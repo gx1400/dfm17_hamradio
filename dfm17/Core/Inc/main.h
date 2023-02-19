@@ -57,6 +57,10 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define gpsTx_Pin GPIO_PIN_2
+#define gpsTx_GPIO_Port GPIOA
+#define gpsRx_Pin GPIO_PIN_3
+#define gpsRx_GPIO_Port GPIOA
 #define usbTX_Pin GPIO_PIN_9
 #define usbTX_GPIO_Port GPIOA
 #define usbRX_Pin GPIO_PIN_10
