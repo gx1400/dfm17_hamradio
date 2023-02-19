@@ -81,6 +81,7 @@ void initRadio() {
 	si4060_reset();
 	printf("check radio info...\r\n");
 	i = si4060_part_info();
+	printf("Radio info: %04X\r\n",i);
 }
 
 void startGpsTimer() {
