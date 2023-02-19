@@ -92,9 +92,15 @@ void initRadio() {
 	si4060_power_up(); 		//power up radio
 
 	// GPIO pin configuration
-	si4060_gpio_pin_cfg(GPIO_MODE_TX_DATA_CLK, GPIO_MODE_EN_PA,
-			GPIO_MODE_DIV_CLK, GPIO_MODE_INPUTPIN, DRV_STRENGTH_HIGH);
+	//si4060_gpio_pin_cfg(GPIO_MODE_TX_DATA_CLK, GPIO_MODE_EN_PA,
+	//		GPIO_MODE_DIV_CLK, GPIO_MODE_INPUTPIN, DRV_STRENGTH_HIGH);
 
+	si4060_setup(MOD_TYPE_2GFSK);
+
+	si4060_freq_aprs_dfm17();
+
+
+	si4060_change_state(STATE_TX);
 
 
 

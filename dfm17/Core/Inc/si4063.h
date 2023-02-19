@@ -67,26 +67,15 @@
 #define FDEV_RTTY			((((uint32_t)1 << 19) * OUTDIV_2M * RF_RTTY_DEV_HZ)/(2*XO_FREQ))
 #define FDEV_APRS			((((uint32_t)1 << 19) * OUTDIV_2M * RF_APRS_DEV_HZ)/(2*XO_FREQ))
 
-#define FDIV_INTE_DFM(freq)	77
+#define FDIV_INTE_DFM		77
+#define FDEV_DFM			0x900000
 
 
 /* number of retries for SPI transmission (reading CTS) */
 #define SI_TIMEOUT		100
 
 /* function prototypes */
-void si4060_shutdown(void);
-void si4060_wakeup(void);
-void si4060_reset(void);
-void si4060_power_up(void);
-void si4060_nop(void);
-void si4060_start_tx(uint8_t channel);
-void si4060_stop_tx(void);
-inline void si4060_set_offset(uint16_t offset);
-void si4060_setup(uint8_t mod_type);
-void si4060_change_state(uint8_t state);
-uint16_t si4060_part_info(void);
-uint8_t si4060_get_cts(uint8_t read_response);
-void si4060_set_aprs_params(void);
+
 void si4060_freq_aprs_reg1(void);
 void si4060_freq_aprs_reg2(void);
 void si4060_freq_aprs_cn(void);
@@ -96,8 +85,32 @@ void si4060_freq_aprs_nz(void);
 void si4060_freq_aprs_aus(void);
 void si4060_freq_aprs_brazil(void);
 void si4060_freq_2m_rtty(void);
-void __delay_cycles(uint32_t delay);
+void si4060_freq_aprs_dfm17(void);
+
+void si4060_set_offset(uint16_t offset);
+void si4060_start_tx(uint8_t channel);
+void si4060_stop_tx(void);
+void si4060_shutdown(void);
+void si4060_wakeup(void);
+void si4060_reset(void);
+uint16_t si4060_part_info(void);
+uint8_t si4060_get_cts(uint8_t read_response);
 uint8_t si4060_read_cmd_buf(uint8_t deselect);
+void si4060_power_up(void);
+void si4060_change_state(uint8_t state);
+void si4060_nop(void);
+void si4060_set_property_8(uint8_t group, uint8_t prop, uint8_t val);
+uint8_t si4060_get_property_8(uint8_t group, uint8_t prop);
+void si4060_set_property_16(uint8_t group, uint8_t prop, uint16_t val);
+void si4060_set_property_16_nocts(uint8_t group, uint8_t prop, uint16_t val);
+void si4060_set_property_24(uint8_t group, uint8_t prop, uint32_t val);
+void si4060_set_property_32(uint8_t group, uint8_t prop, uint32_t val);
+void si4060_setup(uint8_t mod_type);
+void si4060_set_filter(void);
+void si4060_gpio_pin_cfg(uint8_t gpio0, uint8_t gpio1, uint8_t gpio2, uint8_t gpio3, uint8_t drvstrength);
+void si4060_set_aprs_params(void);
+void si4060_set_aprs_params_TESTING(void);
+void __delay_cycles(uint32_t delay);
 
 
 /* ===== command definitions ===== */
