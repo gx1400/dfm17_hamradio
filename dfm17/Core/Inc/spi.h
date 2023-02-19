@@ -51,6 +51,12 @@ void MX_SPI1_Init(void);
 
 /* USER CODE BEGIN Prototypes */
 
+void SpiEnable(void);
+void SpiDisable(void);
+void SpiWriteData(int size, uint8_t* data);
+void SpiReadData (int size, uint8_t *data);
+uint8_t SpiReadWrite(uint8_t byte);
+
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus
