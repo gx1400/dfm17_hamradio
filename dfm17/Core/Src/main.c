@@ -126,9 +126,8 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  ledToggleGreen();
-	  ledToggleRed();
 	  ledToggleYellow();
+	  printf("Main Loop cycle\r\n");
 	  HAL_Delay(1000);
   }
   /* USER CODE END 3 */
@@ -200,6 +199,7 @@ void Error_Handler(void)
   __disable_irq();
   while (1)
   {
+	  ledOnRed();
   }
   /* USER CODE END Error_Handler_Debug */
 }
