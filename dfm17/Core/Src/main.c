@@ -142,11 +142,14 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+	  for(int tonedelay = 500; tonedelay >= 300; tonedelay--){
+	  		//GPIO3 is PA4
+	  		GPIOA->ODR ^= (1U << 4);
+	  		delay_us(2*tonedelay);
+	  	}
 
     /* USER CODE BEGIN 3 */
-	  ledToggleYellow();
-	  printf("Main Loop cycle\r\n");
-	  HAL_Delay(1000);
+
   }
   /* USER CODE END 3 */
 }
