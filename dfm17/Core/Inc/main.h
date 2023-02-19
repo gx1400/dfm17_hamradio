@@ -57,6 +57,10 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define usbTX_Pin GPIO_PIN_9
+#define usbTX_GPIO_Port GPIOA
+#define usbRX_Pin GPIO_PIN_10
+#define usbRX_GPIO_Port GPIOA
 
 /* USER CODE BEGIN Private defines */
 
