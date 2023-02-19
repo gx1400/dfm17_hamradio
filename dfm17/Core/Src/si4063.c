@@ -154,6 +154,98 @@ uint8_t si4060_read_cmd_buf(uint8_t deselect) {
 }
 
 
+/*
+ * si4060_power_up
+ *
+ * powers up the Si4060 by issuing the POWER_UP command
+ *
+ * warning: 	the si4060 can lock after issuing this command if input clock
+ * 		is not available for the internal RC oscillator calibration.
+ */
+void si4060_power_up(void) {
+	/* wait for CTS */
+	si4060_get_cts(0);
+	spi_select();
+	spi_write(CMD_POWER_UP);
+	delay_us(10);
+	spi_write(FUNC);
+#ifdef USE_TCXO
+	spi_write(TCXO);
+#else
+	spi_write(0);			/* TCXO if used */
+#endif
+	spi_write((uint8_t) (XO_FREQ >> 24));
+	spi_write((uint8_t) (XO_FREQ >> 16));
+	spi_write((uint8_t) (XO_FREQ >> 8));
+	spi_write((uint8_t) XO_FREQ);
+	spi_deselect();
+	/* wait for CTS */
+	si4060_get_cts(0);
+}
+
+/*
+ * si4060_gpio_pin_cfg
+ *
+ * configures the GPIOs on the Si4060
+ * see the GPIO_*-defines for reference
+ *
+ * gpio(0..3):	setting flags for respective GPIOs
+ * drvstrength:	the driver strength
+ */
+void si4060_gpio_pin_cfg(uint8_t gpio0, uint8_t gpio1, uint8_t gpio2, uint8_t gpio3, uint8_t drvstrength) {
+	si4060_get_cts(0);
+	spi_select();
+	spi_write(CMD_GPIO_PIN_CFG);
+	spi_write(gpio0);
+	spi_write(gpio1);
+	spi_write(gpio2);
+	spi_write(gpio3);
+	spi_write(NIRQ_MODE_DONOTHING);
+	spi_write(GPIO_MODE_SDO);
+	spi_write(drvstrength);
+	spi_deselect();
+}
+
+void si4060_set_aprs_params(void) {
+	/* use 2GFSK from async GPIO0 */
+	si4060_set_property_8(PROP_MODEM,
+			MODEM_MOD_TYPE,
+			MOD_TYPE_2GFSK | MOD_SOURCE_DIRECT | MOD_GPIO_3 | MOD_DIRECT_MODE_SYNC);
+	/* setup divider to 24 (for 2m amateur radio band) */
+	si4060_set_property_8(PROP_MODEM,
+			MODEM_CLKGEN_BAND,
+			SY_SEL_1 | FVCO_DIV_24);
+	/* setup frequency deviation offset */
+	si4060_set_property_16(PROP_MODEM,
+			MODEM_FREQ_OFFSET,
+			0);
+	/* setup frequency deviation */
+	si4060_set_property_24(PROP_MODEM,
+			MODEM_FREQ_DEV,
+			(uint16_t)(2*FDEV_APRS));
+}
+
+
+void si4060_set_aprs_params_TESTING(void) {
+	/* use 2GFSK from async GPIO0 */
+	si4060_set_property_8(PROP_MODEM,
+			MODEM_MOD_TYPE,
+			MOD_TYPE_2GFSK | MOD_SOURCE_DIRECT | MOD_GPIO_3 | MOD_DIRECT_MODE_SYNC);
+	/* setup divider to 24 (for 2m amateur radio band) */
+	si4060_set_property_8(PROP_MODEM,
+			MODEM_CLKGEN_BAND,
+			SY_SEL_1 | FVCO_DIV_24);
+	/* setup frequency deviation offset */
+	si4060_set_property_16(PROP_MODEM,
+			MODEM_FREQ_OFFSET,
+			0);
+	/* setup frequency deviation */
+	si4060_set_property_24(PROP_MODEM,
+			MODEM_FREQ_DEV,
+			(uint16_t)(2*FDEV_APRS));
+}
+
+
 
 
 

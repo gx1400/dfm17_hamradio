@@ -79,9 +79,27 @@ void initRadio() {
 	HAL_Delay(10);
 	printf("reset radio...\r\n");
 	si4060_reset();
+
 	printf("check radio info...\r\n");
 	i = si4060_part_info();
 	printf("Radio info: %04X\r\n",i);
+
+	if(i != 0x4063) {
+		printf("ERROR: Incorrect radio, not a 4063!\r\n");
+	}
+
+
+	si4060_power_up(); 		//power up radio
+
+	// GPIO pin configuration
+	si4060_gpio_pin_cfg(GPIO_MODE_TX_DATA_CLK, GPIO_MODE_EN_PA,
+			GPIO_MODE_DIV_CLK, GPIO_MODE_INPUTPIN, DRV_STRENGTH_HIGH);
+
+
+
+
+
+
 }
 
 void startGpsTimer() {

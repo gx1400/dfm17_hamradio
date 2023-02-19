@@ -58,6 +58,7 @@
 
 #define F_INT_70CM				(2 * XO_FREQ / 8)
 #define F_INT_2M				(2 * XO_FREQ / 24)
+#define F_INT_DFM				(2 * XO_FREQ / )
 #define OUTDIV_70CM				8
 #define OUTDIV_2M				24
 
@@ -65,6 +66,9 @@
 #define FDIV_FRAC_2M(freq)	((RF_FREQ_HZ_2M_ ## freq - F_INT_2M * (int)FDIV_INTE_2M(freq))*((uint32_t)1 << 19)) / F_INT_2M
 #define FDEV_RTTY			((((uint32_t)1 << 19) * OUTDIV_2M * RF_RTTY_DEV_HZ)/(2*XO_FREQ))
 #define FDEV_APRS			((((uint32_t)1 << 19) * OUTDIV_2M * RF_APRS_DEV_HZ)/(2*XO_FREQ))
+
+#define FDIV_INTE_DFM(freq)	77
+
 
 /* number of retries for SPI transmission (reading CTS) */
 #define SI_TIMEOUT		100
@@ -82,6 +86,7 @@ void si4060_setup(uint8_t mod_type);
 void si4060_change_state(uint8_t state);
 uint16_t si4060_part_info(void);
 uint8_t si4060_get_cts(uint8_t read_response);
+void si4060_set_aprs_params(void);
 void si4060_freq_aprs_reg1(void);
 void si4060_freq_aprs_reg2(void);
 void si4060_freq_aprs_cn(void);
@@ -93,6 +98,7 @@ void si4060_freq_aprs_brazil(void);
 void si4060_freq_2m_rtty(void);
 void __delay_cycles(uint32_t delay);
 uint8_t si4060_read_cmd_buf(uint8_t deselect);
+
 
 /* ===== command definitions ===== */
 #define CMD_NOP							0x00
