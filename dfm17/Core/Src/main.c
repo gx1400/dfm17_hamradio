@@ -84,9 +84,9 @@
 
 /* USER CODE BEGIN PV */
 
-GNSS_StateHandle GNSS_Handle;
-uint8_t txDone;
-uint8_t rxDone;
+volatile GNSS_StateHandle GNSS_Handle;
+volatile uint8_t txDone;
+volatile uint8_t rxDone;
 
 /* USER CODE END PV */
 
