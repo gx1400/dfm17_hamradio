@@ -23,6 +23,13 @@
   * along with this program.  If not, see <http://www.gnu.org/licenses/>.
   *
   ******************************************************************************
+  * Leveraged Projects
+  *
+  * - SimpleMethod/STM32-GNSS
+  *   - https://github.com/SimpleMethod/STM32-GNSS
+  *   - Copyright 2020 SimpleMethod
+  *   - Modified 2023
+  ******************************************************************************
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
@@ -35,6 +42,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "led.h"
+//#include "GNSS.h"
 
 /* USER CODE END Includes */
 
@@ -55,6 +63,10 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+uint8_t txDone;
+uint8_t rxDone;
+
+GNSS_StateHandle GNSS_Handle;
 
 /* USER CODE END PV */
 
