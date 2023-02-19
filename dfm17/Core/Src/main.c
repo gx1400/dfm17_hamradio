@@ -30,6 +30,29 @@
   *   - Copyright 2020 SimpleMethod
   *   - Modified 2023
   ******************************************************************************
+  *	TIMERS
+  *	 -------------------------------------------
+  *	| TIMER		| Purpose						|
+  *	|-----------|-------------------------------|
+  *	| TIM1 		| Reserved for tmux				|
+  *	| TIM2  	| Reserved for tmux				|
+  *	| TIM3  	| Reserved for tmux				|
+  *	| TIM6		| Tick Timer for GPS Updates	|
+  *	| TIM15		| Tick Timer for APRS Baud		|
+  *	| TIM16		| Tick Timer for RTTY Baud		|
+  *	 -------------------------------------------
+  ******************************************************************************
+  * INTERRUPTS
+  *  -------------------------------------------------------
+  * | INTERRUPT | Priority | Purpose                        |
+  * |-----------|----------|--------------------------------|
+  * | TIM15     |    1     | APRS Baud Clock                |
+  * | TIM16     |    2     | RTTY Baud Clock                |
+  * | DMA6      |    6     | GPS UART RX DMA                |
+  * | DMA7      |    7     | GPS UART TX DMA                |
+  * | TIM6      |   10     | GPS Update Tick Timer          |
+  *  -------------------------------------------------------
+  ******************************************************************************
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
@@ -60,10 +83,10 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-uint8_t txDone;
-uint8_t rxDone;
 
 GNSS_StateHandle GNSS_Handle;
+uint8_t txDone;
+uint8_t rxDone;
 
 /* USER CODE END PV */
 

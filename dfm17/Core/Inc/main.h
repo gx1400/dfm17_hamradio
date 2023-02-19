@@ -54,6 +54,7 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 int __io_putchar(int ch);
+void SystemClock_Config(void);
 
 /* USER CODE END EFP */
 
@@ -94,6 +95,7 @@ int __io_putchar(int ch);
 #define iGpsPPS_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
+
 
 /* USER CODE END Private defines */
 

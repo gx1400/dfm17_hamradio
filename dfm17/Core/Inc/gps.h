@@ -1,7 +1,8 @@
 /**
   ******************************************************************************
-  * @file    init.c
-  * @brief   This file contains all functions for initializing hardware
+  * @file    gps.h
+  * @brief   This file contains all the function prototypes for
+  *          the gps.c file
   ******************************************************************************
   * @attention
   *
@@ -24,45 +25,15 @@
   ******************************************************************************
   */
 
-#include "init.h"
-#include "GNSS.h"
-#include "gpio.h"
-#include "dma.h"
-#include "usart.h"
-#include "spi.h"
-#include "tim.h"
+#ifndef INC_GPS_H_
+#define INC_GPS_H_
+
+#include "stm32f1xx_hal.h"
+
+void gpsUpdate(void);
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart);
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart);
 
 
-extern UART_HandleTypeDef huart2;
-extern TIM_HandleTypeDef htim6;
-extern GNSS_StateHandle GNSS_Handle;
-extern uint8_t txDone;
-extern uint8_t rxDone;
-
-void initHw(void) {
-	// initialize STM hardware
-	SystemClock_Config();
-	MX_GPIO_Init();
-	MX_DMA_Init();
-	MX_USART1_UART_Init();
-	MX_USART2_UART_Init();
-	MX_SPI1_Init();
-	MX_TIM6_Init();
-
-	// initialize GPS chip
-	printf("Starting ublox...\r\n");
-	GNSS_Init(&GNSS_Handle, &huart2, &txDone, &rxDone);
-	HAL_Delay(1000);
-	GNSS_LoadConfig(&GNSS_Handle);
-
-	//after GPS is initialized, then start GPS update tick timer
-	startGpsTimer();
-}
-
-void startGpsTimer() {
-  if (HAL_TIM_Base_Start_IT(&htim6) != HAL_OK)
-  {
-	  /* Starting Error */
-	  Error_Handler();
-  }
-}
+#endif /* INC_GPS_H_ */

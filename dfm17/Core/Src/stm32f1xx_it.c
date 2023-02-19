@@ -20,6 +20,9 @@
   * along with this program.  If not, see <http://www.gnu.org/licenses/>.
   *
   ******************************************************************************
+  * Interrupt              Priority
+  * TIM
+  ******************************************************************************
   */
 /* USER CODE END Header */
 
@@ -29,6 +32,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "led.h"
+#include "gps.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -266,6 +270,7 @@ void TIM6_DAC_IRQHandler(void)
   /* USER CODE BEGIN TIM6_DAC_IRQn 1 */
   printf("5 sec gps tick!\r\n");
   ledToggleGreen();
+  gpsUpdate();
   /* USER CODE END TIM6_DAC_IRQn 1 */
 }
 
