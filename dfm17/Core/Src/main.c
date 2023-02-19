@@ -28,7 +28,13 @@
   * - SimpleMethod/STM32-GNSS
   *   - https://github.com/SimpleMethod/STM32-GNSS
   *   - Copyright 2020 SimpleMethod
-  *   - Modified 2023
+  *   - Modified 2023 in GNSS.c and GNSS.h
+  *
+  * - thasti/utrak
+  *   - https://github.com/thasti/utrak
+  *   - Stefan Biereigel
+  *   - Modified 2023 in si4063.c and si4063.h
+  *
   ******************************************************************************
   *	TIMERS
   *	 -------------------------------------------
