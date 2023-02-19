@@ -61,6 +61,12 @@ void Error_Handler(void);
 #define gpsTx_GPIO_Port GPIOA
 #define gpsRx_Pin GPIO_PIN_3
 #define gpsRx_GPIO_Port GPIOA
+#define oSpiSCLK_Pin GPIO_PIN_5
+#define oSpiSCLK_GPIO_Port GPIOA
+#define oSpiMISO_Pin GPIO_PIN_6
+#define oSpiMISO_GPIO_Port GPIOA
+#define oSpiMOSI_Pin GPIO_PIN_7
+#define oSpiMOSI_GPIO_Port GPIOA
 #define usbTX_Pin GPIO_PIN_9
 #define usbTX_GPIO_Port GPIOA
 #define usbRX_Pin GPIO_PIN_10
