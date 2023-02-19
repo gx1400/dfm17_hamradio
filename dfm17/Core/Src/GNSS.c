@@ -33,10 +33,10 @@
 
 #include "GNSS.h"
 
-union u_Short uShort;
-union i_Short iShort;
-union u_Long uLong;
-union i_Long iLong;
+volatile union u_Short uShort;
+volatile union i_Short iShort;
+volatile union u_Long uLong;
+volatile union i_Long iLong;
 
 /*!
  * Structure initialization.
