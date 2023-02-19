@@ -26,6 +26,5 @@
 
 #include "gps.h"
 
-gpsObj gpsRef;
 
 

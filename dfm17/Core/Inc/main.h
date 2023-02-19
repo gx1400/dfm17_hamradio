@@ -28,7 +28,6 @@ extern "C" {
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f1xx_hal.h"
-#include "GNSS.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -82,6 +81,10 @@ int _write(int file, char *ptr, int len);
 #define oSpiCS_GPIO_Port GPIOB
 #define oLED_R_Pin GPIO_PIN_12
 #define oLED_R_GPIO_Port GPIOB
+#define oLED_G_Pin GPIO_PIN_6
+#define oLED_G_GPIO_Port GPIOC
+#define oLED_Y_Pin GPIO_PIN_7
+#define oLED_Y_GPIO_Port GPIOC
 #define iButton_Pin GPIO_PIN_8
 #define iButton_GPIO_Port GPIOC
 #define usbTX_Pin GPIO_PIN_9

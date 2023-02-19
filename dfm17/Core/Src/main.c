@@ -36,13 +36,14 @@
 #include "main.h"
 #include "dma.h"
 #include "spi.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "led.h"
-//#include "GNSS.h"
+#include "GNSS.h"
 
 /* USER CODE END Includes */
 
@@ -113,6 +114,7 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   MX_SPI1_Init();
+  MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -123,10 +125,11 @@ int main(void)
   {
     /* USER CODE END WHILE */
 
-	  printf("Test UART\r\n");
-	  HAL_Delay(1000);
-
     /* USER CODE BEGIN 3 */
+	  ledToggleGreen();
+	  ledToggleRed();
+	  ledToggleYellow();
+	  HAL_Delay(1000);
   }
   /* USER CODE END 3 */
 }

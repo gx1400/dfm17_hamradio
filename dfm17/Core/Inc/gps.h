@@ -33,11 +33,6 @@
 
 #include "main.h"
 
-typedef struct {
-	GNSS_StateHandle *GNSS_Handle;
-
-} gpsObj;
-
 
 
 #endif /* INC_GPS_H_ */
