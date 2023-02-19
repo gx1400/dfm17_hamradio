@@ -44,6 +44,7 @@
 /* USER CODE BEGIN Includes */
 #include "led.h"
 #include "GNSS.h"
+#include "init.h"
 
 /* USER CODE END Includes */
 
@@ -117,6 +118,7 @@ int main(void)
   MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
 
+  initHw();
   /* USER CODE END 2 */
 
   /* Infinite loop */

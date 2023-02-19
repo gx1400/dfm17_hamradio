@@ -55,11 +55,7 @@ void MX_TIM6_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM6_Init 2 */
-  if (HAL_TIM_Base_Start_IT(&htim6) != HAL_OK)
-  {
-	  /* Starting Error */
-  	  Error_Handler();
-  }
+
   /* USER CODE END TIM6_Init 2 */
 
 }
@@ -105,13 +101,6 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
 
 /* USER CODE BEGIN 1 */
 
-void StartGpsTimer(TIM_HandleTypeDef* htim) {
-	//Start Timer 6, 5sec interrupt timer for gps updates
-	  if (HAL_TIM_Base_Start_IT(&htim) != HAL_OK)
-	  {
-		  /* Starting Error */
-	  	  Error_Handler();
-	  }
-}
+
 
 /* USER CODE END 1 */

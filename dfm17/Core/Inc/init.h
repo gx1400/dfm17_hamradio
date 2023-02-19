@@ -1,8 +1,8 @@
 /**
   ******************************************************************************
-  * @file    gps.h
+  * @file    init.h
   * @brief   This file contains all the function prototypes for
-  *          the gps.c file
+  *          the init.c file
   ******************************************************************************
   * @attention
   *
@@ -25,14 +25,13 @@
   ******************************************************************************
   */
 
-
-
-#ifndef INC_GPS_H_
-#define INC_GPS_H_
-
+#ifndef INC_INIT_H_
+#define INC_INIT_H_
 
 #include "main.h"
 
+void initHw(void);
+void startGpsTimer();
 
 
-#endif /* INC_GPS_H_ */
+#endif /* INC_INIT_H_ */

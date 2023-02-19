@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
-  * @file    gps.c
-  * @brief   This file contains code for implementing the GNSS.c functions
+  * @file    init.c
+  * @brief   This file contains all functions for initializing hardware
   ******************************************************************************
   * @attention
   *
@@ -24,7 +24,20 @@
   ******************************************************************************
   */
 
-#include "gps.h"
+#include "init.h"
 
+extern TIM_HandleTypeDef htim6;
 
+void initHw(void) {
 
+	//after GPS is initialized, then start GPS update tick timer
+	startGpsTimer();
+}
+
+void startGpsTimer() {
+  if (HAL_TIM_Base_Start_IT(&htim6) != HAL_OK)
+  {
+	  /* Starting Error */
+	  Error_Handler();
+  }
+}
