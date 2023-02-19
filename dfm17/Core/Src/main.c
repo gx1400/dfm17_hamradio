@@ -46,6 +46,7 @@
   *	| TIM6		| Tick Timer for GPS Updates	|
   *	| TIM15		| Tick Timer for APRS Baud		|
   *	| TIM16		| Tick Timer for RTTY Baud		|
+  *	| TIM17     | delay_us 1us timer            |
   *	 -------------------------------------------
   ******************************************************************************
   * INTERRUPTS

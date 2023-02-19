@@ -56,6 +56,10 @@ void SpiDisable(void);
 void SpiWriteData(int size, uint8_t* data);
 void SpiReadData (int size, uint8_t *data);
 uint8_t SpiReadWrite(uint8_t byte);
+void spi_select(void);
+void spi_deselect(void);
+uint8_t spi_write(uint8_t data);
+uint8_t spi_read(void);
 
 /* USER CODE END Prototypes */
 

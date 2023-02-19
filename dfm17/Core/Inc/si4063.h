@@ -91,6 +91,8 @@ void si4060_freq_aprs_nz(void);
 void si4060_freq_aprs_aus(void);
 void si4060_freq_aprs_brazil(void);
 void si4060_freq_2m_rtty(void);
+void __delay_cycles(uint32_t delay);
+uint8_t si4060_read_cmd_buf(uint8_t deselect);
 
 /* ===== command definitions ===== */
 #define CMD_NOP							0x00
@@ -206,7 +208,7 @@ void si4060_freq_2m_rtty(void);
 #define GPIO_MODE_TRISTATE				0x01	/* input and output drivers are disabled */
 #define GPIO_MODE_DRIVE0				0x02	/* CMOS output "low" */
 #define GPIO_MODE_DRIVE1				0x03	/* CMOS output "high" */
-#define GPIO_MODE_INPUT					0x04	/* GPIO is input, for TXDATA etc, function is not configured here */
+#define GPIO_MODE_INPUTPIN		        0x04	/* GPIO is input, for TXDATA etc, function is not configured here */
 #define GPIO_MODE_32K_CLK				0x05	/* outputs the 32kHz CLK when selected in CLK32_CLK_SEL */
 #define GPIO_MODE_BOOT_CLK				0x06	/* outputs boot clock when SPI_ACTIVE */
 #define GPIO_MODE_DIV_CLK				0x07	/* outputs divided xtal clk */

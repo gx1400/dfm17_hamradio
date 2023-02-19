@@ -31,6 +31,7 @@
 #include "usart.h"
 #include "spi.h"
 #include "tim.h"
+#include "si4063.h"
 
 
 extern UART_HandleTypeDef huart2;
@@ -48,6 +49,13 @@ void initHw(void) {
 	MX_USART2_UART_Init();
 	MX_SPI1_Init();
 	MX_TIM6_Init();
+	MX_TIM17_Init();
+
+
+	//initialize radio
+	initRadio();
+
+
 
 	// initialize GPS chip
 	printf("Starting ublox...\r\n");
@@ -57,6 +65,18 @@ void initHw(void) {
 
 	//after GPS is initialized, then start GPS update tick timer
 	startGpsTimer();
+}
+
+void initRadio() {
+	uint16_t i;
+	//restart radio
+	printf("wake up radio...\r\n");
+	si4060_wakeup();
+	HAL_Delay(10);
+	printf("reset radio...\r\n");
+	si4060_reset();
+	printf("check radio info...\r\n");
+	i = si4060_part_info();
 }
 
 void startGpsTimer() {

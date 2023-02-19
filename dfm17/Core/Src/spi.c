@@ -30,6 +30,7 @@
 #include "spi.h"
 
 /* USER CODE BEGIN 0 */
+volatile uint8_t spi_data;
 
 /* USER CODE END 0 */
 
@@ -199,6 +200,24 @@ uint8_t SpiReadWrite (uint8_t byte) {
 	while (!((SPI1->SR) &(1<<0))){};  // Wait for RXNE to set -> This will indicate that the Rx buffer is not empty
 	return  (SPI1->DR);
 
+}
+
+void spi_select(void) {
+    // nSEL/CS is PB2
+	GPIOB-> BSRR = (1U << (16+2));
+}
+
+void spi_deselect(void) {
+	// nSEL/CS is PB2
+	GPIOB-> BSRR = (1U << (2));
+}
+
+uint8_t spi_write(uint8_t data) {
+	SpiWriteData(sizeof(data), data);
+}
+
+uint8_t spi_read(void) {
+	SpiReadWrite(0xFF);
 }
 
 /* USER CODE END 1 */

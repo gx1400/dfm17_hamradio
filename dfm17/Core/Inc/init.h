@@ -31,6 +31,7 @@
 #include "main.h"
 
 void initHw(void);
+void initRadio(void);
 void startGpsTimer();
 
 
