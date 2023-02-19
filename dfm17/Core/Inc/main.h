@@ -28,7 +28,6 @@ extern "C" {
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f1xx_hal.h"
-#include <stdio.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -55,7 +54,6 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 int __io_putchar(int ch);
-int _write(int file, char *ptr, int len);
 
 /* USER CODE END EFP */
 

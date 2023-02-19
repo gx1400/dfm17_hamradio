@@ -54,6 +54,8 @@ void MX_USART2_UART_Init(void);
 
 /* USER CODE BEGIN Prototypes */
 
+int _write(int file, char *ptr, int len);
+
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus
