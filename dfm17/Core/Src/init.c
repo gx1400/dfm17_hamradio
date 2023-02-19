@@ -50,6 +50,10 @@ void initHw(void) {
 	MX_SPI1_Init();
 	MX_TIM6_Init();
 	MX_TIM17_Init();
+	delay_us(500);
+
+
+	SpiEnable();
 
 
 	//initialize radio

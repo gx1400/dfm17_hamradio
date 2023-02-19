@@ -53,7 +53,7 @@ void si4060_reset(void) {
  */
 void si4060_shutdown(void) {
 	// SDN is PC3
-	GPIOC->BSRR = (1U << (16+3));
+	GPIOC->BSRR = (1U << +3);
 	/* wait 10us */
 	//__delay_cycles(50000);
 	delay_us(10);

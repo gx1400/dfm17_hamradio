@@ -64,7 +64,6 @@ void MX_SPI1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN SPI1_Init 2 */
-  SpiEnable();
 
   /* USER CODE END SPI1_Init 2 */
 
@@ -95,7 +94,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* spiHandle)
 
     GPIO_InitStruct.Pin = oSpiMISO_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-    GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
     HAL_GPIO_Init(oSpiMISO_GPIO_Port, &GPIO_InitStruct);
 
   /* USER CODE BEGIN SPI1_MspInit 1 */
@@ -213,11 +212,11 @@ void spi_deselect(void) {
 }
 
 uint8_t spi_write(uint8_t data) {
-	SpiWriteData(sizeof(data), data);
+	SpiWriteData(sizeof(data), &data);
 }
 
 uint8_t spi_read(void) {
-	SpiReadWrite(0xFF);
+	return SpiReadWrite(0xFF);
 }
 
 /* USER CODE END 1 */
