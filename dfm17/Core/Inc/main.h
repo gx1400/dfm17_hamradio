@@ -57,20 +57,36 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define oSpiGPIO2_Pin GPIO_PIN_0
+#define oSpiGPIO2_GPIO_Port GPIOD
+#define oBattOn_Pin GPIO_PIN_0
+#define oBattOn_GPIO_Port GPIOC
+#define oSiSDN_Pin GPIO_PIN_3
+#define oSiSDN_GPIO_Port GPIOC
 #define gpsTx_Pin GPIO_PIN_2
 #define gpsTx_GPIO_Port GPIOA
 #define gpsRx_Pin GPIO_PIN_3
 #define gpsRx_GPIO_Port GPIOA
+#define oSpiGPIO3_Pin GPIO_PIN_4
+#define oSpiGPIO3_GPIO_Port GPIOA
 #define oSpiSCLK_Pin GPIO_PIN_5
 #define oSpiSCLK_GPIO_Port GPIOA
 #define oSpiMISO_Pin GPIO_PIN_6
 #define oSpiMISO_GPIO_Port GPIOA
 #define oSpiMOSI_Pin GPIO_PIN_7
 #define oSpiMOSI_GPIO_Port GPIOA
+#define oSpiCS_Pin GPIO_PIN_2
+#define oSpiCS_GPIO_Port GPIOB
+#define oLED_R_Pin GPIO_PIN_12
+#define oLED_R_GPIO_Port GPIOB
+#define iButton_Pin GPIO_PIN_8
+#define iButton_GPIO_Port GPIOC
 #define usbTX_Pin GPIO_PIN_9
 #define usbTX_GPIO_Port GPIOA
 #define usbRX_Pin GPIO_PIN_10
 #define usbRX_GPIO_Port GPIOA
+#define iGpsPPS_Pin GPIO_PIN_8
+#define iGpsPPS_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 
