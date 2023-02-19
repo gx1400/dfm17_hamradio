@@ -53,6 +53,8 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
+int __io_putchar(int ch);
+int _write(int file, char *ptr, int len);
 
 /* USER CODE END EFP */
 

@@ -156,6 +156,19 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
+int __io_putchar(int ch) {
+ // Write character to ITM ch.0
+ ITM_SendChar(ch);
+ return(ch);
+}
+
+int _write(int file, char *ptr, int len) {
+    //for (int DataIdx = 0; DataIdx < len; DataIdx++)
+    //    ITM_SendChar(*ptr++);
+	HAL_UART_Transmit(&huart1, ptr, len, HAL_MAX_DELAY);
+    return len;
+}
+
 /* USER CODE END 4 */
 
 /**
