@@ -111,6 +111,9 @@ int main(void)
   {
     /* USER CODE END WHILE */
 
+	  printf("Test UART\r\n");
+	  HAL_Delay(1000);
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
