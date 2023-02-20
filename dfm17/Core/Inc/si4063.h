@@ -68,7 +68,7 @@
 #define FDEV_APRS			((((uint32_t)1 << 19) * OUTDIV_2M * RF_APRS_DEV_HZ)/(2*XO_FREQ))
 
 #define FDIV_INTE_DFM		77
-#define FDEV_DFM			0x900000
+#define FDEV_DFM			0x90000
 
 
 /* number of retries for SPI transmission (reading CTS) */
