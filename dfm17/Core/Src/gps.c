@@ -81,3 +81,5 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	GNSS_ParseBuffer(&GNSS_Handle);
 	GNSS_Handle.rxDone = 1;
 }
+
+

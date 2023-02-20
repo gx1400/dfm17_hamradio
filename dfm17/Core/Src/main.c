@@ -64,12 +64,14 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "tim.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "led.h"
 #include "GNSS.h"
 #include "init.h"
+#include "aprs.h"
 
 /* USER CODE END Includes */
 
@@ -94,6 +96,8 @@
 volatile GNSS_StateHandle GNSS_Handle;
 volatile uint8_t txDone;
 volatile uint8_t rxDone;
+
+
 
 /* USER CODE END PV */
 
@@ -132,6 +136,7 @@ int main(void)
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
+  MX_TIM15_Init();
   /* USER CODE BEGIN 2 */
 
   initHw();
@@ -142,11 +147,6 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-	  for(int tonedelay = 500; tonedelay >= 300; tonedelay--){
-	  		//GPIO3 is PA4
-	  		GPIOA->ODR ^= (1U << 4);
-	  		delay_us(2*tonedelay);
-	  	}
 
     /* USER CODE BEGIN 3 */
 

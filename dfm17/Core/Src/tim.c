@@ -28,12 +28,16 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "tim.h"
+#include "aprs.h"
+#include "gpio.h"
 
 /* USER CODE BEGIN 0 */
+
 
 /* USER CODE END 0 */
 
 TIM_HandleTypeDef htim6;
+TIM_HandleTypeDef htim15;
 TIM_HandleTypeDef htim17;
 
 /* TIM6 init function */
@@ -67,6 +71,47 @@ void MX_TIM6_Init(void)
   /* USER CODE BEGIN TIM6_Init 2 */
 
   /* USER CODE END TIM6_Init 2 */
+
+}
+/* TIM15 init function */
+void MX_TIM15_Init(void)
+{
+
+  /* USER CODE BEGIN TIM15_Init 0 */
+
+  /* USER CODE END TIM15_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM15_Init 1 */
+
+  /* USER CODE END TIM15_Init 1 */
+  htim15.Instance = TIM15;
+  htim15.Init.Prescaler = 606-1;
+  htim15.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim15.Init.Period = 65535;
+  htim15.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim15.Init.RepetitionCounter = 0;
+  htim15.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim15) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim15, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim15, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM15_Init 2 */
+
+  /* USER CODE END TIM15_Init 2 */
 
 }
 /* TIM17 init function */
@@ -116,6 +161,21 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
 
   /* USER CODE END TIM6_MspInit 1 */
   }
+  else if(tim_baseHandle->Instance==TIM15)
+  {
+  /* USER CODE BEGIN TIM15_MspInit 0 */
+
+  /* USER CODE END TIM15_MspInit 0 */
+    /* TIM15 clock enable */
+    __HAL_RCC_TIM15_CLK_ENABLE();
+
+    /* TIM15 interrupt Init */
+    HAL_NVIC_SetPriority(TIM1_BRK_TIM15_IRQn, 1, 0);
+    HAL_NVIC_EnableIRQ(TIM1_BRK_TIM15_IRQn);
+  /* USER CODE BEGIN TIM15_MspInit 1 */
+
+  /* USER CODE END TIM15_MspInit 1 */
+  }
   else if(tim_baseHandle->Instance==TIM17)
   {
   /* USER CODE BEGIN TIM17_MspInit 0 */
@@ -146,6 +206,20 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
 
   /* USER CODE END TIM6_MspDeInit 1 */
   }
+  else if(tim_baseHandle->Instance==TIM15)
+  {
+  /* USER CODE BEGIN TIM15_MspDeInit 0 */
+
+  /* USER CODE END TIM15_MspDeInit 0 */
+    /* Peripheral clock disable */
+    __HAL_RCC_TIM15_CLK_DISABLE();
+
+    /* TIM15 interrupt Deinit */
+    HAL_NVIC_DisableIRQ(TIM1_BRK_TIM15_IRQn);
+  /* USER CODE BEGIN TIM15_MspDeInit 1 */
+
+  /* USER CODE END TIM15_MspDeInit 1 */
+  }
   else if(tim_baseHandle->Instance==TIM17)
   {
   /* USER CODE BEGIN TIM17_MspDeInit 0 */
@@ -166,5 +240,34 @@ void delay_us(uint8_t us) {
 	while (__HAL_TIM_GET_COUNTER(&htim17) < us);  // wait for the counter to reach the us input in the parameter
 }
 
+void startAprsTickTimer(void) {
+	HAL_TIM_Base_Start(&htim15);
+}
+
+void stopAprsTickTimer(void) {
+	HAL_TIM_Base_Stop(&htim15);
+}
+
+void processAprsTick(void) {
+	static uint16_t aprs_nco_count = 0;
+	static uint16_t aprs_bit_count = 0;
+	aprs_nco_count++;
+	aprs_bit_count++;
+	togglePB9();
+/*
+	if (aprs_bit == APRS_SPACE && aprs_nco_count >= APRS_SPACE_TICKS) {
+		aprs_tick = 1;
+		aprs_nco_count = 0;
+	}
+	if (aprs_bit == APRS_MARK && aprs_nco_count >= APRS_MARK_TICKS) {
+		aprs_tick = 1;
+		aprs_nco_count = 0;
+	}
+	if (aprs_bit_count == APRS_BAUD_TICKS) {
+		aprs_baud_tick = 1;
+		aprs_bit_count = 0;
+	}
+*/
+}
 
 /* USER CODE END 1 */

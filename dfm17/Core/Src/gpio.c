@@ -124,4 +124,16 @@ void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 2 */
 
+void toggleSiGPIO3(void) {
+	GPIOA->ODR ^= (1 << 3);
+}
+
+void toggleSiGPIO2(void) {
+	GPIOD->ODR ^= (1 << 0);
+}
+
+void togglePB9(void) {
+	GPIOB->ODR ^= (1 << 9);
+}
+
 /* USER CODE END 2 */

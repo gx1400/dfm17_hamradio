@@ -30,7 +30,6 @@
 #include "spi.h"
 
 /* USER CODE BEGIN 0 */
-volatile uint8_t spi_data;
 
 /* USER CODE END 0 */
 
