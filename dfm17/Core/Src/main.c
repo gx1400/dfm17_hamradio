@@ -97,6 +97,9 @@ volatile GNSS_StateHandle GNSS_Handle;
 volatile uint8_t txDone;
 volatile uint8_t rxDone;
 
+volatile uint16_t aprs_bit;
+volatile uint16_t aprs_tick;
+volatile uint16_t aprs_baud_tick;
 
 
 /* USER CODE END PV */

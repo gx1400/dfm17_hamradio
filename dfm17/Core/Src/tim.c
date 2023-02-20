@@ -32,6 +32,9 @@
 #include "gpio.h"
 
 /* USER CODE BEGIN 0 */
+extern volatile uint16_t aprs_bit;
+extern volatile uint16_t aprs_tick;
+extern volatile uint16_t aprs_baud_tick;
 
 
 /* USER CODE END 0 */
@@ -254,7 +257,7 @@ void processAprsTick(void) {
 	aprs_nco_count++;
 	aprs_bit_count++;
 	togglePB9();
-/*
+
 	if (aprs_bit == APRS_SPACE && aprs_nco_count >= APRS_SPACE_TICKS) {
 		aprs_tick = 1;
 		aprs_nco_count = 0;
@@ -267,7 +270,7 @@ void processAprsTick(void) {
 		aprs_baud_tick = 1;
 		aprs_bit_count = 0;
 	}
-*/
+
 }
 
 /* USER CODE END 1 */
