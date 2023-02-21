@@ -26,3 +26,4 @@ This repo is a development implementation of code to run on a Graw DFM-17 radios
 ## Unknown capability
 
 - [ ] Temperature/humidity measurement ("Tmux") operation
+- [ ] How or if to use NFC based memory
