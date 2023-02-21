@@ -28,6 +28,7 @@
 #include "gps.h"
 #include "GNSS.h"
 #include "usart.h"
+#include <stdio.h>
 
 extern GNSS_StateHandle GNSS_Handle;
 
@@ -79,9 +80,16 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)	{
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	//printf("  RxComplete callback!\r\n");
 	GNSS_ParseBuffer(&GNSS_Handle);
-	GNSS_Handle.rxDone = 1;
+	GNSS_Handle.rxDone = 1; //todo try *GNSS to mitigate warning
 }
 
+/**
+ * @brief Ubx packet crc checker
+ * Checks if Ubx packet has proper crc (or if valid packet)
+ * @param packet - packet reference
+ * @param size - size of packet
+ * @return - 1 = valid packet, 0 = not a valid packet
+ */
 uint8_t checkUbxCrc(uint8_t *packet, uint8_t size) {
     uint8_t CK_A = 0;
     uint8_t CK_B = 0;
@@ -94,7 +102,15 @@ uint8_t checkUbxCrc(uint8_t *packet, uint8_t size) {
     return (packet[size-2] == CK_A) && (packet[size-1] == CK_B);
 }
 
-
+/**
+ * @brief ubx Packet builder
+ * Build a ubx packet using a payload.  Packet param must be preallocated
+ * to the correct size of the ending packet (payload + 4 bytes)
+ * @param packet - preallocated (correctly sized) array for output packet
+ * @param payload - array containing the payload
+ * @param sizeOfPayload - size of the payload
+ * @return - size of generated packet
+ */
 uint8_t buildUbxPacket(uint8_t *packet, uint8_t *payload, uint8_t sizeOfPayload) {
     packet[0] = 0xB5;
     packet[1] = 0x62;
