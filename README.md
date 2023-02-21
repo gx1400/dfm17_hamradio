@@ -6,6 +6,8 @@ This repo is a development implementation of code to run on a Graw DFM-17 radios
 
 - [ ] Comment existing code
 - [ ] Check crc in ubx payloads
+- [ ] Decide on gps tick time
+- [ ] Implement GPS lock status based on 1 PPS input (don't update GPS if no tick?)
 - [ ] Test tone output on 2GFSK
 - [ ] Implement APRS tick timer (26.4Khz to generate 1200 and 2200)
 - [ ] Implement RTTY tick timer (100Hz to generate 50Hz, include 75Hz?)
