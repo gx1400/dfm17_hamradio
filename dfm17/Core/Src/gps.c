@@ -82,4 +82,34 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	GNSS_Handle.rxDone = 1;
 }
 
+uint8_t checkUbxCrc(uint8_t *packet, uint8_t size) {
+    uint8_t CK_A = 0;
+    uint8_t CK_B = 0;
 
+    for(int x = 2; x < (size-2) ; x++) {
+        CK_A = CK_A + packet[x];
+        CK_B = CK_B + CK_A;
+    }
+
+    return (packet[size-2] == CK_A) && (packet[size-1] == CK_B);
+}
+
+
+uint8_t buildUbxPacket(uint8_t *packet, uint8_t *payload, uint8_t sizeOfPayload) {
+    packet[0] = 0xB5;
+    packet[1] = 0x62;
+
+    uint8_t CK_A = 0;
+    uint8_t CK_B = 0;
+
+    for(int x = 0; x < (sizeOfPayload) ; x++) {
+        packet[2+x] = payload[x];
+        CK_A = CK_A + payload[x];
+        CK_B = CK_B + CK_A;
+    }
+
+    packet[sizeOfPayload+2] = CK_A;
+    packet[sizeOfPayload+3] = CK_B;
+
+    return (sizeOfPayload + 4);
+}
