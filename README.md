@@ -5,6 +5,7 @@ This repo is a development implementation of code to run on a Graw DFM-17 radios
 ## TODO
 
 - [ ] Comment existing code
+- [ ] Decide on functionality of LEDs
 - [ ] Check crc in ubx payloads
 - [ ] Decide on gps tick time
 - [ ] Implement GPS lock status based on 1 PPS input (don't update GPS if no tick?)
