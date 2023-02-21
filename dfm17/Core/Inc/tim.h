@@ -46,12 +46,8 @@ void MX_TIM6_Init(void);
 void MX_TIM15_Init(void);
 void MX_TIM17_Init(void);
 
-void startAprsTickTimer(void);
-void stopAprsTickTimer(void);
-void processAprsTick(void);
-
 /* USER CODE BEGIN Prototypes */
-void delay_us(uint8_t us);
+void delay_us(uint16_t us);
 
 /* USER CODE END Prototypes */
 

@@ -28,10 +28,10 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "tim.h"
-#include "aprs.h"
-#include "gpio.h"
 
 /* USER CODE BEGIN 0 */
+
+#include "aprs.h"
 extern volatile uint16_t aprs_bit;
 extern volatile uint16_t aprs_tick;
 extern volatile uint16_t aprs_baud_tick;
@@ -96,7 +96,7 @@ void MX_TIM15_Init(void)
   htim15.Init.Period = 65535;
   htim15.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim15.Init.RepetitionCounter = 0;
-  htim15.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  htim15.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim15) != HAL_OK)
   {
     Error_Handler();
@@ -106,7 +106,7 @@ void MX_TIM15_Init(void)
   {
     Error_Handler();
   }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim15, &sMasterConfig) != HAL_OK)
   {
@@ -238,7 +238,7 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
 
 /* USER CODE BEGIN 1 */
 
-void delay_us(uint8_t us) {
+void delay_us(uint16_t us) {
 	__HAL_TIM_SET_COUNTER(&htim17, 0);  // set the counter value a 0
 	while (__HAL_TIM_GET_COUNTER(&htim17) < us);  // wait for the counter to reach the us input in the parameter
 }

@@ -64,6 +64,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "crc.h"
 #include "tim.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -140,6 +141,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_TIM15_Init();
+  MX_CRC_Init();
   /* USER CODE BEGIN 2 */
 
   initHw();

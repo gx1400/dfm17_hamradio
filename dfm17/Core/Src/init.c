@@ -53,10 +53,15 @@ void initHw(void) {
 	delay_us(500);
 
 
-	SpiEnable();
+
+	togglePB9();
+	delay_us(500);
+	togglePB9();
+
 
 
 	//initialize radio
+	SpiEnable();
 	initRadio();
 
 
@@ -102,7 +107,7 @@ void initRadio() {
 
 	si4060_change_state(STATE_TX);
 
-
+	startAprsTickTimer();
 
 
 
