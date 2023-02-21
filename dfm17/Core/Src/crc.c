@@ -15,6 +15,19 @@
   * If no LICENSE file comes with this software, it is provided AS-IS.
   *
   ******************************************************************************
+  * CRC-CCITT, CRC-16-X25, CRC-16-CCITT
+  * http://practicingelectronics.com/articles/article-100003/article.php
+  * Polynomial  0x1021
+  * processes 'ABC' to generate 0xf4f9
+  * https://srecord.sourceforge.net/crc16-ccitt.html
+  *
+  * no message - expect 0x1D0F
+  * A - 0x9479
+  * 123456789 - 0xE5CC
+  * https://www.tahapaksu.com/crc/
+  *
+  * https://www.picoballoons.net/aprs-protocol/aprs-message-building-source-code
+  ******************************************************************************
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
