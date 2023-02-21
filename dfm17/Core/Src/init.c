@@ -50,21 +50,10 @@ void initHw(void) {
 	MX_SPI1_Init();
 	MX_TIM6_Init();
 	MX_TIM17_Init();
-	delay_us(500);
-
-
-
-	togglePB9();
-	delay_us(500);
-	togglePB9();
-
-
+	delay_us(50);
 
 	//initialize radio
-	SpiEnable();
 	initRadio();
-
-
 
 	// initialize GPS chip
 	printf("Starting ublox...\r\n");
@@ -77,7 +66,8 @@ void initHw(void) {
 }
 
 void initRadio() {
-	uint16_t i;
+	SpiEnable();
+
 	//restart radio
 	printf("wake up radio...\r\n");
 	si4060_wakeup();
@@ -86,6 +76,7 @@ void initRadio() {
 	si4060_reset();
 
 	printf("check radio info...\r\n");
+	uint16_t i;
 	i = si4060_part_info();
 	printf("Radio info: %04X\r\n",i);
 
@@ -93,18 +84,9 @@ void initRadio() {
 		printf("ERROR: Incorrect radio, not a 4063!\r\n");
 	}
 
-
 	si4060_power_up(); 		//power up radio
-
-	// GPIO pin configuration
-	//si4060_gpio_pin_cfg(GPIO_MODE_TX_DATA_CLK, GPIO_MODE_EN_PA,
-	//		GPIO_MODE_DIV_CLK, GPIO_MODE_INPUTPIN, DRV_STRENGTH_HIGH);
-
 	si4060_setup(MOD_TYPE_2GFSK);
-
 	si4060_freq_aprs_dfm17();
-
-
 	si4060_change_state(STATE_TX);
 
 	startAprsTickTimer();
