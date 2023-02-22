@@ -60,6 +60,17 @@
   * | TIM6      |   10     | GPS Update Tick Timer          |
   *  -------------------------------------------------------
   ******************************************************************************
+  * LEDs
+  * - Red: 		Error has occurred (not a hard fault)
+  * - Green: 	Transmitter mode indicator
+  *   - APRS - 1 Hz blink
+  *   - RTTY - 2 Hz blink
+  *   - Off  - Off
+  * - Yellow:	GPS has a fix
+  *
+  * Special scenarios:
+  * - Hard fault = all LEDs turn on and stay on
+  ******************************************************************************
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
