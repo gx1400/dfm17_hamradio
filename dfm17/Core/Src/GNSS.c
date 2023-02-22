@@ -214,6 +214,9 @@ void GNSS_SetMode(GNSS_StateHandle *GNSS, short gnssMode) {
  */
 void GNSS_ParsePVTData(GNSS_StateHandle *GNSS) {
 	//printf("Parsing PVT Data...\r\n");
+
+	if(!checkUbxCrc(GNSS->uartWorkingBuffer, 100)) { return; };
+
 	uShort.bytes[0] = GNSS->uartWorkingBuffer[10];
 	GNSS->yearBytes[0]=GNSS->uartWorkingBuffer[10];
 	uShort.bytes[1] = GNSS->uartWorkingBuffer[11];
@@ -279,6 +282,11 @@ void GNSS_ParsePVTData(GNSS_StateHandle *GNSS) {
  */
 void GNSS_ParseNavigatorData(GNSS_StateHandle *GNSS) {
 	//printf("Parsing Navigator Data...\r\n");
+
+	//uint8_t res = checkUbxCrc(GNSS->uartWorkingBuffer, 100); // todo implement crc, need packet length
+	//if(!checkUbxCrc(GNSS->uartWorkingBuffer, 100)) { return; };
+
+
 	uShort.bytes[0] = GNSS->uartWorkingBuffer[18];
 	uShort.bytes[1] = GNSS->uartWorkingBuffer[19];
 	GNSS->year = uShort.uShort;
@@ -296,6 +304,10 @@ void GNSS_ParseNavigatorData(GNSS_StateHandle *GNSS) {
  */
 void GNSS_ParsePOSLLHData(GNSS_StateHandle *GNSS) {
 	//printf("Parsing POS LLH Data...\r\n");
+
+	//uint8_t res = checkUbxCrc(GNSS->uartWorkingBuffer, 100); // todo implement crc, need packet length
+	//if(!checkUbxCrc(GNSS->uartWorkingBuffer, 100)) { return; };
+
 	for (int var = 0; var < 4; ++var) {
 		iLong.bytes[var] = GNSS->uartWorkingBuffer[var + 10];
 	}
