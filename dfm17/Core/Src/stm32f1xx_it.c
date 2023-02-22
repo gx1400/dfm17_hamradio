@@ -33,6 +33,7 @@
 /* USER CODE BEGIN Includes */
 #include "led.h"
 #include "gps.h"
+#include "si4063.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -52,6 +53,8 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
+
+static volatile uint8_t radioState = 1;
 
 /* USER CODE END PV */
 
@@ -287,6 +290,16 @@ void TIM6_DAC_IRQHandler(void)
   printf("5 sec gps tick!\r\n");
   ledToggleGreen();
   gpsUpdate();
+
+  /*
+  if(radioState) {
+	  si4060_stop_tx();
+	  radioState = 0;
+  } else {
+	  si4060_change_state(STATE_TX);
+	  radioState = 1;
+  }
+  */
   /* USER CODE END TIM6_DAC_IRQn 1 */
 }
 
