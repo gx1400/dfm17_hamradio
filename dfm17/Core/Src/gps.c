@@ -31,10 +31,16 @@
 #include <stdio.h>
 
 extern GNSS_StateHandle GNSS_Handle;
+volatile uint8_t ppsLockStatus;
 
 
 void gpsUpdate(void) {
 		printf("GPS Update!\r\n");
+
+		if(!ppsLockStatus) {
+			printf("No 1PPS GPS Lock...\r\n\r\n");
+			return;
+		}
 
 		if( GNSS_Handle.uniqueID[0] == 0x00 && GNSS_Handle.uniqueID[1] == 0x00 &&
 				GNSS_Handle.uniqueID[2] == 0x00 && GNSS_Handle.uniqueID[3] == 0x00 &&
@@ -129,3 +135,13 @@ uint8_t buildUbxPacket(uint8_t *packet, uint8_t *payload, uint8_t sizeOfPayload)
 
     return (sizeOfPayload + 4);
 }
+
+void assertGpsLock(void) {
+	ppsLockStatus = 1;
+}
+
+void deassertGpsLock(void) {
+	ppsLockStatus = 0;
+}
+
+

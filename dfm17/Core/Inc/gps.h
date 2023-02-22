@@ -31,6 +31,8 @@
 #include "stm32f1xx_hal.h"
 
 void gpsUpdate(void);
+void assertGpsLock(void);
+void deassertGpsLock(void);
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart);
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart);

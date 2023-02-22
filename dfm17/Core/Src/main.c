@@ -44,6 +44,7 @@
   *	| TIM2  	| Reserved for tmux				|
   *	| TIM3  	| Reserved for tmux				|
   *	| TIM6		| Tick Timer for GPS Updates	|
+  *	| TIM7      | GPS lock timer                |
   *	| TIM15		| Tick Timer for APRS Baud		|
   *	| TIM16		| Tick Timer for RTTY Baud		|
   *	| TIM17     | delay_us 1us timer            |
@@ -58,6 +59,8 @@
   * | DMA6      |    6     | GPS UART RX DMA                |
   * | DMA7      |    7     | GPS UART TX DMA                |
   * | TIM6      |   10     | GPS Update Tick Timer          |
+  * | TIM7      |   14     | GPS Lock timer                 |
+  * | EXTIO     |   15     | GPS 1pps input interrupt       |
   *  -------------------------------------------------------
   ******************************************************************************
   * LEDs
@@ -153,6 +156,7 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_CRC_Init();
   MX_TIM15_Init();
+  MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
 
   initHw();

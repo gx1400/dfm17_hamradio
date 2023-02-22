@@ -137,7 +137,9 @@ uint8_t si4060_get_cts(uint8_t read_response) {
 			}
 		}
 	}
-	printf("timeout count: %d\r\n", timeout);
+	//printf("timeout count: %d\r\n", timeout);
+
+	// todo add error return if timeout is reached
 	return 0;
 
 }
