@@ -65,6 +65,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "crc.h"
+#include "tim.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -140,6 +141,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_CRC_Init();
+  MX_TIM15_Init();
   /* USER CODE BEGIN 2 */
 
   initHw();
