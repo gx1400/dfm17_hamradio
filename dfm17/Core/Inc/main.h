@@ -91,8 +91,11 @@ void SystemClock_Config(void);
 #define usbTX_GPIO_Port GPIOA
 #define usbRX_Pin GPIO_PIN_10
 #define usbRX_GPIO_Port GPIOA
-#define iGpsPPS_Pin GPIO_PIN_8
-#define iGpsPPS_GPIO_Port GPIOB
+#define intGpsPPS_Pin GPIO_PIN_8
+#define intGpsPPS_GPIO_Port GPIOB
+#define intGpsPPS_EXTI_IRQn EXTI9_5_IRQn
+#define oTestPoint_Pin GPIO_PIN_9
+#define oTestPoint_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 
