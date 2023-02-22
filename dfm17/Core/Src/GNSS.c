@@ -32,6 +32,8 @@
  */
 
 #include "GNSS.h"
+#include "gps.h"
+#include <stdio.h>
 
 volatile union u_Short uShort;
 volatile union i_Short iShort;
@@ -96,6 +98,7 @@ void GNSS_ParseBuffer(GNSS_StateHandle *GNSS) {
 			}
 		}
 	}
+	memset(GNSS->uartWorkingBuffer, 0, 101);
 }
 
 /*!
@@ -161,6 +164,10 @@ void GNSS_GetPVTData(GNSS_StateHandle *GNSS) {
  */
 void GNSS_ParseUniqID(GNSS_StateHandle *GNSS) {
 	//printf("Parsing GetUniqID...\r\n");
+
+	if(!checkUbxCrc(GNSS->uartWorkingBuffer, 17)) {
+		return;
+	};
 	for (int var = 0; var < 5; ++var) {
 		GNSS->uniqueID[var] = GNSS->uartWorkingBuffer[10 + var];
 	}
