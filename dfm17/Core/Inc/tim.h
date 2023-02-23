@@ -50,8 +50,12 @@ void MX_TIM15_Init(void);
 void MX_TIM17_Init(void);
 
 /* USER CODE BEGIN Prototypes */
+
 void delay_us(uint16_t us);
 void assertGpsLock(void);
+void startAprsTickTimer(void);
+void stopAprsTickTimer(void);
+
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus

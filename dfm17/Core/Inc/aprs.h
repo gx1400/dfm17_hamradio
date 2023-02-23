@@ -1,20 +1,41 @@
-/*
- * aprs.h
- *
- *  Created on: Feb 19, 2023
- *      Author: gx1400
- */
+/**
+  ******************************************************************************
+  * @file    aprs.h
+  * @brief   This file contains all the function prototypes for
+  *          the aprs.c file
+  ******************************************************************************
+  * @attention
+  *
+  * Copyright (c) Stefan Biereigel
+  * All rights reserved.
+  *
+  * This program is free software: you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License as published by
+  * the Free Software Foundation, either version 3 of the License, or
+  * (at your option) any later version.
+  *
+  * This program is distributed in the hope that it will be useful,
+  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  * GNU General Public License for more details.
+  *
+  * You should have received a copy of the GNU General Public License
+  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+  *
+  ******************************************************************************
+  * Based on code from https://github.com/bristol-seds/pico-tracker
+  ******************************************************************************
+  */
 
 #ifndef INC_APRS_H_
 #define INC_APRS_H_
 
-#ifndef TEST
-//void aprs_prepare_buffer(struct gps_fix *fix, uint8_t backlog_fix);
+#include <inttypes.h>
+#include "GNSS.h"
+
+void aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix);
 void tx_aprs(void);
-#else
-uint8_t get_next_bit(void);
-void aprs_init(void);
-#endif
+
 
 /* APRS destination SSID is 0 */
 #define DST_SSID	0
