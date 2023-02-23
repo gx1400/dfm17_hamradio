@@ -107,18 +107,23 @@ static uint16_t calc_aprscrc (uint8_t crcStart, uint8_t *frame, uint8_t frame_le
         }
     }
 
-    // Take the one's compliment of the calculated CRC
-    crc = crc ^ 0xffff;
+
     return crc;
 }
 
 void calculate_fcs(void) {
+	// calculate crc of header with initial value of 0xFFFF
 	uint16_t crcval1 = 0;
 	crcval1 = calc_aprscrc(0xFFFF, aprs_header, APRS_HEADER_LEN);
 
+	// pass header calculation back into crc calc to process buffer
 	uint16_t crcval2 = 0;
 	crcval2 = calc_aprscrc(crcval1, aprs_buf, APRS_BUF_LEN);
 
+	// Take the one's compliment of the calculated CRC
+	crcval2 = crcval2 ^ 0xffff;
+
+	// bytes are swapped, so reverse
 	fcs = rev16(crcval2);
 
 }
