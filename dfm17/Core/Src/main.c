@@ -192,8 +192,13 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   initHw();
+  si4060_stop_tx();
+
+
 
   aprs_prepare_buffer(&GNSS_Handle, 0);
+
+
 
   /* USER CODE END 2 */
 
@@ -202,6 +207,8 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+	  HAL_Delay(5000);
+	  tx_aprs();
 
     /* USER CODE BEGIN 3 */
 

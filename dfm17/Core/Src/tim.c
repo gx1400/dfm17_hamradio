@@ -332,7 +332,7 @@ void processAprsTick(void) {
 	if (aprs_bit_count == APRS_BAUD_TICKS) {
 		aprs_baud_tick = 1;
 		aprs_bit_count = 0;
-		toggleSiGPIO3();
+		//toggleSiGPIO3();
 	}
 
 }
