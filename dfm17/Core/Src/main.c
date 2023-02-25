@@ -78,7 +78,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "crc.h"
 #include "tim.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -186,7 +185,6 @@ int main(void)
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
-  MX_CRC_Init();
   MX_TIM15_Init();
   MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
@@ -197,7 +195,10 @@ int main(void)
 
 
   aprs_prepare_buffer(&GNSS_Handle, 0);
+  calculate_fcs();
 
+  stopGpsLockTimer();
+  stopGpsTickTimer();
 
 
   /* USER CODE END 2 */
@@ -207,10 +208,11 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-	  HAL_Delay(5000);
-	  tx_aprs();
+
 
     /* USER CODE BEGIN 3 */
+	  HAL_Delay(2000);
+	  tx_aprs();
 
   }
   /* USER CODE END 3 */

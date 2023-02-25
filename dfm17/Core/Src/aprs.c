@@ -48,12 +48,15 @@
 #include "tim.h"
 #include "string.h"
 #include <math.h>
+#include "led.h"
 
 /*
  * the APRS data buffer
  * contains ASCII data
  */
 char aprs_buf[APRS_BUF_LEN] = "/ddhhmmz/xxxxyyyyOaa1|ss001122|";
+// KC0TWY-5>APDR16,TCPIP*,qAC,T2LAUSITZ:=3858.33N/09439.08W>166/000/A=000973 https://aprsdroid.org/
+//char aprs_buf[] = "=3858.33N/09439.08W>189/000/A=000972 https://aprsdroid.org/";
 
 extern volatile uint16_t aprs_bit;
 extern volatile uint16_t aprs_tick;
@@ -62,7 +65,7 @@ extern volatile uint8_t ppsLockStatus;
 
 const unsigned char aprs_header[APRS_HEADER_LEN] = {
 	'A'*2, 'P'*2, 'R'*2, 'S'*2, ' '*2, ' '*2, SSID_RESC + (DST_SSID << 1),
-	'D'*2, 'K'*2, '3'*2, 'S'*2, 'B'*2, ' '*2, SSID_RESC + (SRC_SSID << 1),
+	'K'*2, 'E'*2, '0'*2, 'P'*2, 'R'*2, 'Y'*2, SSID_RESC + (SRC_SSID << 1),
 	'W'*2, 'I'*2, 'D'*2, 'E'*2, '1'*2, ' '*2, SSID_RESC + (WIDE_SSID << 1) + HEADER_END,
 	CONTROL_UI, PID_NONE};
 
@@ -336,13 +339,15 @@ uint8_t get_next_bit(void) {
  */
 void tx_aprs(void) {
 	aprs_init();
+	ledOnGreen();
+	deassertSiGPIO3();
 	startAprsTickTimer();
 
 	/* use 2FSK mode so we can adjust the OFFSET register */
 	si4060_setup(MOD_TYPE_2GFSK);
 	si4060_start_tx(0);
 	/* add some TX delay */
-	__delay_cycles(300000);
+	HAL_Delay(250);
 
 	aprs_tick = 0;
 	do {
@@ -354,6 +359,7 @@ void tx_aprs(void) {
 				/* running with bit clock (1200 / sec) */
 				//WDTCTL = WDTPW + WDTCNTCL + WDTIS1;
 				aprs_baud_tick = 0;
+				//toggleSiGPIO3();
 
 				if (get_next_bit()) {
 					aprs_bit = APRS_SPACE;
@@ -370,8 +376,13 @@ void tx_aprs(void) {
 //			}
 		}
 	} while(!finished);
+
+	deassertSiGPIO3();
+
+	HAL_Delay(100);
 	si4060_stop_tx();
 	stopAprsTickTimer();
+	ledOffGreen();
 }
 
 

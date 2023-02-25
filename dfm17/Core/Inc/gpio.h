@@ -51,6 +51,8 @@ void MX_GPIO_Init(void);
 void toggleSiGPIO2(void);
 void toggleSiGPIO3(void);
 void togglePB9(void);
+void assertSiGPIO3(void);
+void deassertSiGPIO3(void);
 
 /* USER CODE END Prototypes */
 

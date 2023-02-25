@@ -50,6 +50,8 @@ void MX_TIM6_Init(void)
 
   /* USER CODE BEGIN TIM6_Init 0 */
 
+	// TIM6 used for GPS tick timer
+
   /* USER CODE END TIM6_Init 0 */
 
   TIM_MasterConfigTypeDef sMasterConfig = {0};
@@ -82,6 +84,7 @@ void MX_TIM7_Init(void)
 {
 
   /* USER CODE BEGIN TIM7_Init 0 */
+	// TIM7 used for 1pps
 
   /* USER CODE END TIM7_Init 0 */
 
@@ -106,7 +109,7 @@ void MX_TIM7_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM7_Init 2 */
-  HAL_TIM_Base_Start_IT(&htim7);
+  startGpsLockTimer();
 
   /* USER CODE END TIM7_Init 2 */
 
@@ -126,7 +129,7 @@ void MX_TIM15_Init(void)
 
   /* USER CODE END TIM15_Init 1 */
   htim15.Instance = TIM15;
-  htim15.Init.Prescaler = 151;
+  htim15.Init.Prescaler = 303;
   htim15.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim15.Init.Period = 1;
   htim15.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -321,6 +324,12 @@ void processAprsTick(void) {
 	aprs_nco_count++;
 	aprs_bit_count++;
 
+	// TESTING
+	//if (aprs_nco_count >= APRS_MARK_TICKS) {
+		//aprs_nco_count = 0;
+		//toggleSiGPIO3();
+	//}
+
 	if (aprs_bit == APRS_SPACE && aprs_nco_count >= APRS_SPACE_TICKS) {
 		aprs_tick = 1;
 		aprs_nco_count = 0;
@@ -335,12 +344,40 @@ void processAprsTick(void) {
 		//toggleSiGPIO3();
 	}
 
+
+
 }
 
 void resetGpsLockTimer(void) {
 	__HAL_TIM_SET_COUNTER(&htim7, 0);  // set the counter value a 0
 }
 
+void startGpsTickTimer(void) {
+	if (HAL_TIM_Base_Start_IT(&htim6) != HAL_OK) {
+	  /* Starting Error */
+	  Error_Handler();
+	}
+}
 
+void stopGpsTickTimer(void) {
+	if (HAL_TIM_Base_Stop_IT(&htim6) != HAL_OK) {
+		  /* Starting Error */
+		  Error_Handler();
+		}
+}
+
+void startGpsLockTimer(void) {
+	if (HAL_TIM_Base_Start_IT(&htim7) != HAL_OK) {
+		  /* Starting Error */
+		  Error_Handler();
+		}
+}
+
+void stopGpsLockTimer(void) {
+	if (HAL_TIM_Base_Stop_IT(&htim7)!= HAL_OK) {
+		  /* Starting Error */
+		  Error_Handler();
+		}
+}
 
 /* USER CODE END 1 */

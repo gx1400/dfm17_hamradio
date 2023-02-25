@@ -258,10 +258,7 @@ void EXTI9_5_IRQHandler(void)
   /* USER CODE BEGIN EXTI9_5_IRQn 0 */
 
   /* USER CODE END EXTI9_5_IRQn 0 */
-  //printf("1pps tick!\r\n");
   HAL_GPIO_EXTI_IRQHandler(intGpsPPS_Pin);
-  resetGpsLockTimer();
-  assertGpsLock();
   /* USER CODE BEGIN EXTI9_5_IRQn 1 */
 
   /* USER CODE END EXTI9_5_IRQn 1 */

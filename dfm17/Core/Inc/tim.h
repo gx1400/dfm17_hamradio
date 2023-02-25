@@ -55,6 +55,10 @@ void delay_us(uint16_t us);
 void assertGpsLock(void);
 void startAprsTickTimer(void);
 void stopAprsTickTimer(void);
+void startGpsTickTimer(void);
+void stopGpsTickTimer(void);
+void startGpsLockTimer(void);
+void stopGpsLockTimer(void);
 
 /* USER CODE END Prototypes */
 

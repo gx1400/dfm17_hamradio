@@ -132,6 +132,14 @@ void toggleSiGPIO3(void) {
 	GPIOA->ODR ^= (1 << 4);
 }
 
+void assertSiGPIO3(void) {
+	GPIOA->BSRR = (1 << 4);
+}
+
+void deassertSiGPIO3(void) {
+	GPIOA->BSRR = (1 << (16+4));
+}
+
 void toggleSiGPIO2(void) {
 	GPIOD->ODR ^= (1 << 0);
 }

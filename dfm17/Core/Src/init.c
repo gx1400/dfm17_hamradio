@@ -62,7 +62,7 @@ void initHw(void) {
 	GNSS_LoadConfig(&GNSS_Handle);
 
 	//after GPS is initialized, then start GPS update tick timer
-	startGpsTimer();
+	startGpsTickTimer();
 }
 
 void initRadio() {
@@ -95,10 +95,4 @@ void initRadio() {
 
 }
 
-void startGpsTimer() {
-  if (HAL_TIM_Base_Start_IT(&htim6) != HAL_OK)
-  {
-	  /* Starting Error */
-	  Error_Handler();
-  }
-}
+

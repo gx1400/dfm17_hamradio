@@ -86,6 +86,7 @@ void tx_aprs(void);
  * 1 tlm delimiter
  */
 #define APRS_BUF_LEN	1 + 7 + 1 + 4 + 4 + 1 + 3 + 1 + 2 + 2 + 2 + 2 + 1
+//#define APRS_BUF_LEN 60
 
 #define APRS_TIME_START	1
 #define APRS_TIME_LEN	6
