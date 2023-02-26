@@ -568,10 +568,10 @@ void si4060_set_aprs_params_TESTING(void) {
 	si4060_set_property_8(PROP_MODEM,
 			MODEM_MOD_TYPE,
 			MOD_TYPE_2GFSK | MOD_SOURCE_DIRECT | MOD_GPIO_3 | MOD_DIRECT_MODE_SYNC);
-	/* setup divider to 24 (for 2m amateur radio band) */
+	/* setup divider to 10 (for DFMtesting at 400Mhz) */
 	si4060_set_property_8(PROP_MODEM,
 			MODEM_CLKGEN_BAND,
-			SY_SEL_1 | FVCO_DIV_6);
+			SY_SEL_1 | FVCO_DIV_10);
 	/* setup frequency deviation offset */
 	si4060_set_property_16(PROP_MODEM,
 			MODEM_FREQ_OFFSET,
@@ -579,8 +579,10 @@ void si4060_set_aprs_params_TESTING(void) {
 	/* setup frequency deviation */
 	si4060_set_property_24(PROP_MODEM,
 			MODEM_FREQ_DEV,
-			(uint16_t)(2*FDEV_APRS));
+			(uint16_t)(2*FDEV_APRS_DFM));
 }
+
+
 
 void si4060_freq_aprs_reg1(void) {
 	si4060_set_aprs_params();

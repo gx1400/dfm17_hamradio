@@ -61,11 +61,13 @@
 #define F_INT_DFM				(2 * XO_FREQ / )
 #define OUTDIV_70CM				8
 #define OUTDIV_2M				24
+#define OUTDIV_DFM				10
 
 #define FDIV_INTE_2M(freq)	((RF_FREQ_HZ_2M_ ## freq / F_INT_2M) - 1)
 #define FDIV_FRAC_2M(freq)	((RF_FREQ_HZ_2M_ ## freq - F_INT_2M * (int)FDIV_INTE_2M(freq))*((uint32_t)1 << 19)) / F_INT_2M
 #define FDEV_RTTY			((((uint32_t)1 << 19) * OUTDIV_2M * RF_RTTY_DEV_HZ)/(2*XO_FREQ))
-#define FDEV_APRS			((((uint32_t)1 << 19) * OUTDIV_2M * RF_APRS_DEV_HZ)/(2*XO_FREQ))
+#define FDEV_APRS		((((uint32_t)1 << 19) * OUTDIV_2M * RF_APRS_DEV_HZ)/(2*XO_FREQ))
+#define FDEV_APRS_DFM		((((uint32_t)1 << 19) * OUTDIV_DFM * RF_APRS_DEV_HZ)/(2*XO_FREQ))
 
 #define FDIV_INTE_DFM		77
 #define FDEV_DFM			0x90000
