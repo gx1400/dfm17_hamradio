@@ -308,6 +308,7 @@ void __delay_cycles(uint32_t delay);
 #define SY_SEL_1			(0x01 << 3) 	/* default */
 #define FVCO_DIV_4			0x00 			/* default */
 #define FVCO_DIV_6			0x01
+#define FVCO_DIV_10			0x01            /* for si4063 */
 #define FVCO_DIV_8			0x02 			/* for 70cm ISM band */
 #define FVCO_DIV_12			0x03
 #define FVCO_DIV_16			0x04
