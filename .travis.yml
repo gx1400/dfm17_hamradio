@@ -1,4 +1,5 @@
 language: c
+dist: jammy
 before_install:
   - sudo apt-get -y install flatpak
   - flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
