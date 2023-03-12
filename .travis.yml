@@ -3,6 +3,6 @@ dist: jammy
 before_install:
   - sudo apt-get -y install flatpak
   - sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-  - sudo flatpak install flathub com.st.STM32CubeIDE
+  - sudo flatpak install -y flathub com.st.STM32CubeIDE
   - sudo flatpak run com.st.STM32CubeIDE /opt/st/headless.sh help
 
