@@ -1,7 +1,7 @@
 language: minimal
-dist: jammy
+dist: focal
 before_install:
-  - sudo apt-get -y install gcc-arm-embedded flatpak
+  - sudo apt-get -y install gcc-arm-none-eabi flatpak
   - flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
   - flatpak install -y --user flathub com.st.STM32CubeIDE
 script:
