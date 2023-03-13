@@ -5,6 +5,6 @@ before_install:
   - flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
   - flatpak install -y --user flathub com.st.STM32CubeIDE
 # output is in job 12:  - find `flatpak info -l com.st.STM32CubeIDE `
-  - flatpak run --command="stm32cubeide/headless-build.sh --help" com.st.STM32CubeIDE
+  - flatpak run --command="`flatpak info -l com.st.STM32CubeIDE`/files/stm32cubeide/headless-build.sh --help" com.st.STM32CubeIDE
   - false
 
