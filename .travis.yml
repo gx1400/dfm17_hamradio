@@ -6,5 +6,5 @@ before_install:
   - flatpak install -y --user flathub com.st.STM32CubeIDE
 # output is in job 12:  - find `flatpak info -l com.st.STM32CubeIDE `
 script:
-  - flatpak run --command="/app/stm32cubeide/headless-build.sh" com.st.STM32CubeIDE -data . -importAll . -build all -no-indexer
+  - flatpak run --command="/app/stm32cubeide/stm32cubeide" com.st.STM32CubeIDE --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data . -importAll . -build all -no-indexer
 
