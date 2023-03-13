@@ -6,12 +6,9 @@ before_install:
   - flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
   - flatpak install -y --user flathub com.st.STM32CubeIDE
 script:
-# it's normal for this flatpak command to show errors like:
-#23:08:41 **** Build of configuration Release for project dfm17 ****
-#make -j4 all 
-#Portal call failed: org.freedesktop.DBus.Error.ServiceUnknown
-#"make -j4 all" terminated with exit code 1. Build might be incomplete.
-# If it runs this, then it's generated the makefile, which we invoke manually later
-  - flatpak run --command="/app/stm32cubeide/stm32cubeide" com.st.STM32CubeIDE --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data . -importAll . -build all -no-indexer
+# This flatpak STM32CubeIDE command fails to produce a build, but it generates
+# the uncommitted makefile that we need to build manually below.
+# So we use it, but suppress errors.
+  - flatpak run --command="/app/stm32cubeide/stm32cubeide" com.st.STM32CubeIDE --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data . -importAll . -build all -no-indexer > /dev/null
   - cd dfm17/Release
   - make all
