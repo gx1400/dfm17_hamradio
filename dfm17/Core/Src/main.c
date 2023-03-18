@@ -86,6 +86,7 @@
 #include "GNSS.h"
 #include "init.h"
 #include "aprs.h"
+#include "si4063.h"
 
 /* USER CODE END Includes */
 
@@ -113,6 +114,7 @@ volatile uint8_t rxDone;
 
 volatile uint16_t aprs_bit;
 volatile uint16_t aprs_tick;
+volatile uint16_t rtty_tick;
 volatile uint16_t aprs_baud_tick;
 
 
@@ -159,6 +161,239 @@ static uint16_t calc_aprscrc (uint16_t crcStart, uint8_t *frame, uint8_t frame_l
     return crc;
 }
 
+volatile uint16_t rtty_bit;
+extern volatile uint16_t tlm_tick;
+uint16_t tx_buf_rdy;
+uint16_t tx_buf_length;
+char tx_buf[100];
+#define NUM_IDLE_BITS	320
+
+
+/*
+ * tx_rtty
+ *
+ * transmits the TX buffer via RTTY at 50 baud (at 100Hz rtty_tick)
+ * LSB first, in 7bit-ASCII format, 1 start bit, 2 stop bits
+ *
+ * the systick-flag is used for timing.
+ */
+void tx_rtty(void) {
+	    //tx_buf = 'hello world!';
+		int z = -1;
+		tx_buf_rdy = 1;
+	    tx_buf[z++] = 'h';
+	    tx_buf[z++] = 'e';
+	    tx_buf[z++] = 'l';
+	    tx_buf[z++] = 'l';
+	    tx_buf[z++] = 'o';
+	    tx_buf[z++] = ' ';
+	    tx_buf[z++] = 'w';
+	    tx_buf[z++] = 'o';
+	    tx_buf[z++] = 'r';
+	    tx_buf[z++] = 'l';
+	    tx_buf[z++] = 'd';
+	    tx_buf[z++] = '!';
+	    tx_buf[z++] = 'h';
+	    tx_buf[z++] = 'e';
+	    tx_buf[z++] = 'l';
+	    tx_buf[z++] = 'l';
+	    tx_buf[z++] = 'o';
+	    tx_buf[z++] = ' ';
+	    tx_buf[z++] = 'w';
+	    tx_buf[z++] = 'o';
+	    tx_buf[z++] = 'r';
+	    tx_buf[z++] = 'l';
+	    tx_buf[z++] = 'd';
+	    tx_buf[z++] = '!';
+	    tx_buf[z++] = 'h';
+	    tx_buf[z++] = 'e';
+	    tx_buf[z++] = 'l';
+	    tx_buf[z++] = 'l';
+	    tx_buf[z++] = 'o';
+	    tx_buf[z++] = ' ';
+	    tx_buf[z++] = 'w';
+	    tx_buf[z++] = 'o';
+	    tx_buf[z++] = 'r';
+	    tx_buf[z++] = 'l';
+	    tx_buf[z++] = 'd';
+	    tx_buf[z++] = '!';
+	    tx_buf[z++] = 'h';
+	    tx_buf[z++] = 'e';
+	    tx_buf[z++] = 'l';
+	    tx_buf[z++] = 'l';
+	    tx_buf[z++] = 'o';
+	    tx_buf[z++] = ' ';
+	    tx_buf[z++] = 'w';
+	    tx_buf[z++] = 'o';
+	    tx_buf[z++] = 'r';
+	    tx_buf[z++] = 'l';
+	    tx_buf[z++] = 'd';
+	    tx_buf[z++] = '!';
+	    tx_buf[z++] = 'h';
+	    tx_buf[z++] = 'e';
+	    tx_buf[z++] = 'l';
+	    tx_buf[z++] = 'l';
+	    tx_buf[z++] = 'o';
+	    tx_buf[z++] = ' ';
+	    tx_buf[z++] = 'w';
+	    tx_buf[z++] = 'o';
+	    tx_buf[z++] = 'r';
+	    tx_buf[z++] = 'l';
+	    tx_buf[z++] = 'd';
+	    tx_buf[z++] = '!';
+	    tx_buf[z++] = '\0';
+	    tx_buf_length = 13;
+        enum c_states {IDLE, START, CHARACTER, STOP1, STOP2};
+        static uint16_t tx_state = 0;
+        static uint16_t char_state = IDLE;
+        static uint8_t data = 0;
+        static uint16_t i = 0;
+        static uint16_t tx_buf_index = 0;       /* the index for reading from the buffer */
+        /*if (!tx_buf_rdy) {
+                if (tx_state == 1) {
+                        si4060_stop_tx();
+                        tx_state = 0;
+                }
+                return;
+        }*/
+        /* tx_buffer is ready */
+
+		aprs_init();
+		ledOnGreen();
+		deassertSiGPIO3();
+		start_rtty_tick_timer();
+
+		si4060_setup(MOD_TYPE_2FSK);
+		si4060_start_tx(0);
+		tx_state = 1;
+		tx_buf_index = 0;
+
+
+        if (!rtty_tick)
+                return;
+
+        do {
+        	if (rtty_tick) {
+        		rtty_tick = 0;
+				switch (char_state) {
+						case IDLE:
+								//P1OUT |= SI_DATA;
+								assertSiGPIO3();
+								deassertSiGPIO3();
+								i++;
+								if (i == NUM_IDLE_BITS) {
+										char_state = START;
+										i = 0;
+								}
+								break;
+						case START:
+								//P1OUT &= ~SI_DATA;
+								assertSiGPIO3();
+
+								i = 0;
+								data = tx_buf[tx_buf_index];
+								char_state = CHARACTER;
+								break;
+						case CHARACTER:
+								i++;
+
+								if (data & 0x01) {
+										//P1OUT |= SI_DATA;
+										assertSiGPIO3();
+								} else {
+										//P1OUT &= ~SI_DATA;
+										deassertSiGPIO3();
+								}
+								data >>= 1;
+								if (i == 7) {
+										char_state = STOP1;
+								}
+								break;
+						case STOP1:
+								//P1OUT |= SI_DATA;
+								ledOnRed();
+								deassertSiGPIO3();
+								char_state = STOP2;
+								break;
+						case STOP2:
+								i = 0;
+								char_state = START;
+								tx_buf_index++;
+								if (tx_buf_index >= tx_buf_length) {
+										char_state = IDLE;
+										tx_buf_rdy = 0;
+								}
+								break;
+						default:
+								break;
+				}
+        	}
+        } while (tx_buf_rdy == 1);
+
+    	deassertSiGPIO3();
+    	HAL_Delay(100);
+    	si4060_stop_tx();
+    	stop_rtty_tick_timer();
+    	ledOffGreen();
+    	ledOffRed();
+}
+
+
+void tx_rtty_bleep_a_lot()
+{
+	aprs_init();
+	ledOnGreen();
+	deassertSiGPIO3();
+	start_rtty_tick_timer();
+
+	si4060_setup(MOD_TYPE_2FSK);
+	si4060_start_tx(0);
+	//si4060_set_offset(1200);
+	/* add some TX delay */
+	HAL_Delay(250);
+
+	aprs_tick = 0;
+	int counter = 0;
+	do {
+		if (rtty_tick) {
+			/* running with RTTY sample clock */
+			rtty_tick = 0;
+			toggleSiGPIO3();
+			counter++;
+			/*if (aprs_baud_tick) {
+
+				aprs_baud_tick = 0;
+				//toggleSiGPIO3();
+
+				if (get_next_bit()) {
+					aprs_bit = APRS_SPACE;
+				} else {
+					aprs_bit = APRS_MARK;
+				}
+			}*/
+
+			/* tell us when we fail to meet the timing */
+//			if (aprs_tick) {
+//				while(1) {
+//					WDTCTL = WDTPW + WDTCNTCL + WDTIS1;
+//				}
+//			}
+		}
+	} while(counter < 50);
+
+	deassertSiGPIO3();
+
+	HAL_Delay(100);
+	si4060_stop_tx();
+	stop_rtty_tick_timer();
+	ledOffGreen();
+}
+
+void process_rtty_tick()
+{
+	rtty_tick = 1;
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -187,6 +422,7 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_TIM15_Init();
   MX_TIM7_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
   initHw();
@@ -194,8 +430,8 @@ int main(void)
 
 
 
-  aprs_prepare_buffer(&GNSS_Handle, 0);
-  calculate_fcs();
+  //aprs_prepare_buffer(&GNSS_Handle, 0);
+  //calculate_fcs();
 
   stopGpsLockTimer();
   stopGpsTickTimer();
@@ -209,10 +445,10 @@ int main(void)
   {
     /* USER CODE END WHILE */
 
-
     /* USER CODE BEGIN 3 */
 	  HAL_Delay(2000);
-	  tx_aprs();
+	  //tx_aprs();
+	  tx_rtty();
 
   }
   /* USER CODE END 3 */
