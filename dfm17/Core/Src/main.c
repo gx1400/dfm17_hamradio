@@ -277,7 +277,9 @@ void tx_rtty(void) {
         		rtty_tick = 0;
 				switch (char_state) {
 						case IDLE:
+                                // send a bunch of zeroes
 								//P1OUT |= SI_DATA;
+                                // assert + deassert real quick to get the tine to 0. it starts somewhere in the middle.
 								assertSiGPIO3();
 								deassertSiGPIO3();
 								i++;
@@ -287,8 +289,9 @@ void tx_rtty(void) {
 								}
 								break;
 						case START:
+                                // send a single 0
 								//P1OUT &= ~SI_DATA;
-								assertSiGPIO3();
+								deassertSiGPIO3();
 
 								i = 0;
 								data = tx_buf[tx_buf_index];
@@ -298,9 +301,11 @@ void tx_rtty(void) {
 								i++;
 
 								if (data & 0x01) {
+                                        // 1
 										//P1OUT |= SI_DATA;
 										assertSiGPIO3();
 								} else {
+                                        // 0
 										//P1OUT &= ~SI_DATA;
 										deassertSiGPIO3();
 								}
@@ -310,12 +315,14 @@ void tx_rtty(void) {
 								}
 								break;
 						case STOP1:
+                                // 1
 								//P1OUT |= SI_DATA;
 								ledOnRed();
 								deassertSiGPIO3();
 								char_state = STOP2;
 								break;
 						case STOP2:
+                                // 1
 								i = 0;
 								char_state = START;
 								tx_buf_index++;
@@ -328,7 +335,7 @@ void tx_rtty(void) {
 								break;
 				}
         	}
-        } while (tx_buf_rdy == 1);
+        } while (tx_buf_rdy == 1); // FIXME the second stop bit wont make it...
 
     	deassertSiGPIO3();
     	HAL_Delay(100);
