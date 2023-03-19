@@ -166,7 +166,7 @@ extern volatile uint16_t tlm_tick;
 uint16_t tx_buf_rdy;
 uint16_t tx_buf_length;
 char tx_buf[100];
-#define NUM_IDLE_BITS	320
+#define NUM_IDLE_BITS	32
 
 
 /*
@@ -318,7 +318,7 @@ void tx_rtty(void) {
                                 // 1
 								//P1OUT |= SI_DATA;
 								ledOnRed();
-								deassertSiGPIO3();
+								assertSiGPIO3();
 								char_state = STOP2;
 								break;
 						case STOP2:
