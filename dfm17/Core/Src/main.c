@@ -175,6 +175,7 @@ char tx_buf[100];
  * transmits the TX buffer via RTTY at 50 baud (50 Hz rtty_tick)
  * LSB first, in 7bit-ASCII format, 1 start bit, 2 stop bits
  *
+ * For now in development, this transmits at 144.7 MHz, and sends a static test string.
  */
 void tx_rtty(void) {
 		tx_buf_rdy = 1;
@@ -348,6 +349,8 @@ int main(void)
     /* USER CODE BEGIN 3 */
 	  HAL_Delay(1000);
 	  tx_aprs();
+
+	  // If you're developing APRS and don't want to wait for slow RTTY, comment these out:
 	  HAL_Delay(1000);
 	  tx_rtty();
 

@@ -336,6 +336,8 @@ uint8_t get_next_bit(void) {
  *
  * transmits an APRS packet.
  *
+ * For now in development, this transmits packets on 400.0 MHz
+ *
  */
 void tx_aprs(void) {
 	aprs_init();
