@@ -42,11 +42,11 @@
   *	|-----------|-------------------------------|
   *	| TIM1 		| Reserved for tmux				|
   *	| TIM2  	| Reserved for tmux				|
-  *	| TIM3  	| Reserved for tmux				|
+  *	| TIM3  	| Tick timer for RTTY baud      |
   *	| TIM6		| Tick Timer for GPS Updates	|
   *	| TIM7      | GPS lock timer                |
   *	| TIM15		| Tick Timer for APRS Baud		|
-  *	| TIM16		| Tick Timer for RTTY Baud		|
+  *	| TIM16		| Unused                        |
   *	| TIM17     | delay_us 1us timer            |
   *	 -------------------------------------------
   ******************************************************************************
@@ -55,7 +55,7 @@
   * | INTERRUPT | Priority | Purpose                        |
   * |-----------|----------|--------------------------------|
   * | TIM15     |    1     | APRS Baud Clock                |
-  * | TIM16     |    2     | RTTY Baud Clock                |
+  * | TIM3      |    2     | RTTY Baud Clock                |
   * | DMA6      |    6     | GPS UART RX DMA                |
   * | DMA7      |    7     | GPS UART TX DMA                |
   * | TIM6      |   10     | GPS Update Tick Timer          |
@@ -86,6 +86,7 @@
 #include "GNSS.h"
 #include "init.h"
 #include "aprs.h"
+#include "si4063.h"
 
 /* USER CODE END Includes */
 
@@ -113,6 +114,7 @@ volatile uint8_t rxDone;
 
 volatile uint16_t aprs_bit;
 volatile uint16_t aprs_tick;
+volatile uint16_t rtty_tick;
 volatile uint16_t aprs_baud_tick;
 
 
@@ -159,6 +161,140 @@ static uint16_t calc_aprscrc (uint16_t crcStart, uint8_t *frame, uint8_t frame_l
     return crc;
 }
 
+volatile uint16_t rtty_bit;
+extern volatile uint16_t tlm_tick;
+uint16_t tx_buf_rdy;
+uint16_t tx_buf_length;
+char tx_buf[100];
+#define NUM_IDLE_BITS	32
+
+
+/*
+ * tx_rtty
+ *
+ * transmits the TX buffer via RTTY at 50 baud (50 Hz rtty_tick)
+ * LSB first, in 7bit-ASCII format, 1 start bit, 2 stop bits
+ *
+ * For now in development, this transmits at 144.7 MHz, and sends a static test string.
+ */
+void tx_rtty(void) {
+		tx_buf_rdy = 1;
+		// FIXME: we need about 10 blanks at the start of the transmission because
+		// fldigi doesn't sync with our signal quick enough. Probably a sign of a
+		// bug in modulation/encoding/timing?
+        char tx_buf[] = "          KD9PRC hello world! from dfm17_hamradio rtty 50 baud 7n2 73!\r\n\0";
+	    tx_buf_length = 72;
+        enum c_states {IDLE, START, CHARACTER, STOP1, STOP2};
+        static uint16_t tx_state = 0;
+        static uint16_t char_state = IDLE;
+        static uint8_t data = 0;
+        static uint16_t i = 0;
+        static uint16_t tx_buf_index = 0;       /* the index for reading from the buffer */
+        /*if (!tx_buf_rdy) {
+                if (tx_state == 1) {
+                        si4060_stop_tx();
+                        tx_state = 0;
+                }
+                return;
+        }*/
+        /* tx_buffer is ready */
+
+		ledOnGreen();
+
+		si4060_setup(MOD_TYPE_2FSK);
+		si4060_freq_2m_rtty();
+		si4060_start_tx(0);
+		// assert + de-assert real quick to get the tone to 0. it starts somewhere in the middle.
+		assertSiGPIO3();
+		deassertSiGPIO3();
+		/* add some TX delay */
+	    //HAL_Delay(1000);
+
+		rtty_tick = 0;
+		start_rtty_tick_timer();
+
+		tx_state = 1;
+		tx_buf_index = 0;
+
+
+        //if (!rtty_tick)
+        //        return;
+
+        do {
+        	if (rtty_tick) {
+        		rtty_tick = 0;
+				switch (char_state) {
+						case IDLE:
+                                // send a bunch of zeroes
+								//P1OUT |= SI_DATA;
+								deassertSiGPIO3();
+								i++;
+								if (i == NUM_IDLE_BITS) {
+										char_state = START;
+										i = 0;
+								}
+								break;
+						case START:
+                                // send a single 0
+								//P1OUT &= ~SI_DATA;
+								deassertSiGPIO3();
+								ledToggleGreen();
+
+								i = 0;
+								data = tx_buf[tx_buf_index];
+								char_state = CHARACTER;
+								break;
+						case CHARACTER:
+								i++;
+
+								if (data & 0x01) {
+                                        // 1
+										//P1OUT |= SI_DATA;
+										assertSiGPIO3();
+								} else {
+                                        // 0
+										//P1OUT &= ~SI_DATA;
+										deassertSiGPIO3();
+								}
+								data >>= 1;
+								if (i == 7) {
+										char_state = STOP1;
+								}
+								break;
+						case STOP1:
+                                // 1
+								//P1OUT |= SI_DATA;
+								assertSiGPIO3();
+								char_state = STOP2;
+								break;
+						case STOP2:
+                                // 1
+								i = 0;
+								char_state = START;
+								tx_buf_index++;
+								if (tx_buf_index >= tx_buf_length) {
+										char_state = IDLE;
+										tx_buf_rdy = 0;
+								}
+								break;
+						default:
+								break;
+				}
+        	}
+        } while (tx_buf_rdy == 1); // FIXME the second stop bit wont make it...
+
+    	deassertSiGPIO3();
+    	HAL_Delay(100);
+    	si4060_stop_tx();
+    	stop_rtty_tick_timer();
+    	ledOffGreen();
+}
+
+void process_rtty_tick()
+{
+	rtty_tick = 1;
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -187,6 +323,7 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_TIM15_Init();
   MX_TIM7_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
   initHw();
@@ -209,10 +346,13 @@ int main(void)
   {
     /* USER CODE END WHILE */
 
-
     /* USER CODE BEGIN 3 */
-	  HAL_Delay(2000);
+	  HAL_Delay(1000);
 	  tx_aprs();
+
+	  // If you're developing APRS and don't want to wait for slow RTTY, comment these out:
+	  HAL_Delay(1000);
+	  tx_rtty();
 
   }
   /* USER CODE END 3 */
@@ -296,7 +436,7 @@ void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+     for example: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
