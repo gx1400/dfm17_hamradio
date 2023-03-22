@@ -42,11 +42,11 @@
   *	|-----------|-------------------------------|
   *	| TIM1 		| Reserved for tmux				|
   *	| TIM2  	| Reserved for tmux				|
-  *	| TIM3  	| Tick timer for RTTY baud				|
+  *	| TIM3  	| Tick timer for RTTY baud      |
   *	| TIM6		| Tick Timer for GPS Updates	|
   *	| TIM7      | GPS lock timer                |
   *	| TIM15		| Tick Timer for APRS Baud		|
-  *	| TIM16		| Unused		|
+  *	| TIM16		| Unused                        |
   *	| TIM17     | delay_us 1us timer            |
   *	 -------------------------------------------
   ******************************************************************************
