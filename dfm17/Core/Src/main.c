@@ -67,7 +67,7 @@
   * - Red: 		Error has occurred (not a hard fault)
   * - Green: 	Transmitter mode indicator
   *   - APRS - 1 Hz blink
-  *   - RTTY - 2 Hz blink // FIXME
+  *   - RTTY - 2 Hz blink
   *   - Off  - Off
   * - Yellow:	GPS has a fix
   *
@@ -177,7 +177,6 @@ char tx_buf[100];
  *
  */
 void tx_rtty(void) {
-		int z = 1;
 		tx_buf_rdy = 1;
 		// FIXME: we need about 10 blanks at the start of the transmission because
 		// fldigi doesn't sync with our signal quick enough. Probably a sign of a
@@ -238,6 +237,7 @@ void tx_rtty(void) {
                                 // send a single 0
 								//P1OUT &= ~SI_DATA;
 								deassertSiGPIO3();
+								ledToggleGreen();
 
 								i = 0;
 								data = tx_buf[tx_buf_index];
@@ -263,7 +263,6 @@ void tx_rtty(void) {
 						case STOP1:
                                 // 1
 								//P1OUT |= SI_DATA;
-								ledOnRed();
 								assertSiGPIO3();
 								char_state = STOP2;
 								break;
@@ -288,7 +287,6 @@ void tx_rtty(void) {
     	si4060_stop_tx();
     	stop_rtty_tick_timer();
     	ledOffGreen();
-    	ledOffRed();
 }
 
 void process_rtty_tick()
