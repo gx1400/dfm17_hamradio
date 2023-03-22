@@ -1,4 +1,4 @@
-[![Build Status](https://app.travis-ci.com/gx1400/dfm17_hamradio.svg?branch=main)](https://app.travis-ci.com/gx1400/dfm17_hamradio)
+[![Build Status](https://app.travis-ci.com/trickv/dfm17_hamradio.svg?branch=main)](https://app.travis-ci.com/gx1400/dfm17_hamradio)
 # dfm17_hamradio
 
 This repo is a development implementation of code to run on a Graw DFM-17 radiosonde
