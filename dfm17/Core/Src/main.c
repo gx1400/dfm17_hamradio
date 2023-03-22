@@ -42,11 +42,11 @@
   *	|-----------|-------------------------------|
   *	| TIM1 		| Reserved for tmux				|
   *	| TIM2  	| Reserved for tmux				|
-  *	| TIM3  	| Reserved for tmux				|
+  *	| TIM3  	| Tick timer for RTTY baud				|
   *	| TIM6		| Tick Timer for GPS Updates	|
   *	| TIM7      | GPS lock timer                |
   *	| TIM15		| Tick Timer for APRS Baud		|
-  *	| TIM16		| Tick Timer for RTTY Baud		|
+  *	| TIM16		| Unused		|
   *	| TIM17     | delay_us 1us timer            |
   *	 -------------------------------------------
   ******************************************************************************
@@ -55,7 +55,7 @@
   * | INTERRUPT | Priority | Purpose                        |
   * |-----------|----------|--------------------------------|
   * | TIM15     |    1     | APRS Baud Clock                |
-  * | TIM16     |    2     | RTTY Baud Clock                |
+  * | TIM3      |    2     | RTTY Baud Clock                |
   * | DMA6      |    6     | GPS UART RX DMA                |
   * | DMA7      |    7     | GPS UART TX DMA                |
   * | TIM6      |   10     | GPS Update Tick Timer          |
@@ -67,7 +67,7 @@
   * - Red: 		Error has occurred (not a hard fault)
   * - Green: 	Transmitter mode indicator
   *   - APRS - 1 Hz blink
-  *   - RTTY - 2 Hz blink
+  *   - RTTY - 2 Hz blink // FIXME
   *   - Off  - Off
   * - Yellow:	GPS has a fix
   *
@@ -172,10 +172,9 @@ char tx_buf[100];
 /*
  * tx_rtty
  *
- * transmits the TX buffer via RTTY at 50 baud (at 100Hz rtty_tick)
+ * transmits the TX buffer via RTTY at 50 baud (50 Hz rtty_tick)
  * LSB first, in 7bit-ASCII format, 1 start bit, 2 stop bits
  *
- * the systick-flag is used for timing.
  */
 void tx_rtty(void) {
 	    //tx_buf = 'hello world!';
