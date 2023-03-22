@@ -330,8 +330,8 @@ int main(void)
 
 
 
-  //aprs_prepare_buffer(&GNSS_Handle, 0);
-  //calculate_fcs();
+  aprs_prepare_buffer(&GNSS_Handle, 0);
+  calculate_fcs();
 
   stopGpsLockTimer();
   stopGpsTickTimer();
