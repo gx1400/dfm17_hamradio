@@ -85,15 +85,5 @@ void initRadio() {
 	}
 
 	si4060_power_up(); 		//power up radio
-	si4060_setup(MOD_TYPE_2FSK);
-	//si4060_freq_aprs_dfm17();
-	si4060_freq_2m_rtty();
 	si4060_change_state(STATE_TX);
-
-	//startAprsTickTimer();
-
-
-
 }
-
-

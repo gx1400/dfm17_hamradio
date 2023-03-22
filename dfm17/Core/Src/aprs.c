@@ -345,6 +345,7 @@ void tx_aprs(void) {
 
 	/* use 2FSK mode so we can adjust the OFFSET register */
 	si4060_setup(MOD_TYPE_2GFSK);
+	si4060_freq_aprs_dfm17();
 	si4060_start_tx(0);
 	/* add some TX delay */
 	HAL_Delay(250);

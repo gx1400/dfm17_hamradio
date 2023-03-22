@@ -202,6 +202,7 @@ void tx_rtty(void) {
 		ledOnGreen();
 
 		si4060_setup(MOD_TYPE_2FSK);
+		si4060_freq_2m_rtty();
 		si4060_start_tx(0);
 		// assert + de-assert real quick to get the tone to 0. it starts somewhere in the middle.
 		assertSiGPIO3();
@@ -347,8 +348,9 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  HAL_Delay(2000);
-	  //tx_aprs();
+	  HAL_Delay(1000);
+	  tx_aprs();
+	  HAL_Delay(1000);
 	  tx_rtty();
 
   }
