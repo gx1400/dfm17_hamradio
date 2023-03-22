@@ -177,11 +177,13 @@ char tx_buf[100];
  *
  */
 void tx_rtty(void) {
-	    //tx_buf = 'hello world!';
 		int z = 1;
 		tx_buf_rdy = 1;
-        char tx_buf[] = "hello world! hello world! from dfm17_hamradio rtty 50 baud 7n2 73!\0";
-	    tx_buf_length = 67;
+		// FIXME: we need about 10 blanks at the start of the transmission because
+		// fldigi doesn't sync with our signal quick enough. Probably a sign of a
+		// bug in modulation/encoding/timing?
+        char tx_buf[] = "          KD9PRC hello world! from dfm17_hamradio rtty 50 baud 7n2 73!\r\n\0";
+	    tx_buf_length = 72;
         enum c_states {IDLE, START, CHARACTER, STOP1, STOP2};
         static uint16_t tx_state = 0;
         static uint16_t char_state = IDLE;
@@ -197,19 +199,25 @@ void tx_rtty(void) {
         }*/
         /* tx_buffer is ready */
 
-		aprs_init();
 		ledOnGreen();
-		deassertSiGPIO3();
-		start_rtty_tick_timer();
 
 		si4060_setup(MOD_TYPE_2FSK);
 		si4060_start_tx(0);
+		// assert + de-assert real quick to get the tone to 0. it starts somewhere in the middle.
+		assertSiGPIO3();
+		deassertSiGPIO3();
+		/* add some TX delay */
+	    //HAL_Delay(1000);
+
+		rtty_tick = 0;
+		start_rtty_tick_timer();
+
 		tx_state = 1;
 		tx_buf_index = 0;
 
 
-        if (!rtty_tick)
-                return;
+        //if (!rtty_tick)
+        //        return;
 
         do {
         	if (rtty_tick) {
@@ -218,8 +226,6 @@ void tx_rtty(void) {
 						case IDLE:
                                 // send a bunch of zeroes
 								//P1OUT |= SI_DATA;
-                                // assert + deassert real quick to get the tine to 0. it starts somewhere in the middle.
-								assertSiGPIO3();
 								deassertSiGPIO3();
 								i++;
 								if (i == NUM_IDLE_BITS) {
@@ -282,57 +288,6 @@ void tx_rtty(void) {
     	stop_rtty_tick_timer();
     	ledOffGreen();
     	ledOffRed();
-}
-
-
-void tx_rtty_bleep_a_lot()
-{
-	aprs_init();
-	ledOnGreen();
-	deassertSiGPIO3();
-	start_rtty_tick_timer();
-
-	si4060_setup(MOD_TYPE_2FSK);
-	si4060_start_tx(0);
-	//si4060_set_offset(1200);
-	/* add some TX delay */
-	HAL_Delay(250);
-
-	aprs_tick = 0;
-	int counter = 0;
-	do {
-		if (rtty_tick) {
-			/* running with RTTY sample clock */
-			rtty_tick = 0;
-			toggleSiGPIO3();
-			counter++;
-			/*if (aprs_baud_tick) {
-
-				aprs_baud_tick = 0;
-				//toggleSiGPIO3();
-
-				if (get_next_bit()) {
-					aprs_bit = APRS_SPACE;
-				} else {
-					aprs_bit = APRS_MARK;
-				}
-			}*/
-
-			/* tell us when we fail to meet the timing */
-//			if (aprs_tick) {
-//				while(1) {
-//					WDTCTL = WDTPW + WDTCNTCL + WDTIS1;
-//				}
-//			}
-		}
-	} while(counter < 50);
-
-	deassertSiGPIO3();
-
-	HAL_Delay(100);
-	si4060_stop_tx();
-	stop_rtty_tick_timer();
-	ledOffGreen();
 }
 
 void process_rtty_tick()
