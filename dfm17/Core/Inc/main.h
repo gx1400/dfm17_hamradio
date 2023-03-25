@@ -55,6 +55,8 @@ void Error_Handler(void);
 /* USER CODE BEGIN EFP */
 int __io_putchar(int ch);
 void SystemClock_Config(void);
+void process_rtty_tick();
+void tx_rtty();
 
 /* USER CODE END EFP */
 
