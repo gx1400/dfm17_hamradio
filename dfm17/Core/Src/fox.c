@@ -127,8 +127,8 @@ static void send_cw(const char *text) {
  * fox_transmit
  *
  * one fox transmission: Morse ID, FOX_TONE_MS of hunt tone, then (with
- * FOX_SEND_APRS) an APRS position packet. the caller repeats it every
- * FOX_PERIOD_MS.
+ * FOX_SEND_APRS, every FOX_APRS_EVERY-th time) an APRS position packet. the
+ * caller repeats it every FOX_PERIOD_MS.
  */
 void fox_transmit(GNSS_StateHandle *GNSS) {
 	tx_start();
@@ -145,8 +145,12 @@ void fox_transmit(GNSS_StateHandle *GNSS) {
 	tx_stop();
 
 #ifdef FOX_SEND_APRS
-	HAL_Delay(1000);
-	send_aprs(GNSS);
+	/* the first cycle after boot sends one, then every FOX_APRS_EVERY-th */
+	static uint16_t cycle = 0;
+	if (cycle++ % FOX_APRS_EVERY == 0) {
+		HAL_Delay(1000);
+		send_aprs(GNSS);
+	}
 #else
 	(void)GNSS;
 #endif

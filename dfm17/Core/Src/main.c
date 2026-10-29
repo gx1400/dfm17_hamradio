@@ -91,6 +91,8 @@
 #include "fox.h"
 #include "diag.h"
 #include "gps.h"
+#include "analog.h"
+#include "tracker.h"
 
 /* USER CODE END Includes */
 
@@ -101,6 +103,16 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+/* uncomment to run the one-shot hardware survey (hw_survey.c) after init; the
+ * fox then starts paused. results are read over SWD, see
+ * docs/hardware-investigation.md */
+//#define HW_SURVEY
+/* uncomment to replace the fox with a carrier controlled over SWD (rf_test.c),
+ * for frequency sweeps with tools/rf_sweep */
+//#define RF_TEST_SWD
+/* APRS tracker (tracker.c) instead of the fox: GPS on only for a fix, one
+ * position/telemetry packet every 5 min, no hunt tone */
+#define TRACKER
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -126,6 +138,8 @@ volatile uint16_t aprs_baud_tick;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
+void hw_survey_run(void);
+void rf_test_poll(void);
 
 /* USER CODE END PFP */
 
@@ -203,8 +217,22 @@ int main(void)
   // the GPS occasionally leaves a NAV-PVT poll unanswered; only a run of
   // failed updates counts as a GPS fault
   uint8_t gpsFailures = 0;
+  uint32_t lastAnalog = 0;
+#ifdef TRACKER
+  tracker_start();
+#else
   // first fox transmission right away
   uint32_t lastFox = HAL_GetTick() - FOX_PERIOD_MS;
+#endif
+
+#ifdef HW_SURVEY
+  hw_survey_run();
+#endif
+#if defined(HW_SURVEY) || defined(FOX_START_PAUSED)
+  // a long button press resumes the fox
+  foxPaused = 1;
+  diag_set_paused(1);
+#endif
 
   /* USER CODE END 2 */
 
@@ -222,14 +250,23 @@ int main(void)
 		  gpsUpdateDue = 0;
 		  gpsUpdate();
 		  if (GNSS_timeouts != timeouts) {
-			  if (++gpsFailures >= 3)
+			  // the GPS may have restarted and lost its UBX-only config
+			  if (++gpsFailures >= 3) {
 				  diag_set_error(DIAG_ERR_GPS);
+				  gpsConfigure();
+				  gpsFailures = 0;
+			  }
 		  } else if (ppsLockStatus) {
 			  gpsFailures = 0;
 			  diag_clear_error(DIAG_ERR_GPS);
 		  }
 	  }
 	  diag_set_gps_fix(ppsLockStatus && gnss->fixType >= Fix3D);
+
+	  if (HAL_GetTick() - lastAnalog >= 1000) {
+		  lastAnalog = HAL_GetTick();
+		  analog_read(&analog_last);
+	  }
 
 	  switch (diag_get_button()) {
 	  case DIAG_BUTTON_SHORT:
@@ -247,10 +284,19 @@ int main(void)
 		  break;
 	  }
 
+#ifdef RF_TEST_SWD
+	  rf_test_poll();
+	  continue;
+#endif
+#ifdef TRACKER
+	  if (!foxPaused)
+		  tracker_poll(gnss);
+#else
 	  if (!foxPaused && HAL_GetTick() - lastFox >= FOX_PERIOD_MS) {
 		  lastFox = HAL_GetTick();
 		  fox_transmit(gnss);
 	  }
+#endif
 
   }
   /* USER CODE END 3 */

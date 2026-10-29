@@ -31,6 +31,20 @@ void ledOffGreen(void) {}
 void si4060_setup(uint8_t mod_type) { (void)mod_type; }
 void si4060_start_tx(uint8_t channel) { (void)channel; }
 void si4060_stop_tx(void) {}
+void si4060_set_deviation(uint32_t dev_hz) { (void)dev_hz; }
+void si4060_set_offset(uint16_t offset) { (void)offset; }
+int32_t si4060_offset_units(int32_t hz) { return hz; }
+void si4060_spi_fast(uint8_t on) { (void)on; }
+uint8_t si4060_set_offset_fast(int16_t offset) { (void)offset; return 1; }
+
+/* fixed telemetry, values like the survey measured on the bench */
+#include "analog.h"
+void analog_read(analog_reading *r) {
+	r->vdda_mv = 3310;
+	r->vin_mv = 4660;
+	r->iin_ma = 54;
+	r->temp_c = 31;
+}
 
 /* non-static functions/state from aprs.c that have no prototype in aprs.h */
 extern volatile uint8_t finished;
@@ -44,7 +58,7 @@ int main(int argc, char **argv) {
 	GNSS_StateHandle gnss = {0};
 
 	/* "fix": simulate a 3D GPS fix; otherwise there is no fix and aprs.c
-	 * falls back to its APRS_TEST_* position */
+	 * sends a status packet (or its APRS_TEST_* position, if defined) */
 	if (argc > 1 && argv[1][0] == 'f') {
 		gnss.fixType = Fix3D;
 		gnss.lat = 391000000;		/* 39.1 N, u-blox units of 1e-7 deg */

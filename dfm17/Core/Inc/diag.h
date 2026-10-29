@@ -48,7 +48,10 @@ typedef enum {
 #define DIAG_BUTTON_MEDIUM_MS	1000
 #define DIAG_BUTTON_LONG_MS		3000
 
+extern volatile uint32_t pps_cycles;
+
 void diag_selftest(void);
+void diag_leds_off(void);
 void diag_tick(void);
 void diag_pps(void);
 void diag_set_error(diag_error err);

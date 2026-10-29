@@ -50,12 +50,16 @@
 #include <math.h>
 #include "led.h"
 #include "gpio.h"
+#include "analog.h"
 
 /*
  * the APRS data buffer
  * contains ASCII data
  */
-char aprs_buf[APRS_BUF_LEN] = "/ddhhmmz/xxxxyyyyOaa1|ss001122|";
+static const char aprs_pos_template[APRS_POS_LEN + 1] = "/ddhhmmz/xxxxyyyyOaa1|ss001122|";
+char aprs_buf[APRS_BUF_SIZE];
+/* number of bytes of aprs_buf that are sent */
+uint8_t aprs_len;
 // KC0TWY-5>APDR16,TCPIP*,qAC,T2LAUSITZ:=3858.33N/09439.08W>166/000/A=000973 https://aprsdroid.org/
 //char aprs_buf[] = "=3858.33N/09439.08W>189/000/A=000972 https://aprsdroid.org/";
 
@@ -63,6 +67,61 @@ extern volatile uint16_t aprs_bit;
 extern volatile uint16_t aprs_tick;
 extern volatile uint16_t aprs_baud_tick;
 extern volatile uint8_t ppsLockStatus;
+
+/*
+ * AFSK modulation, all settable over SWD for testing (takes effect at the next
+ * packet):
+ * 0: square wave on GPIO3, async direct 2FSK at +-RF_DEV_HZ_DFM
+ * 1: sine AFSK from MODEM_FREQ_OFFSET writes (aprs_afsk_tick), with separate
+ *    mark and space deviation. a louder space tone (pre-emphasis) makes up for
+ *    the de-emphasis in FM receivers, which leaves 2200 Hz 5.3 dB below 1200 Hz
+ */
+volatile uint8_t aprs_afsk_sine = APRS_AFSK_SINE;
+volatile uint16_t aprs_mark_dev_hz = APRS_MARK_DEV_HZ;
+volatile uint16_t aprs_space_dev_hz = APRS_SPACE_DEV_HZ;
+/* samples skipped in the last packet because the radio wasn't ready */
+volatile uint32_t aprs_afsk_skipped;
+static volatile uint8_t afsk_run;
+static uint32_t afsk_phase, afsk_inc_mark, afsk_inc_space;
+static int32_t afsk_amp_mark, afsk_amp_space;
+
+static const int16_t sine64[64] = {
+	0, 3212, 6393, 9512, 12539, 15446, 18204, 20787,
+	23170, 25329, 27245, 28898, 30273, 31356, 32137, 32609,
+	32767, 32609, 32137, 31356, 30273, 28898, 27245, 25329,
+	23170, 20787, 18204, 15446, 12539, 9512, 6393, 3212,
+	0, -3212, -6393, -9512, -12539, -15446, -18204, -20787,
+	-23170, -25329, -27245, -28898, -30273, -31356, -32137, -32609,
+	-32767, -32609, -32137, -31356, -30273, -28898, -27245, -25329,
+	-23170, -20787, -18204, -15446, -12539, -9512, -6393, -3212,
+};
+
+/* phase increment per AFSK sample for a tone: f * 2^32 / sample rate, with
+ * sample rate = 24 MHz / 909 / APRS_AFSK_TICKS_PER_SAMPLE */
+static uint32_t afsk_inc(uint32_t f) {
+	return (uint32_t)(((uint64_t)f << 32) * 909 * APRS_AFSK_TICKS_PER_SAMPLE / 24000000UL);
+}
+
+/*
+ * aprs_afsk_tick
+ *
+ * called by the TIM15 ISR on every tick; while a sine AFSK packet is being
+ * sent, writes one sample of the phase-continuous tone every
+ * APRS_AFSK_TICKS_PER_SAMPLE ticks
+ */
+void aprs_afsk_tick(void) {
+	static uint8_t div = 0;
+
+	if (!afsk_run || ++div < APRS_AFSK_TICKS_PER_SAMPLE)
+		return;
+	div = 0;
+	uint8_t space = aprs_bit == APRS_SPACE;
+	afsk_phase += space ? afsk_inc_space : afsk_inc_mark;
+	int32_t s = sine64[afsk_phase >> 26];
+	int16_t offset = (int16_t)((s * (space ? afsk_amp_space : afsk_amp_mark)) >> 15);
+	if (!si4060_set_offset_fast(offset))
+		aprs_afsk_skipped++;
+}
 
 const unsigned char aprs_header[APRS_HEADER_LEN] = {
 	'A'*2, 'P'*2, 'Z'*2, 'D'*2, 'F'*2, 'M'*2, SSID_RESC + (DST_SSID << 1),
@@ -118,7 +177,7 @@ void calculate_fcs(void) {
 
 	// pass header calculation back into crc calc to process buffer
 	uint16_t crcval2 = 0;
-	crcval2 = calc_aprscrc(crcval1, (const uint8_t *)aprs_buf, APRS_BUF_LEN);
+	crcval2 = calc_aprscrc(crcval1, (const uint8_t *)aprs_buf, aprs_len);
 
 	// Take the one's compliment of the calculated CRC
 	crcval2 = crcval2 ^ 0xffff;
@@ -155,23 +214,34 @@ void base91_encode_latlon(char *buf, uint32_t value) {
  * aprs_prepare_buffer
  *
  * prepares the buffer for APRS transmission with the fix given as a reference.
- * checks for validity of the fix. if the fix is unsuitable for transmission, the
- * fixed APRS_TEST_* position is sent when APRS_TEST_POSITION is defined, otherwise
- * the buffer is not changed.
+ * checks for validity of the fix (GPS PPS and at least a 2D fix), then works as
+ * aprs_prepare_fix().
+ */
+uint8_t aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix) {
+	return aprs_prepare_fix(GNSS, ppsLockStatus && GNSS->fixType >= Fix2D, backlog_fix);
+}
+
+/*
+ * aprs_prepare_fix
+ *
+ * prepares the buffer with the fix in GNSS if fix_valid; otherwise the fixed
+ * APRS_TEST_* position is sent when APRS_TEST_POSITION is defined, or else a
+ * status packet with the telemetry as text (see aprs_prepare_status).
  *
  * backlog_fix contains a flag marking the fix as a backlog fix, containing a zero TLM sequence ID
  *
  * always transmits the latest temperature / battery voltage, no historical values!
  *
+ * returns: 1 if the packet carries a position, 0 for a status packet
  */
-void aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix) {
+uint8_t aprs_prepare_fix(GNSS_StateHandle *GNSS, uint8_t fix_valid, uint8_t backlog_fix) {
 	int16_t temp_aprs = 0;
 	uint16_t seq_tmp;
 	static uint16_t aprs_seqnum = 0;
 	float lat, lon, alt_ft;
 	uint8_t day, hour, min;
 
-	if (ppsLockStatus && GNSS->fixType >= Fix2D) {
+	if (fix_valid) {
 		/* u-blox PVT: lat/lon in 1e-7 degrees, height above MSL in mm */
 		lat = (float)GNSS->lat / 10000000.0f;
 		lon = (float)GNSS->lon / 10000000.0f;
@@ -188,9 +258,13 @@ void aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix) {
 		hour = 0;
 		min = 0;
 #else
-		return;
+		aprs_prepare_status(GNSS);
+		return 0;
 #endif
 	}
+
+	__builtin_memcpy(aprs_buf, aprs_pos_template, APRS_POS_LEN);
+	aprs_len = APRS_POS_LEN;
 
 	/* compressed altitude is log1.002(feet), which cannot go below 1 ft */
 	if (alt_ft < 1.0f)
@@ -211,19 +285,65 @@ void aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix) {
 		seq_tmp = aprs_seqnum;
 	}
 
-	//temp_aprs = fix->temperature_int + APRS_TLM_TEMP_OFFSET;
-
-	//base91_encode_tlm(&aprs_buf[APRS_SEQ_START], seq_tmp);
-	//	base91_encode_tlm(&aprs_buf[APRS_TEMP_START], (uint16_t)temp_aprs);
-	//base91_encode_tlm(&aprs_buf[APRS_VOLT_START], fix->voltage_bat);
-	//base91_encode_tlm(&aprs_buf[APRS_VSOL_START], fix->voltage_sol);
-
-	temp_aprs = 32 + APRS_TLM_TEMP_OFFSET;
+	/* telemetry channels: MCU temperature (C + APRS_TLM_TEMP_OFFSET), supply
+	 * voltage in mV and supply current in mA, each 0..8280 in base91 */
+	analog_reading analog;
+	analog_read(&analog);
+	temp_aprs = analog.temp_c + APRS_TLM_TEMP_OFFSET;
 
 	base91_encode_tlm(&aprs_buf[APRS_SEQ_START], seq_tmp);
 	base91_encode_tlm(&aprs_buf[APRS_TEMP_START], (uint16_t)temp_aprs);
-	base91_encode_tlm(&aprs_buf[APRS_VOLT_START], 3000);
-	base91_encode_tlm(&aprs_buf[APRS_VSOL_START], 3100);
+	base91_encode_tlm(&aprs_buf[APRS_VOLT_START], analog.vin_mv);
+	base91_encode_tlm(&aprs_buf[APRS_VSOL_START], analog.iin_ma);
+
+	calculate_fcs();
+	return 1;
+}
+
+/*
+ * aprs_prepare_status
+ *
+ * prepares a status packet without a position, for when there is no GPS fix:
+ * ">nofix 2D 4sv 4674mV 55mA 30C" (GPS fix type and satellites from the last
+ * NAV-PVT, or "nopps" without GPS PPS; supply voltage, supply current, MCU
+ * temperature). the GPS state comes first, a TH-D72 shows only 20 characters.
+ * the station is identified by the source callsign in the header.
+ */
+void aprs_prepare_status(GNSS_StateHandle *GNSS) {
+	static const char text[] = ">nofix ";
+	analog_reading analog;
+	uint8_t n = sizeof(text) - 1;
+
+	analog_read(&analog);
+	__builtin_memcpy(aprs_buf, text, n);
+	if (!ppsLockStatus) {
+		__builtin_memcpy(&aprs_buf[n], "nopps ", 6);
+		n += 6;
+	} else {
+		n += i16toav(GNSS->fixType, &aprs_buf[n]);
+		aprs_buf[n++] = 'D';
+		aprs_buf[n++] = ' ';
+		n += i16toav(GNSS->numSV, &aprs_buf[n]);
+		aprs_buf[n++] = 's';
+		aprs_buf[n++] = 'v';
+		aprs_buf[n++] = ' ';
+	}
+	n += i16toav(analog.vin_mv, &aprs_buf[n]);
+	aprs_buf[n++] = 'm';
+	aprs_buf[n++] = 'V';
+	aprs_buf[n++] = ' ';
+	n += i16toav(analog.iin_ma, &aprs_buf[n]);
+	aprs_buf[n++] = 'm';
+	aprs_buf[n++] = 'A';
+	aprs_buf[n++] = ' ';
+	if (analog.temp_c < 0) {
+		aprs_buf[n++] = '-';
+		n += i16toav(-analog.temp_c, &aprs_buf[n]);
+	} else {
+		n += i16toav(analog.temp_c, &aprs_buf[n]);
+	}
+	aprs_buf[n++] = 'C';
+	aprs_len = n;
 
 	calculate_fcs();
 }
@@ -277,7 +397,7 @@ uint8_t get_next_byte(void) {
 			break;
 		case AX25_DATA:
 			retval = aprs_buf[i];
-			if (++i >= APRS_BUF_LEN) {
+			if (++i >= aprs_len) {
 				aprs_state = AX25_FCS1;
 				i = 0;
 			}
@@ -354,6 +474,18 @@ uint8_t get_next_bit(void) {
  *
  */
 void tx_aprs(void) {
+	uint8_t sine = aprs_afsk_sine;
+
+	if (sine) {
+		afsk_amp_mark = si4060_offset_units(aprs_mark_dev_hz);
+		afsk_amp_space = si4060_offset_units(aprs_space_dev_hz);
+		afsk_inc_mark = afsk_inc(1200);
+		afsk_inc_space = afsk_inc(2200);
+		afsk_phase = 0;
+		aprs_afsk_skipped = 0;
+		/* the carrier only moves by MODEM_FREQ_OFFSET */
+		si4060_set_deviation(0);
+	}
 	aprs_init();
 	ledOnGreen();
 	deassertSiGPIO3();
@@ -366,12 +498,18 @@ void tx_aprs(void) {
 	/* add some TX delay */
 	HAL_Delay(250);
 
+	if (sine) {
+		/* from here on only the TIM15 ISR uses the SPI */
+		si4060_spi_fast(1);
+		afsk_run = 1;
+	}
 	aprs_tick = 0;
 	do {
 		if (aprs_tick) {
 			/* running with APRS sample clock */
 			aprs_tick = 0;
-			toggleSiGPIO3();
+			if (!sine)
+				toggleSiGPIO3();
 			if (aprs_baud_tick) {
 				/* running with bit clock (1200 / sec) */
 				//WDTCTL = WDTPW + WDTCNTCL + WDTIS1;
@@ -395,10 +533,17 @@ void tx_aprs(void) {
 	} while(!finished);
 
 	deassertSiGPIO3();
+	if (sine) {
+		afsk_run = 0;
+		si4060_spi_fast(0);
+		si4060_set_offset(0);
+	}
 
 	HAL_Delay(100);
 	si4060_stop_tx();
 	stopAprsTickTimer();
+	if (sine)
+		si4060_set_deviation(RF_DEV_HZ_DFM);
 	ledOffGreen();
 }
 

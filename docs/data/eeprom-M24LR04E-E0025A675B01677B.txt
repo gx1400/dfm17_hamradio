@@ -1,0 +1,45 @@
+# DFM-17 NFC EEPROM (M24LR04E-R, U12) read over I2C (PB6 SCL / PB7 SDA)
+# board 1, UID E0 02 5A 67 5B 01 67 7B, read 2026-10-29 by tools/hw_survey (HW_SURVEY build)
+# user memory: I2C address 0x53, 16-bit addresses 0x0000-0x01FF (4 sectors x 128 bytes)
+# 0x0000-0x015F is Graw factory data (not decoded; looks like config bytes and IEEE-754
+# double calibration coefficients), 0x0160-0x01FF erased (0xFF). Keep this file as a backup.
+
+0000: 31 02 ff ff 00 ff ff ff 01 ff ff ff 0a ff ff ff  |1...............|
+0010: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+0020: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+0030: 02 ff ff ff 00 ff ff ff 64 8a fd 00 ff ff ff ff  |........d.......|
+0040: b2 00 55 08 2b 04 ff 0b ff ff ff ff ce fe d4 ff  |..U.+...........|
+0050: ff ff ff ff ff ff ff ff ff ff 01 01 ff ff ff ff  |................|
+0060: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+0070: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+0080: ff ff e8 00 ff ff ff ff d0 f0 31 01 ff ff 00 00  |..........1.....|
+0090: a0 a8 a3 e1 e2 e1 e1 e1 e1 e1 e1 e1 00 00 00 00  |................|
+00a0: 45 44 4f 06 07 46 47 48 50 51 fd fe ff ff ff ff  |EDO..FGHPQ......|
+00b0: 75 61 10 00 00 00 00 00 c6 99 8e e5 06 8c 52 c0  |ua............R.|
+00c0: b4 c8 4b 53 68 14 2b c0 1e c7 e9 07 40 1c e7 3f  |..KSh.+.....@..?|
+00d0: 73 57 0c 23 e9 2f 86 bf 13 c6 43 2c 8c 4f 7f 3f  |sW.#./....C,.O.?|
+00e0: c1 fb cf df ef 12 24 3f 00 00 00 00 00 00 f0 3f  |......$?.......?|
+00f0: 48 cd 8c 09 4f 6c 90 c0 07 ee 6a 8a 49 df e0 40  |H...Ol....j.I..@|
+0100: bf 50 23 e6 97 af 15 c1 3b 15 cf 1b 73 c4 34 41  |.P#.....;...s.4A|
+0110: 00 00 00 00 00 00 f0 3f 1b ce 39 2b e0 e5 50 c0  |.......?..9+..P.|
+0120: 78 44 84 74 04 34 2e c0 34 89 fb f6 65 d2 eb 3f  |xD.t.4..4...e..?|
+0130: 2e c9 57 6b 5d 02 88 3f 3d 7f e2 bb 9e 1a 8e 3f  |..Wk]..?=......?|
+0140: b8 ae 61 18 f2 5b 45 3f 9a 99 99 99 c1 b7 94 3f  |..a..[E?.......?|
+0150: 34 33 33 33 a3 03 d5 3f ff ff ff ff ff ff ff ff  |4333...?........|
+0160: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+0170: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+0180: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+0190: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+01a0: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+01b0: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+01c0: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+01d0: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+01e0: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+01f0: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+
+# system area: I2C address 0x57
+# 0x0000: sector security status, sectors 0-3
+0000: 0d 0f 0f 0f 00 00 00 00 00 00 00 00 00 00 00 00
+# 0x0900: I2C password (reads FF), 0x0910.., UID at 0x0914 (LSB first), IC ref at 0x091C
+0900: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+0910: ff ef 00 ff 7b 67 01 5b 67 5a 02 e0 5a 7f 03 ff

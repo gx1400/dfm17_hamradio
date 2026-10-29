@@ -33,7 +33,19 @@
 #include <inttypes.h>
 #include "GNSS.h"
 
-void aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix);
+uint8_t aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix);
+uint8_t aprs_prepare_fix(GNSS_StateHandle *GNSS, uint8_t fix_valid, uint8_t backlog_fix);
+void aprs_prepare_status(GNSS_StateHandle *GNSS);
+void aprs_afsk_tick(void);
+
+/* AFSK modulation (see aprs.c): 0 = square wave on GPIO3 (tested on air),
+ * 1 = sine AFSK with pre-emphasis. aprs_afsk_sine can be changed over SWD */
+#define APRS_AFSK_SINE			0
+/* sine AFSK: peak deviation of each tone, space +3.1 dB over mark */
+#define APRS_MARK_DEV_HZ		2800
+#define APRS_SPACE_DEV_HZ		4000
+/* sine AFSK sample rate: TIM15 26402.6 Hz / 2 = 13201.3 Hz */
+#define APRS_AFSK_TICKS_PER_SAMPLE	2
 void tx_aprs(void);
 void calculate_fcs(void);
 
@@ -69,15 +81,15 @@ void calculate_fcs(void);
 
 #define APRS_TLM_TEMP_OFFSET	512
 
-/* position sent while there is no GPS fix, for bench testing.
- * comment out APRS_TEST_POSITION to send nothing new until the GPS has a fix */
-#define APRS_TEST_POSITION
+/* position sent while there is no GPS fix, for bench testing. without
+ * APRS_TEST_POSITION a status packet with the telemetry as text is sent instead */
+//#define APRS_TEST_POSITION
 #define APRS_TEST_LAT		38.9987994f
 #define APRS_TEST_LON		-94.6819494f
 #define APRS_TEST_ALT_M		100.0f
 
 /*
- * buffer length
+ * position packet length
  * example: /ddhhmmz/xxxxyyyyOaa1|ss001122|
  * 1 report indicator (real time, no APRS messaging)
  * 2 + 2 + 2 + 1: day / hour / minute / zulu time indicator
@@ -89,12 +101,13 @@ void calculate_fcs(void);
  * 1 tlm delimiter
  * 2 tlm sequence id
  * 2 tlm temperature
- * 2 tlm battery
- * 2 tlm solar
+ * 2 tlm supply voltage (mV)
+ * 2 tlm supply current (mA)
  * 1 tlm delimiter
  */
-#define APRS_BUF_LEN	1 + 7 + 1 + 4 + 4 + 1 + 3 + 1 + 2 + 2 + 2 + 2 + 1
-//#define APRS_BUF_LEN 60
+#define APRS_POS_LEN	(1 + 7 + 1 + 4 + 4 + 1 + 3 + 1 + 2 + 2 + 2 + 2 + 1)
+/* room for the position packet or a status packet (">" and text) */
+#define APRS_BUF_SIZE	64
 
 #define APRS_TIME_START	1
 #define APRS_TIME_LEN	6

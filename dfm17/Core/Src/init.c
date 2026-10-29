@@ -34,6 +34,8 @@
 #include "tim.h"
 #include "si4063.h"
 #include "diag.h"
+#include "analog.h"
+#include "gps.h"
 
 
 extern UART_HandleTypeDef huart2;
@@ -56,6 +58,8 @@ void initHw(void) {
 	MX_GPIO_Init();
 	// all LEDs on for 0.5 s, then diag_tick() drives them
 	diag_selftest();
+	// supply voltage/current and temperature for APRS telemetry
+	analog_init();
 	MX_DMA_Init();
 	MX_USART1_UART_Init();
 	MX_USART2_UART_Init();
@@ -80,8 +84,9 @@ void initHw(void) {
 	printf("Starting ublox...\r\n");
 	GNSS_Init(&GNSS_Handle, &huart2, &txDone, &rxDone);
 	HAL_Delay(1000);
-	GNSS_LoadConfig(&GNSS_Handle);
-	if (GNSS_timeouts) {
+	// the GPS can still be starting up after a slow power ramp, or in
+	// software backup if only the MCU was reset
+	if (!gpsConfigure()) {
 		printf("ERROR: GPS not responding\r\n");
 		diag_set_error(DIAG_ERR_GPS);
 	}

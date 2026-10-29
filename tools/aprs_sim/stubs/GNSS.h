@@ -10,6 +10,7 @@ typedef struct {
 	uint8_t hour;
 	uint8_t min;
 	enum GNSSFixType fixType;
+	uint8_t numSV;
 	signed long lon;
 	signed long lat;
 	signed long hMSL;

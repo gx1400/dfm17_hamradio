@@ -92,8 +92,13 @@ def decode_position(info):
     lat = 90 - b91(info[9:13]) / 380926
     lon = -180 + b91(info[13:17]) / 190463
     alt_ft = 1.002 ** b91(info[18:20])
-    return (f'\n  time {info[1:3]}d {info[3:5]}:{info[5:7]}z  '
-            f'lat {lat:.5f}  lon {lon:.5f}  alt {alt_ft * 0.3048:.0f} m')
+    out = (f'\n  time {info[1:3]}d {info[3:5]}:{info[5:7]}z  '
+           f'lat {lat:.5f}  lon {lon:.5f}  alt {alt_ft * 0.3048:.0f} m')
+    # base91 telemetry |ss tt vv ii|: sequence, temp + 512, supply mV, supply mA
+    if len(info) >= 31 and info[21] == '|' and info[30] == '|':
+        seq, temp, vin, iin = (b91(info[i:i + 2]) for i in range(22, 30, 2))
+        out += f'\n  telemetry seq {seq}  temp {temp - 512} C  supply {vin} mV  {iin} mA'
+    return out
 
 
 def render_ideal(bits):
