@@ -35,16 +35,110 @@
 #include "spi.h"
 #include "tim.h"
 
-void si4060_freq_aprs_dfm17(void) {
-	si4060_set_aprs_params_TESTING();
-	/* set up the integer divider */
+/* keep the DFM-17 transmitter inside the US 70 cm amateur band */
+_Static_assert(RF_FREQ_HZ_DFM >= 420000000UL && RF_FREQ_HZ_DFM <= 450000000UL,
+		"RF_FREQ_HZ_DFM is outside the 420-450 MHz amateur band");
+
+/* VCO output divider of the band in use, needed for the deviation setting */
+static uint8_t si4060_outdiv = 8;
+
+/*
+ * si4060_config_dfm17
+ *
+ * sets up the DFM-17 transmitter: async direct 2FSK from GPIO3 (the MCU-timed
+ * square wave), RF_FREQ_HZ_DFM, RF_DEV_HZ_DFM deviation and RF_TX_POWER_DFM.
+ */
+void si4060_config_dfm17(void) {
+	si4060_set_cw(0);
+	si4060_set_property_16(PROP_MODEM,
+			MODEM_FREQ_OFFSET,
+			0);
+	si4060_set_frequency(RF_FREQ_HZ_DFM);
+	si4060_set_deviation(RF_DEV_HZ_DFM);
+	si4060_set_tx_power(RF_TX_POWER_DFM);
+}
+
+/*
+ * si4060_set_cw
+ *
+ * on: unmodulated carrier exactly on the tuned frequency (MOD_TYPE_CW), for
+ * measuring it. off: async direct 2FSK from GPIO3, the normal fox/APRS mode.
+ */
+void si4060_set_cw(uint8_t on) {
+	si4060_set_property_8(PROP_MODEM,
+			MODEM_MOD_TYPE,
+			(on ? MOD_TYPE_CW : MOD_TYPE_2FSK) | MOD_SOURCE_DIRECT | MOD_GPIO_3 | MOD_DIRECT_MODE_ASYNC);
+}
+
+/*
+ * si4060_set_frequency
+ *
+ * tunes the PLL. the VCO output divider and MODEM_CLKGEN_BAND come from the band
+ * table in the Si406x datasheet; the PLL output is then
+ *   RF = (INTE + FRAC / 2^19) * 2 * XO_FREQ / outdiv,  with FRAC in [2^19, 2^20)
+ * call si4060_set_deviation() afterwards, the deviation scales with outdiv.
+ */
+void si4060_set_frequency(uint32_t freq_hz) {
+	uint8_t band;
+
+	if (freq_hz < 177000000UL) {
+		si4060_outdiv = 24;
+		band = FVCO_DIV_24;
+	} else if (freq_hz < 239000000UL) {
+		si4060_outdiv = 16;
+		band = FVCO_DIV_16;
+	} else if (freq_hz < 353000000UL) {
+		si4060_outdiv = 12;
+		band = FVCO_DIV_12;
+	} else if (freq_hz < 525000000UL) {
+		si4060_outdiv = 8;
+		band = FVCO_DIV_8;
+	} else if (freq_hz < 705000000UL) {
+		si4060_outdiv = 6;
+		band = FVCO_DIV_6;
+	} else {
+		si4060_outdiv = 4;
+		band = FVCO_DIV_4;
+	}
+
+	/* N * 2^19, where N = RF * outdiv / (2 * XO_FREQ) */
+	uint64_t n19 = (((uint64_t)freq_hz * si4060_outdiv) << 19) / (2 * XO_FREQ);
+	uint8_t inte = (uint8_t)((n19 >> 19) - 1);
+	uint32_t frac = (uint32_t)(n19 - ((uint64_t)inte << 19));
+
+	si4060_set_property_8(PROP_MODEM,
+			MODEM_CLKGEN_BAND,
+			SY_SEL_1 | band);
 	si4060_set_property_8(PROP_FREQ_CONTROL,
 			FREQ_CONTROL_INTE,
-			(uint8_t)FDIV_INTE_DFM);
-	/* set up the fractional divider */
+			inte);
 	si4060_set_property_24(PROP_FREQ_CONTROL,
 			FREQ_CONTROL_FRAC,
-			(uint32_t)FDEV_DFM);
+			frac);
+}
+
+/*
+ * si4060_set_deviation
+ *
+ * sets the 2FSK deviation: MODEM_FREQ_DEV = 2^19 * outdiv * dev / (2 * XO_FREQ)
+ */
+void si4060_set_deviation(uint32_t dev_hz) {
+	uint32_t fdev = (uint32_t)((((uint64_t)dev_hz * si4060_outdiv) << 19) / (2 * XO_FREQ));
+
+	si4060_set_property_24(PROP_MODEM,
+			MODEM_FREQ_DEV,
+			fdev);
+}
+
+/*
+ * si4060_set_tx_power
+ *
+ * level: PA_PWR_LVL, 0x00 (minimum) to 0x7f (maximum, the power-up default)
+ */
+void si4060_set_tx_power(uint8_t level) {
+	si4060_set_property_8(PROP_PA,
+			PA_PWR_LVL,
+			level & 0x7f);
 }
 
 /*
@@ -116,32 +210,34 @@ uint16_t si4060_part_info(void) {
 /*
  * si4060_get_cts
  *
- * waits for a CTS from the Si4060, includes a "time out"
+ * waits for a CTS from the Si4060, giving up after SI_TIMEOUT_MS. POWER_UP
+ * takes several ms: a too-short timeout here sent the next commands before the
+ * chip was ready, and it silently dropped them.
  *
  * read_response: do not deselect the slave, if you want to read from it afterwards
+ *
+ * returns: 0 on CTS, 1 on timeout
  */
 uint8_t si4060_get_cts(uint8_t read_response) {
 	uint8_t temp = 0;
-	uint8_t timeout = 0;
+	uint32_t start = HAL_GetTick();
 	if (!read_response) {
-		while (si4060_read_cmd_buf(1) != 0xff && timeout < SI_TIMEOUT) {
-			timeout++;
+		while (si4060_read_cmd_buf(1) != 0xff) {
+			if (HAL_GetTick() - start > SI_TIMEOUT_MS)
+				return 1;
 			delay_us(5);
 		}
 	} else {
-		while (temp != 0xff && timeout < SI_TIMEOUT) {
-			timeout++;
+		while (temp != 0xff) {
+			if (HAL_GetTick() - start > SI_TIMEOUT_MS)
+				return 1;
 			temp = si4060_read_cmd_buf(0);
 			if (temp != 0xff) {
 				spi_deselect();
 			}
 		}
 	}
-	//printf("timeout count: %d\r\n", timeout);
-
-	// todo add error return if timeout is reached
 	return 0;
-
 }
 
 /*
@@ -223,7 +319,7 @@ void si4060_start_tx(uint8_t channel) {
 	spi_select();
 	spi_write(CMD_START_TX);
 	spi_write(channel);
-	spi_write(START_TX_TXC_STATE_SLEEP | START_TX_RETRANSMIT_0 | START_TX_START_IMM);
+	spi_write(START_TX_TXC_STATE_READY | START_TX_RETRANSMIT_0 | START_TX_START_IMM);
 	/* set length to 0 for direct mode (is this correct?) */
 	spi_write(0x00);
 	spi_write(0x00);
@@ -233,10 +329,12 @@ void si4060_start_tx(uint8_t channel) {
 /*
  * si4060_stop_tx
  *
- * makes the Si4060 stop all transmissions by transistioning to SLEEP state
+ * makes the Si4060 stop all transmissions by transitioning to READY state.
+ * READY keeps the crystal oscillator running, and with it the DIV_CLK output
+ * on GPIO2 that clocks the STM32.
  */
 void si4060_stop_tx(void) {
-	si4060_change_state(STATE_SLEEP);
+	si4060_change_state(STATE_READY);
 }
 
 /*
@@ -426,7 +524,7 @@ void si4060_setup(uint8_t mod_type) {
 	/* Global clock config */
 	si4060_set_property_8(PROP_GLOBAL,
 			GLOBAL_CLK_CFG,
-			0x60);
+			DIV_CLK_EN | DIV_CLK_SEL_2);	/* 12.8 MHz on GPIO2 = STM32 OSC_IN */
 
 	/* set high performance mode */
 	si4060_set_property_8(PROP_GLOBAL,
@@ -434,21 +532,23 @@ void si4060_setup(uint8_t mod_type) {
 			GLOBAL_RESERVED | POWER_MODE_HIGH_PERF | SEQUENCER_MODE_FAST);
 
 	/* PROP_INT_CTL */
-	si4060_set_property_8(PROP_GLOBAL,
-			PROP_INT_CTL, 0x00);
+	si4060_set_property_8(PROP_INT_CTL,
+			INT_CTL_ENABLE, 0x00);
 
-	si4060_set_property_32(PROP_GLOBAL,
-			PROP_FRR_CTL, 0x00000000);
+	si4060_set_property_32(PROP_FRR_CTL,
+			FRR_CTL_A_MODE, 0x00000000);
 
 	/* disable preamble */
 	si4060_set_property_8(PROP_PREAMBLE,
 			PREAMBLE_TX_LENGTH,
 			0);
 
-	/* use 2FSK from async GPIO0 */
+	/* modulate directly from GPIO3. async: the radio follows the pin edges as they
+	 * happen instead of sampling it on its TX data clock, which would mangle the
+	 * MCU-timed AFSK square wave. async only supports 2FSK/OOK, not 2GFSK. */
 	si4060_set_property_8(PROP_MODEM,
 			MODEM_MOD_TYPE,
-			MOD_DIRECT_MODE_SYNC | MOD_GPIO_3 | MOD_SOURCE_DIRECT | (mod_type & 0x07));
+			MOD_DIRECT_MODE_ASYNC | MOD_GPIO_3 | MOD_SOURCE_DIRECT | (mod_type & 0x07));
 
 	/* setup the NCO data rate for APRS */
 	si4060_set_property_24(PROP_MODEM,
@@ -560,26 +660,6 @@ void si4060_set_aprs_params(void) {
 	si4060_set_property_24(PROP_MODEM,
 			MODEM_FREQ_DEV,
 			(uint16_t)(2*FDEV_APRS));
-}
-
-
-void si4060_set_aprs_params_TESTING(void) {
-	/* use 2GFSK from async GPIO0 */
-	si4060_set_property_8(PROP_MODEM,
-			MODEM_MOD_TYPE,
-			MOD_TYPE_2GFSK | MOD_SOURCE_DIRECT | MOD_GPIO_3 | MOD_DIRECT_MODE_SYNC);
-	/* setup divider to 10 (for DFMtesting at 400Mhz) */
-	si4060_set_property_8(PROP_MODEM,
-			MODEM_CLKGEN_BAND,
-			SY_SEL_1 | FVCO_DIV_10);
-	/* setup frequency deviation offset */
-	si4060_set_property_16(PROP_MODEM,
-			MODEM_FREQ_OFFSET,
-			0);
-	/* setup frequency deviation */
-	si4060_set_property_24(PROP_MODEM,
-			MODEM_FREQ_DEV,
-			(uint16_t)(2*FDEV_APRS_DFM));
 }
 
 

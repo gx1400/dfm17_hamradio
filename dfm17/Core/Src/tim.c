@@ -32,9 +32,14 @@
 /* USER CODE BEGIN 0 */
 
 #include "aprs.h"
+#include "gpio.h"
 extern volatile uint16_t aprs_bit;
 extern volatile uint16_t aprs_tick;
 extern volatile uint16_t aprs_baud_tick;
+
+/* plain tone mode: when nonzero, GPIO3 toggles every tone_half_ticks TIM15 ticks
+ * (tone = 26402.6 Hz / (2 * tone_half_ticks)) and APRS timing is not generated */
+volatile uint16_t tone_half_ticks = 0;
 
 
 /* USER CODE END 0 */
@@ -60,7 +65,7 @@ void MX_TIM6_Init(void)
 
   /* USER CODE END TIM6_Init 1 */
   htim6.Instance = TIM6;
-  htim6.Init.Prescaler = 1600-1;
+  htim6.Init.Prescaler = 2400-1;
   htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim6.Init.Period = 50000-1;
   htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -94,7 +99,7 @@ void MX_TIM7_Init(void)
 
   /* USER CODE END TIM7_Init 1 */
   htim7.Instance = TIM7;
-  htim7.Init.Prescaler = 16000-1;
+  htim7.Init.Prescaler = 24000-1;
   htim7.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim7.Init.Period = 2000;
   htim7.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -129,9 +134,9 @@ void MX_TIM15_Init(void)
 
   /* USER CODE END TIM15_Init 1 */
   htim15.Instance = TIM15;
-  htim15.Init.Prescaler = 303;
+  htim15.Init.Prescaler = 0;
   htim15.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim15.Init.Period = 1;
+  htim15.Init.Period = 908;
   htim15.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim15.Init.RepetitionCounter = 0;
   htim15.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -167,7 +172,7 @@ void MX_TIM17_Init(void)
 
   /* USER CODE END TIM17_Init 1 */
   htim17.Instance = TIM17;
-  htim17.Init.Prescaler = 0;
+  htim17.Init.Prescaler = 24-1;
   htim17.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim17.Init.Period = 65535;
   htim17.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -321,6 +326,16 @@ void stopAprsTickTimer(void) {
 void processAprsTick(void) {
 	static uint16_t aprs_nco_count = 0;
 	static uint16_t aprs_bit_count = 0;
+	static uint16_t tone_count = 0;
+
+	if (tone_half_ticks) {
+		if (++tone_count >= tone_half_ticks) {
+			tone_count = 0;
+			toggleSiGPIO3();
+		}
+		return;
+	}
+
 	aprs_nco_count++;
 	aprs_bit_count++;
 
@@ -381,3 +396,4 @@ void stopGpsLockTimer(void) {
 }
 
 /* USER CODE END 1 */
+

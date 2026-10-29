@@ -35,6 +35,7 @@
 
 void aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix);
 void tx_aprs(void);
+void calculate_fcs(void);
 
 
 /* APRS destination SSID is 0 */
@@ -67,6 +68,13 @@ void tx_aprs(void);
 #define HEADER_END	0x01
 
 #define APRS_TLM_TEMP_OFFSET	512
+
+/* position sent while there is no GPS fix, for bench testing.
+ * comment out APRS_TEST_POSITION to send nothing new until the GPS has a fix */
+#define APRS_TEST_POSITION
+#define APRS_TEST_LAT		38.9987994f
+#define APRS_TEST_LON		-94.6819494f
+#define APRS_TEST_ALT_M		100.0f
 
 /*
  * buffer length

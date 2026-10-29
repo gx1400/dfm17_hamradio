@@ -1,0 +1,80 @@
+/*
+ * aprs_harness.c
+ *
+ * Host-side test harness for dfm17/Core/Src/aprs.c. Builds the real firmware
+ * APRS code on a PC with the hardware stubbed out, then:
+ *   - prints the AX.25 frame bytes (flags excluded) to stderr
+ *   - prints the NRZI-coded, bit-stuffed line bits ('0'/'1') to stdout,
+ *     exactly as get_next_bit() hands them to the tone generator
+ *
+ * aprs_sim.py turns the bit stream into audio for Dire Wolf's atest.
+ */
+
+#include <stdio.h>
+#include <inttypes.h>
+#include "aprs.h"
+
+/* globals that live in main.c / gps.c on the target */
+volatile uint16_t aprs_bit;
+volatile uint16_t aprs_tick;
+volatile uint16_t aprs_baud_tick;
+volatile uint8_t ppsLockStatus = 1;
+
+/* hardware stubs */
+void startAprsTickTimer(void) {}
+void stopAprsTickTimer(void) {}
+void HAL_Delay(unsigned int ms) { (void)ms; }
+void toggleSiGPIO3(void) {}
+void deassertSiGPIO3(void) {}
+void ledOnGreen(void) {}
+void ledOffGreen(void) {}
+void si4060_setup(uint8_t mod_type) { (void)mod_type; }
+void si4060_start_tx(uint8_t channel) { (void)channel; }
+void si4060_stop_tx(void) {}
+
+/* non-static functions/state from aprs.c that have no prototype in aprs.h */
+extern volatile uint8_t finished;
+extern volatile uint16_t aprs_state;
+void aprs_init(void);
+void calculate_fcs(void);
+uint8_t get_next_byte(void);
+uint8_t get_next_bit(void);
+
+int main(int argc, char **argv) {
+	GNSS_StateHandle gnss = {0};
+
+	/* "fix": simulate a 3D GPS fix; otherwise there is no fix and aprs.c
+	 * falls back to its APRS_TEST_* position */
+	if (argc > 1 && argv[1][0] == 'f') {
+		gnss.fixType = Fix3D;
+		gnss.lat = 391000000;		/* 39.1 N, u-blox units of 1e-7 deg */
+		gnss.lon = -945800000;		/* 94.58 W */
+		gnss.hMSL = 25000000;		/* 25 km, in mm */
+		gnss.day = 28;
+		gnss.hour = 21;
+		gnss.min = 45;
+	}
+
+	aprs_prepare_buffer(&gnss, 0);
+	calculate_fcs();
+
+	/* pass 1: dump the frame bytes between the opening and closing flags */
+	aprs_init();
+	fprintf(stderr, "frame:");
+	while (!finished) {
+		uint16_t state_before = aprs_state;
+		uint8_t b = get_next_byte();
+		/* states 2..5 are AX25_HEADER, AX25_DATA, AX25_FCS1, AX25_FCS2 */
+		if (state_before >= 2 && state_before <= 5)
+			fprintf(stderr, " %02x", b);
+	}
+	fprintf(stderr, "\n");
+
+	/* pass 2: the line bit stream */
+	aprs_init();
+	while (!finished)
+		putchar(get_next_bit() ? '1' : '0');
+	putchar('\n');
+
+	return 0;
+}

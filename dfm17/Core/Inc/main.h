@@ -59,8 +59,6 @@ void SystemClock_Config(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define oSpiGPIO2_Pin GPIO_PIN_0
-#define oSpiGPIO2_GPIO_Port GPIOD
 #define oBattOn_Pin GPIO_PIN_0
 #define oBattOn_GPIO_Port GPIOC
 #define oSiSDN_Pin GPIO_PIN_3

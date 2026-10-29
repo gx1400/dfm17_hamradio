@@ -32,6 +32,8 @@
 
 void initHw(void);
 void initRadio(void);
+HAL_StatusTypeDef switchToRadioClock(void);
+void checkRadioClock(void);
 void startGpsTimer();
 
 

@@ -31,9 +31,12 @@
 #include "stm32f1xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdio.h>
 #include "led.h"
+#include "tim.h"
 #include "gps.h"
 #include "si4063.h"
+#include "diag.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -88,12 +91,10 @@ extern UART_HandleTypeDef huart2;
 void NMI_Handler(void)
 {
   /* USER CODE BEGIN NonMaskableInt_IRQn 0 */
-
+  // clock security system: the Si4063 clock on OSC_IN stopped
+  HAL_RCC_NMI_IRQHandler();
   /* USER CODE END NonMaskableInt_IRQn 0 */
   /* USER CODE BEGIN NonMaskableInt_IRQn 1 */
-  while (1)
-  {
-  }
   /* USER CODE END NonMaskableInt_IRQn 1 */
 }
 
@@ -211,7 +212,7 @@ void SysTick_Handler(void)
   /* USER CODE END SysTick_IRQn 0 */
   HAL_IncTick();
   /* USER CODE BEGIN SysTick_IRQn 1 */
-
+  diag_tick();
   /* USER CODE END SysTick_IRQn 1 */
 }
 
@@ -304,19 +305,8 @@ void TIM6_DAC_IRQHandler(void)
   /* USER CODE END TIM6_DAC_IRQn 0 */
   HAL_TIM_IRQHandler(&htim6);
   /* USER CODE BEGIN TIM6_DAC_IRQn 1 */
-  printf("5 sec gps tick!\r\n");
-  ledToggleGreen();
-  gpsUpdate();
-
-  /*
-  if(radioState) {
-	  si4060_stop_tx();
-	  radioState = 0;
-  } else {
-	  si4060_change_state(STATE_TX);
-	  radioState = 1;
-  }
-  */
+  // gpsUpdate() waits on UART replies, so it runs from the main loop, not here
+  gpsUpdateDue = 1;
   /* USER CODE END TIM6_DAC_IRQn 1 */
 }
 
@@ -341,9 +331,12 @@ void TIM7_IRQHandler(void)
 // EXTI Line9 External Interrupt ISR Handler CallBackFun
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-    if(GPIO_Pin == intGpsPPS_Pin) // If The INT Source Is EXTI Line9 (A9 Pin)
+    if(GPIO_Pin == intGpsPPS_Pin) // GPS PPS on PB8, EXTI line 8
     {
-    	ledToggleYellow();
+    	// a PPS pulse means GPS lock; TIM7 deasserts it if pulses stop for 2 s
+    	assertGpsLock();
+    	resetGpsLockTimer();
+    	diag_pps();
     }
 }
 
