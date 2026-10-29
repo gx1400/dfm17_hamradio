@@ -16,7 +16,7 @@ unconfirmed scale factor it says so.
 | PA0 | **Supply input voltage through a divider**, not VCC: 2.33 V on the pin from USB 5 V, and it sags under load. Divider assumed 2:1 (gives 4.67 V = 5 V minus a diode drop). **Needs bench calibration.** |
 | PB1 | **Supply current monitor**, consistent with **1 V = 1 A**: GPS ~20-25 mA, radio READY ~6-10 mA, TX steps with PA level. **Needs meter calibration.** |
 | APRS telemetry | **Implemented**: temperature, supply mV, supply mA in the existing base91 telemetry fields. Decoded over the air by Dire Wolf. |
-| EEPROM (M24LR04E-R) | On I2C (PB6/PB7) at 0x53 (user) / 0x57 (system). 512 bytes: **0x000-0x15F Graw factory data**, **0x160-0x1FF free**. **Writable over I2C without a password** (tested at 0x1FC, restored). Good home for settings; also reachable from a phone over NFC (to be tested). |
+| EEPROM (M24LR04E-R) | On I2C (PB6/PB7) at 0x53 (user) / 0x57 (system). 512 bytes: **0x000-0x15F Graw factory data**, **0x160-0x1FF free**. **Writable over I2C without a password** (tested at 0x1FC, restored). Good home for settings. Over NFC every sector is locked behind Graw's RF password; sector 3 can probably be opened by the MCU with the I2C password (default `00000000`, untested). |
 | 32.768 kHz crystal (LSE) | **Present and starts**, so the RTC can wake the MCU from Stop/Standby on an accurate schedule. |
 | Radio clock in sleep | Si4063 DIV_CLK **stops in SLEEP and SHUTDOWN**: the MCU must leave the radio clock (back to HSI) before the radio sleeps. |
 | GPS power save | UBX-RXM-PMREQ software backup **works** (~20-25 mA saved) and the receiver **wakes on UART activity** with its fix intact. |
@@ -121,8 +121,11 @@ Dual-interface EEPROM: I2C to the MCU and ISO 15693 NFC (RF) to a reader.
 
 - `0x000-0x0B7`: Graw configuration bytes (mostly `FF` with a few values;
   `0x038` reads `64 8A FD 00` = 16616036 as a little-endian 32-bit integer,
-  possibly the sonde serial number, compare with the label), and ASCII
-  `EDO..FGHPQ` around `0x0A0`.
+  not on any PCB label, possibly the sonde serial on the case; `0x088` reads
+  `D0 F0 31 01` = **20050128**, the number on the PCB's datamatrix label
+  ("2005 0128 G38662 TU"), so the board serial; the other label, "90277
+  G39103#929", isn't stored as an integer), and ASCII `EDO..FGHPQ` around
+  `0x0A0`.
 - `0x0B8-0x157`: little-endian IEEE-754 doubles in groups separated by `1.0`,
   e.g. `-74.19, -13.54, 0.7222, -0.01083, 0.007644, 0.000153` and
   `-1051.08, 34554.3, -355302, 1.36e6`. These look like polynomial calibration
@@ -164,10 +167,50 @@ Ways to change settings, in order of effort:
 2. A text command interface on USART1 (the mini-USB connector carries UART,
    not USB), e.g. `set call NZ0P-12`, `set freq 432500000`, `save`.
 3. **NFC from a phone** (ST's NFC Tap / ST25 apps read and write ISO 15693
-   tags). The sector security bytes `0F` suggest Graw protected the sectors
-   against RF access with a password; whether sector 3 can be opened for RF
-   writes (via the I2C side, which presents its own password, default
-   `00000000`) is untested.
+   tags), see below.
+
+### NFC (RF) access and how to open sector 3
+
+RF access is controlled per sector by the sector security status (SSS) byte;
+I2C access separately by the I2C_Write_Lock bits (default 0, which is why the
+MCU can write sector 3 freely). SSS bits, from the M24LR04E-R datasheet:
+b0 = sector locked, b2:b1 = access rights when locked, b4:b3 = which RF
+password (1-3, 00 = none) unlocks it.
+
+| b2:b1 (locked) | password presented | no password |
+|---|---|---|
+| 00 | read, write | read only |
+| 01 | read, write | read, write |
+| 10 | read, write | no access |
+| 11 | read only | no access |
+
+On this board:
+
+| Sector | SSS | Meaning over RF |
+|---|---|---|
+| 0 (0x000-0x07F) | `0D` | locked, b2:b1 = 10, password 1: no access without it, read/write with it |
+| 1-3 (0x080-0x1FF) | `0F` | locked, b2:b1 = 11, password 1: no access without it, read only with it |
+
+So a phone can identify the tag (UID, system info) but read none of the
+memory without Graw's RF password 1, and can never write sectors 1-3 over
+RF. Opening sector 3 needs its SSS rewritten, which only the MCU can do:
+
+1. Present the I2C password: write 9 bytes to the system area (I2C 0x57) at
+   address `0x0900`: password (4 bytes, big-endian), `0x09`, password again.
+   `0x07` instead of `0x09` sets a new password (format from the Linux
+   `drivers/nvmem/m24lr.c` driver). The factory default is `00000000`; Graw
+   may have changed it.
+2. Write SSS byte 3 (system area address `0x0003`) to `00` (unlocked: RF read
+   and write without a password). Writing an SSS byte needs the I2C password
+   to have been presented; reading never does.
+3. Read it back. If it still reads `0F`, the I2C password isn't the default.
+
+This only touches sector 3's protection; Graw's data in sectors 0-2 stays
+protected. It can be undone by writing `0F` back. Not tried yet.
+
+PC13 is the chip's RF WIP/BUSY output, so the firmware can also notice when a
+phone is reading or writing and reload settings afterwards. RF and I2C
+cannot access the memory at the same moment; I2C is refused while RF is busy.
 
 ## Low power
 
