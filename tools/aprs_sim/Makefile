@@ -9,6 +9,18 @@ OUT     = out
 aprs_harness: aprs_harness.c $(CORE)/Src/aprs.c $(CORE)/Src/string.c stubs/*.h
 	$(CC) $(CFLAGS) -o $@ aprs_harness.c $(CORE)/Src/aprs.c $(CORE)/Src/string.c -lm
 
+afsk_harness: afsk_harness.c $(CORE)/Src/aprs.c $(CORE)/Src/string.c stubs/*.h
+	$(CC) $(CFLAGS) -o $@ afsk_harness.c $(CORE)/Src/aprs.c $(CORE)/Src/string.c -lm -lpthread
+
+# square wave vs sine AFSK through an FM receiver with and without de-emphasis
+afsk-test: afsk_harness
+	@mkdir -p $(OUT)
+	@for m in square sine; do for d in '' --deemph; do \
+		echo "=== $$m $$d ==="; \
+		./afsk_harness $$m | python3 afsk_sim.py $$d -o $(OUT)/afsk_$$m$$d.wav; \
+		atest $(OUT)/afsk_$$m$$d.wav 2>&1 | grep -E "packets decoded"; \
+	done; done
+
 test: aprs_harness
 	@mkdir -p $(OUT)
 	./aprs_harness fix > $(OUT)/bits_fix.txt
@@ -23,6 +35,6 @@ test: aprs_harness
 	done
 
 clean:
-	rm -rf aprs_harness $(OUT)
+	rm -rf aprs_harness afsk_harness $(OUT)
 
-.PHONY: test clean
+.PHONY: test afsk-test clean

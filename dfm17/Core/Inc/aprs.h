@@ -35,6 +35,16 @@
 
 uint8_t aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix);
 void aprs_prepare_status(void);
+void aprs_afsk_tick(void);
+
+/* AFSK modulation (see aprs.c): 0 = square wave on GPIO3 (tested on air),
+ * 1 = sine AFSK with pre-emphasis. aprs_afsk_sine can be changed over SWD */
+#define APRS_AFSK_SINE			0
+/* sine AFSK: peak deviation of each tone, space +3.1 dB over mark */
+#define APRS_MARK_DEV_HZ		2800
+#define APRS_SPACE_DEV_HZ		4000
+/* sine AFSK sample rate: TIM15 26402.6 Hz / 2 = 13201.3 Hz */
+#define APRS_AFSK_TICKS_PER_SAMPLE	2
 void tx_aprs(void);
 void calculate_fcs(void);
 

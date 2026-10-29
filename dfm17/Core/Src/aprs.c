@@ -68,6 +68,61 @@ extern volatile uint16_t aprs_tick;
 extern volatile uint16_t aprs_baud_tick;
 extern volatile uint8_t ppsLockStatus;
 
+/*
+ * AFSK modulation, all settable over SWD for testing (takes effect at the next
+ * packet):
+ * 0: square wave on GPIO3, async direct 2FSK at +-RF_DEV_HZ_DFM
+ * 1: sine AFSK from MODEM_FREQ_OFFSET writes (aprs_afsk_tick), with separate
+ *    mark and space deviation. a louder space tone (pre-emphasis) makes up for
+ *    the de-emphasis in FM receivers, which leaves 2200 Hz 5.3 dB below 1200 Hz
+ */
+volatile uint8_t aprs_afsk_sine = APRS_AFSK_SINE;
+volatile uint16_t aprs_mark_dev_hz = APRS_MARK_DEV_HZ;
+volatile uint16_t aprs_space_dev_hz = APRS_SPACE_DEV_HZ;
+/* samples skipped in the last packet because the radio wasn't ready */
+volatile uint32_t aprs_afsk_skipped;
+static volatile uint8_t afsk_run;
+static uint32_t afsk_phase, afsk_inc_mark, afsk_inc_space;
+static int32_t afsk_amp_mark, afsk_amp_space;
+
+static const int16_t sine64[64] = {
+	0, 3212, 6393, 9512, 12539, 15446, 18204, 20787,
+	23170, 25329, 27245, 28898, 30273, 31356, 32137, 32609,
+	32767, 32609, 32137, 31356, 30273, 28898, 27245, 25329,
+	23170, 20787, 18204, 15446, 12539, 9512, 6393, 3212,
+	0, -3212, -6393, -9512, -12539, -15446, -18204, -20787,
+	-23170, -25329, -27245, -28898, -30273, -31356, -32137, -32609,
+	-32767, -32609, -32137, -31356, -30273, -28898, -27245, -25329,
+	-23170, -20787, -18204, -15446, -12539, -9512, -6393, -3212,
+};
+
+/* phase increment per AFSK sample for a tone: f * 2^32 / sample rate, with
+ * sample rate = 24 MHz / 909 / APRS_AFSK_TICKS_PER_SAMPLE */
+static uint32_t afsk_inc(uint32_t f) {
+	return (uint32_t)(((uint64_t)f << 32) * 909 * APRS_AFSK_TICKS_PER_SAMPLE / 24000000UL);
+}
+
+/*
+ * aprs_afsk_tick
+ *
+ * called by the TIM15 ISR on every tick; while a sine AFSK packet is being
+ * sent, writes one sample of the phase-continuous tone every
+ * APRS_AFSK_TICKS_PER_SAMPLE ticks
+ */
+void aprs_afsk_tick(void) {
+	static uint8_t div = 0;
+
+	if (!afsk_run || ++div < APRS_AFSK_TICKS_PER_SAMPLE)
+		return;
+	div = 0;
+	uint8_t space = aprs_bit == APRS_SPACE;
+	afsk_phase += space ? afsk_inc_space : afsk_inc_mark;
+	int32_t s = sine64[afsk_phase >> 26];
+	int16_t offset = (int16_t)((s * (space ? afsk_amp_space : afsk_amp_mark)) >> 15);
+	if (!si4060_set_offset_fast(offset))
+		aprs_afsk_skipped++;
+}
+
 const unsigned char aprs_header[APRS_HEADER_LEN] = {
 	'A'*2, 'P'*2, 'Z'*2, 'D'*2, 'F'*2, 'M'*2, SSID_RESC + (DST_SSID << 1),
 	'N'*2, 'Z'*2, '0'*2, 'P'*2, ' '*2, ' '*2, SSID_RESC + (SRC_SSID << 1),
@@ -395,6 +450,18 @@ uint8_t get_next_bit(void) {
  *
  */
 void tx_aprs(void) {
+	uint8_t sine = aprs_afsk_sine;
+
+	if (sine) {
+		afsk_amp_mark = si4060_offset_units(aprs_mark_dev_hz);
+		afsk_amp_space = si4060_offset_units(aprs_space_dev_hz);
+		afsk_inc_mark = afsk_inc(1200);
+		afsk_inc_space = afsk_inc(2200);
+		afsk_phase = 0;
+		aprs_afsk_skipped = 0;
+		/* the carrier only moves by MODEM_FREQ_OFFSET */
+		si4060_set_deviation(0);
+	}
 	aprs_init();
 	ledOnGreen();
 	deassertSiGPIO3();
@@ -407,12 +474,18 @@ void tx_aprs(void) {
 	/* add some TX delay */
 	HAL_Delay(250);
 
+	if (sine) {
+		/* from here on only the TIM15 ISR uses the SPI */
+		si4060_spi_fast(1);
+		afsk_run = 1;
+	}
 	aprs_tick = 0;
 	do {
 		if (aprs_tick) {
 			/* running with APRS sample clock */
 			aprs_tick = 0;
-			toggleSiGPIO3();
+			if (!sine)
+				toggleSiGPIO3();
 			if (aprs_baud_tick) {
 				/* running with bit clock (1200 / sec) */
 				//WDTCTL = WDTPW + WDTCNTCL + WDTIS1;
@@ -436,10 +509,17 @@ void tx_aprs(void) {
 	} while(!finished);
 
 	deassertSiGPIO3();
+	if (sine) {
+		afsk_run = 0;
+		si4060_spi_fast(0);
+		si4060_set_offset(0);
+	}
 
 	HAL_Delay(100);
 	si4060_stop_tx();
 	stopAprsTickTimer();
+	if (sine)
+		si4060_set_deviation(RF_DEV_HZ_DFM);
 	ledOffGreen();
 }
 

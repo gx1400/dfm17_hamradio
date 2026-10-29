@@ -33,6 +33,10 @@
 void gpsUpdate(void);
 void gpsSleep(void);
 void gpsWake(void);
+uint8_t gpsConfigure(void);
+
+/* attempts at sending the UBX configuration before giving up */
+#define GPS_CONFIG_TRIES	5
 
 extern volatile uint8_t ppsLockStatus;
 /* set every 5 s by the TIM6 ISR; the main loop runs gpsUpdate() */

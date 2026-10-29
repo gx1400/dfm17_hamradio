@@ -352,6 +352,67 @@ void si4060_set_offset(uint16_t offset) {
 }
 
 /*
+ * si4060_offset_units
+ *
+ * converts a frequency offset in Hz to MODEM_FREQ_OFFSET units at the current
+ * output divider (same scaling as MODEM_FREQ_DEV)
+ */
+int32_t si4060_offset_units(int32_t hz) {
+	return (int32_t)(((int64_t)hz * si4060_outdiv * (1 << 19)) / (2 * (int64_t)XO_FREQ));
+}
+
+/*
+ * si4060_spi_fast
+ *
+ * on: SPI1 at PCLK2 / 4 (6 MHz, the Si4063 allows 10 MHz) so that
+ * si4060_set_offset_fast() fits between AFSK samples. off: back to / 32.
+ */
+void si4060_spi_fast(uint8_t on) {
+	CLEAR_BIT(SPI1->CR1, SPI_CR1_SPE);
+	MODIFY_REG(SPI1->CR1, SPI_CR1_BR, on ? SPI_BAUDRATEPRESCALER_4 : SPI_BAUDRATEPRESCALER_32);
+	SET_BIT(SPI1->CR1, SPI_CR1_SPE);
+}
+
+static inline uint8_t spi_xfer_fast(uint8_t b) {
+	while (!(SPI1->SR & SPI_SR_TXE))
+		;
+	SPI1->DR = b;
+	while (!(SPI1->SR & SPI_SR_RXNE))
+		;
+	return SPI1->DR;
+}
+
+/*
+ * si4060_set_offset_fast
+ *
+ * writes MODEM_FREQ_OFFSET while transmitting, on the SPI registers, for AFSK
+ * samples from the TIM15 ISR. nothing else may use the SPI meanwhile.
+ *
+ * returns: 0 if the radio wasn't ready (no CTS) and the sample was skipped
+ */
+uint8_t si4060_set_offset_fast(int16_t offset) {
+	uint8_t cts;
+
+	(void)SPI1->DR;
+	spi_select();
+	spi_xfer_fast(CMD_READ_CMD_BUF);
+	cts = spi_xfer_fast(0xFF);
+	spi_deselect();
+	if (cts != 0xFF)
+		return 0;
+
+	spi_select();
+	spi_xfer_fast(CMD_SET_PROPERTY);
+	spi_xfer_fast(PROP_MODEM);
+	spi_xfer_fast(2);
+	spi_xfer_fast(MODEM_FREQ_OFFSET);
+	spi_xfer_fast((uint16_t)offset >> 8);
+	spi_xfer_fast((uint16_t)offset & 0xFF);
+	spi_deselect();
+	return 1;
+}
+
+/*
  * si4060_nop
  *
  * implements the NOP command on the Si4060

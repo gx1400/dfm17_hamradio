@@ -174,6 +174,28 @@ void gpsWake(void) {
 	gpsAsleep = 0;
 }
 
+/*
+ * gpsConfigure
+ *
+ * sends the UBX configuration (UBX only on the UART, no NMEA), waking the GPS
+ * first in case it is in software backup. without it the GPS talks NMEA and
+ * every NAV-PVT poll fails, so it is retried up to GPS_CONFIG_TRIES times.
+ *
+ * returns: 1 if the GPS answered
+ */
+uint8_t gpsConfigure(void) {
+	for (int i = 0; i < GPS_CONFIG_TRIES; i++) {
+		uint32_t timeouts = GNSS_timeouts;
+		gpsWake();
+		HAL_Delay(500);
+		GNSS_LoadConfig(&GNSS_Handle);
+		if (GNSS_timeouts == timeouts)
+			return 1;
+		printf("GPS config attempt %d failed\r\n", i + 1);
+	}
+	return 0;
+}
+
 void assertGpsLock(void) {
 	ppsLockStatus = 1;
 }

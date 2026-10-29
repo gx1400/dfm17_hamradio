@@ -250,8 +250,12 @@ int main(void)
 		  gpsUpdateDue = 0;
 		  gpsUpdate();
 		  if (GNSS_timeouts != timeouts) {
-			  if (++gpsFailures >= 3)
+			  // the GPS may have restarted and lost its UBX-only config
+			  if (++gpsFailures >= 3) {
 				  diag_set_error(DIAG_ERR_GPS);
+				  gpsConfigure();
+				  gpsFailures = 0;
+			  }
 		  } else if (ppsLockStatus) {
 			  gpsFailures = 0;
 			  diag_clear_error(DIAG_ERR_GPS);

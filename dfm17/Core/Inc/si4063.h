@@ -93,6 +93,9 @@ void si4060_set_deviation(uint32_t dev_hz);
 void si4060_set_tx_power(uint8_t level);
 
 void si4060_set_offset(uint16_t offset);
+int32_t si4060_offset_units(int32_t hz);
+void si4060_spi_fast(uint8_t on);
+uint8_t si4060_set_offset_fast(int16_t offset);
 void si4060_start_tx(uint8_t channel);
 void si4060_stop_tx(void);
 void si4060_shutdown(void);

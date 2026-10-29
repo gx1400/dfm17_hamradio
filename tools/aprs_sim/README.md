@@ -20,3 +20,23 @@ number of packets `atest` decoded:
 `--tick-period N` sets TIM15 counts per tick ((PSC+1)*(ARR+1), firmware is
 909 at 24 MHz) to try other timer settings or MCU clock error. WAVs land in `out/`; open
 them in Audacity's spectrogram view to see the tones.
+
+## Square wave vs sine AFSK through a receiver
+
+```
+make afsk-test
+```
+
+`afsk_harness` runs the firmware's `tx_aprs()` with the TIM15 ISR simulated
+in a second thread and prints the carrier offset at every tick, for the
+square wave on GPIO3 (`square`) and the sine AFSK from `MODEM_FREQ_OFFSET`
+writes (`sine`, `aprs_afsk_sine = 1`). `afsk_sim.py` turns that into receiver
+audio, with `--deemph` applying the 6 dB/octave de-emphasis of a two-way radio,
+and prints how much weaker the 2200 Hz tone arrives than 1200 Hz:
+
+| | flat (SDR) | de-emphasized (radio) |
+|---|---|---|
+| square, +-2.6 kHz | +0.8 dB | -4.5 dB |
+| sine, 2.8 / 4.0 kHz | +3.8 dB | -1.5 dB |
+
+Hardware TNCs tolerate less of this twist than Dire Wolf does.
