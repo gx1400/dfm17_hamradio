@@ -2,9 +2,14 @@
 
 This repo is a development implementation of code to run on a Graw DFM-17 radiosonde
 
-Current firmware: a 70 cm fox transmitter on 446.175 MHz (Morse ID, hunt tone
-every 30 s, APRS position with telemetry every 5 min) with button and LED
-diagnostics. Tested on hardware with a HackRF and Dire Wolf.
+Current firmware (`TRACKER` in main.c): an APRS tracker on 446.175 MHz. Every
+5 min it wakes the GPS, waits for a 3D fix that has held for 10 s (up to 2 min),
+sends one packet as NZ0P-12 and puts the GPS back into backup. The packet is a
+position with supply voltage, current and temperature telemetry, or a status
+packet (`>no GPS fix 4668mV 54mA 31C`) without a fix. The GPS stays on until
+its first fix. Without `TRACKER` it is a 70 cm fox (Morse ID, hunt tone every
+30 s, APRS every 5 min). Both have button and LED diagnostics. Tested on
+hardware with a HackRF and Dire Wolf.
 
 ## Documentation
 
@@ -22,13 +27,13 @@ diagnostics. Tested on hardware with a HackRF and Dire Wolf.
 
 - Button, acting on release: under 1 s = 5 s unmodulated carrier on the
   transmit frequency; 1-3 s = 5 s 1200 Hz tone then one APRS packet; over
-  3 s = pause / resume the fox
+  3 s = pause / resume the fox or tracker
 - Green: on while transmitting, short heartbeat flash when idle (double flash
   while paused). Yellow: flashes with GPS PPS, solid with a 3D fix. Red: blink
   code, 1 = radio not found, 2 = not running from the radio clock,
   3 = GPS not answering
-- Settings are `#define`s for now: frequency and power in `si4063.h`, fox
-  timing, callsign, `FOX_SEND_APRS` / `FOX_APRS_EVERY` / `FOX_START_PAUSED` in
+- Settings are `#define`s for now: mode (`TRACKER`) in `main.c`, tracker
+  timing in `tracker.h`, frequency and power in `si4063.h`, fox timing, callsign, `FOX_SEND_APRS` / `FOX_APRS_EVERY` / `FOX_START_PAUSED` in
   `fox.h`
 
 ## TODO

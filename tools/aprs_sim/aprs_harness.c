@@ -53,7 +53,7 @@ int main(int argc, char **argv) {
 	GNSS_StateHandle gnss = {0};
 
 	/* "fix": simulate a 3D GPS fix; otherwise there is no fix and aprs.c
-	 * falls back to its APRS_TEST_* position */
+	 * sends a status packet (or its APRS_TEST_* position, if defined) */
 	if (argc > 1 && argv[1][0] == 'f') {
 		gnss.fixType = Fix3D;
 		gnss.lat = 391000000;		/* 39.1 N, u-blox units of 1e-7 deg */

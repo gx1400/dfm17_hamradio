@@ -33,10 +33,15 @@
 extern GNSS_StateHandle GNSS_Handle;
 volatile uint8_t ppsLockStatus;
 volatile uint8_t gpsUpdateDue = 0;
+/* set by gpsSleep(): no polling, any UART traffic would wake the GPS */
+static uint8_t gpsAsleep = 0;
 
 
 void gpsUpdate(void) {
 		printf("GPS Update!\r\n");
+
+		if (gpsAsleep)
+			return;
 
 		if(!ppsLockStatus) {
 			printf("No 1PPS GPS Lock...\r\n\r\n");
@@ -135,6 +140,38 @@ uint8_t buildUbxPacket(uint8_t *packet, uint8_t *payload, uint8_t sizeOfPayload)
     packet[sizeOfPayload+3] = CK_B;
 
     return (sizeOfPayload + 4);
+}
+
+/*
+ * gpsSleep
+ *
+ * puts the GPS into software backup (UBX-RXM-PMREQ, no time limit): about
+ * 20-25 mA less, it keeps time and ephemeris for a hot start. the PPS stops,
+ * so ppsLockStatus drops within 2 s; gpsUpdate() stops polling right away.
+ */
+void gpsSleep(void) {
+	/* duration 0 (until woken), flags: backup */
+	uint8_t payload[4 + 8] = {0x02, 0x41, 8, 0, 0, 0, 0, 0, 0x02, 0, 0, 0};
+	uint8_t packet[sizeof(payload) + 4];
+
+	buildUbxPacket(packet, payload, sizeof(payload));
+	HAL_UART_Transmit(GNSS_Handle.huart, packet, sizeof(packet), 100);
+	gpsAsleep = 1;
+}
+
+/*
+ * gpsWake
+ *
+ * wakes the GPS from software backup: any UART activity does it, the bytes
+ * themselves are lost. the fix is cleared so a stale one isn't used before
+ * the first new NAV-PVT reply.
+ */
+void gpsWake(void) {
+	uint8_t wake[8] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
+	HAL_UART_Transmit(GNSS_Handle.huart, wake, sizeof(wake), 100);
+	GNSS_Handle.fixType = 0;
+	gpsAsleep = 0;
 }
 
 void assertGpsLock(void) {

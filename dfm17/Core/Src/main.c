@@ -92,6 +92,7 @@
 #include "diag.h"
 #include "gps.h"
 #include "analog.h"
+#include "tracker.h"
 
 /* USER CODE END Includes */
 
@@ -109,6 +110,9 @@
 /* uncomment to replace the fox with a carrier controlled over SWD (rf_test.c),
  * for frequency sweeps with tools/rf_sweep */
 //#define RF_TEST_SWD
+/* APRS tracker (tracker.c) instead of the fox: GPS on only for a fix, one
+ * position/telemetry packet every 5 min, no hunt tone */
+#define TRACKER
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -214,8 +218,12 @@ int main(void)
   // failed updates counts as a GPS fault
   uint8_t gpsFailures = 0;
   uint32_t lastAnalog = 0;
+#ifdef TRACKER
+  tracker_start();
+#else
   // first fox transmission right away
   uint32_t lastFox = HAL_GetTick() - FOX_PERIOD_MS;
+#endif
 
 #ifdef HW_SURVEY
   hw_survey_run();
@@ -276,10 +284,15 @@ int main(void)
 	  rf_test_poll();
 	  continue;
 #endif
+#ifdef TRACKER
+	  if (!foxPaused)
+		  tracker_poll(gnss);
+#else
 	  if (!foxPaused && HAL_GetTick() - lastFox >= FOX_PERIOD_MS) {
 		  lastFox = HAL_GetTick();
 		  fox_transmit(gnss);
 	  }
+#endif
 
   }
   /* USER CODE END 3 */

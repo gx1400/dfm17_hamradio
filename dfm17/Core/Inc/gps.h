@@ -31,6 +31,8 @@
 #include "stm32f1xx_hal.h"
 
 void gpsUpdate(void);
+void gpsSleep(void);
+void gpsWake(void);
 
 extern volatile uint8_t ppsLockStatus;
 /* set every 5 s by the TIM6 ISR; the main loop runs gpsUpdate() */

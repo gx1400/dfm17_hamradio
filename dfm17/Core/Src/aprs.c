@@ -56,7 +56,10 @@
  * the APRS data buffer
  * contains ASCII data
  */
-char aprs_buf[APRS_BUF_LEN] = "/ddhhmmz/xxxxyyyyOaa1|ss001122|";
+static const char aprs_pos_template[APRS_POS_LEN + 1] = "/ddhhmmz/xxxxyyyyOaa1|ss001122|";
+char aprs_buf[APRS_BUF_SIZE];
+/* number of bytes of aprs_buf that are sent */
+uint8_t aprs_len;
 // KC0TWY-5>APDR16,TCPIP*,qAC,T2LAUSITZ:=3858.33N/09439.08W>166/000/A=000973 https://aprsdroid.org/
 //char aprs_buf[] = "=3858.33N/09439.08W>189/000/A=000972 https://aprsdroid.org/";
 
@@ -119,7 +122,7 @@ void calculate_fcs(void) {
 
 	// pass header calculation back into crc calc to process buffer
 	uint16_t crcval2 = 0;
-	crcval2 = calc_aprscrc(crcval1, (const uint8_t *)aprs_buf, APRS_BUF_LEN);
+	crcval2 = calc_aprscrc(crcval1, (const uint8_t *)aprs_buf, aprs_len);
 
 	// Take the one's compliment of the calculated CRC
 	crcval2 = crcval2 ^ 0xffff;
@@ -158,14 +161,15 @@ void base91_encode_latlon(char *buf, uint32_t value) {
  * prepares the buffer for APRS transmission with the fix given as a reference.
  * checks for validity of the fix. if the fix is unsuitable for transmission, the
  * fixed APRS_TEST_* position is sent when APRS_TEST_POSITION is defined, otherwise
- * the buffer is not changed.
+ * a status packet with the telemetry as text (see aprs_prepare_status).
  *
  * backlog_fix contains a flag marking the fix as a backlog fix, containing a zero TLM sequence ID
  *
  * always transmits the latest temperature / battery voltage, no historical values!
  *
+ * returns: 1 if the packet carries a position, 0 for a status packet
  */
-void aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix) {
+uint8_t aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix) {
 	int16_t temp_aprs = 0;
 	uint16_t seq_tmp;
 	static uint16_t aprs_seqnum = 0;
@@ -189,9 +193,13 @@ void aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix) {
 		hour = 0;
 		min = 0;
 #else
-		return;
+		aprs_prepare_status();
+		return 0;
 #endif
 	}
+
+	__builtin_memcpy(aprs_buf, aprs_pos_template, APRS_POS_LEN);
+	aprs_len = APRS_POS_LEN;
 
 	/* compressed altitude is log1.002(feet), which cannot go below 1 ft */
 	if (alt_ft < 1.0f)
@@ -222,6 +230,41 @@ void aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix) {
 	base91_encode_tlm(&aprs_buf[APRS_TEMP_START], (uint16_t)temp_aprs);
 	base91_encode_tlm(&aprs_buf[APRS_VOLT_START], analog.vin_mv);
 	base91_encode_tlm(&aprs_buf[APRS_VSOL_START], analog.iin_ma);
+
+	calculate_fcs();
+	return 1;
+}
+
+/*
+ * aprs_prepare_status
+ *
+ * prepares a status packet without a position, for when there is no GPS fix:
+ * ">no GPS fix 4674mV 55mA 30C" (supply voltage, supply current, MCU
+ * temperature). the station is identified by the source callsign in the header.
+ */
+void aprs_prepare_status(void) {
+	static const char text[] = ">no GPS fix ";
+	analog_reading analog;
+	uint8_t n = sizeof(text) - 1;
+
+	analog_read(&analog);
+	__builtin_memcpy(aprs_buf, text, n);
+	n += i16toav(analog.vin_mv, &aprs_buf[n]);
+	aprs_buf[n++] = 'm';
+	aprs_buf[n++] = 'V';
+	aprs_buf[n++] = ' ';
+	n += i16toav(analog.iin_ma, &aprs_buf[n]);
+	aprs_buf[n++] = 'm';
+	aprs_buf[n++] = 'A';
+	aprs_buf[n++] = ' ';
+	if (analog.temp_c < 0) {
+		aprs_buf[n++] = '-';
+		n += i16toav(-analog.temp_c, &aprs_buf[n]);
+	} else {
+		n += i16toav(analog.temp_c, &aprs_buf[n]);
+	}
+	aprs_buf[n++] = 'C';
+	aprs_len = n;
 
 	calculate_fcs();
 }
@@ -275,7 +318,7 @@ uint8_t get_next_byte(void) {
 			break;
 		case AX25_DATA:
 			retval = aprs_buf[i];
-			if (++i >= APRS_BUF_LEN) {
+			if (++i >= aprs_len) {
 				aprs_state = AX25_FCS1;
 				i = 0;
 			}
