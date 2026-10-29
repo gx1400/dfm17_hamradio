@@ -40,22 +40,33 @@ volatile union i_Short iShort;
 volatile union u_Long uLong;
 volatile union i_Long iLong;
 
-/* number of GPS requests that got no reply within GNSS_TIMEOUT_MS */
+/* number of GPS requests that got no reply within GNSS_TIMEOUT_MS, and the UBX
+ * class << 8 | id of the last one, with the HAL tick when it timed out */
 volatile uint32_t GNSS_timeouts = 0;
+volatile uint16_t GNSS_timeoutMsg = 0;
+volatile uint32_t GNSS_timeoutTick = 0;
+/* HAL ErrorCode and reply bytes still missing at the last timeout */
+volatile uint32_t GNSS_timeoutErr = 0;
+volatile uint16_t GNSS_timeoutMissing = 0;
 
 /*!
  * Wait for the UART DMA transmit and receive started by the caller to complete.
  * Gives up after GNSS_TIMEOUT_MS so a silent GPS can't hang the firmware.
  * @param GNSS Pointer to main GNSS structure.
+ * @param request The UBX message that was sent, to record which one timed out.
  * @return 1 if the reply arrived, 0 on timeout.
  */
-static uint8_t GNSS_WaitForReply(GNSS_StateHandle *GNSS) {
+static uint8_t GNSS_WaitForReply(GNSS_StateHandle *GNSS, const uint8_t *request) {
 	uint32_t start = HAL_GetTick();
 
 	while ((GNSS->txDone == 0x00) || (GNSS->rxDone == 0x00)) {
 		if (HAL_GetTick() - start > GNSS_TIMEOUT_MS) {
+			GNSS_timeoutErr = GNSS->huart->ErrorCode;
+			GNSS_timeoutMissing = __HAL_DMA_GET_COUNTER(GNSS->huart->hdmarx);
 			HAL_UART_Abort(GNSS->huart);
 			GNSS_timeouts++;
+			GNSS_timeoutMsg = (request[2] << 8) | request[3];
+			GNSS_timeoutTick = HAL_GetTick();
 			return 0;
 		}
 	}
@@ -135,7 +146,7 @@ void GNSS_GetUniqID(GNSS_StateHandle *GNSS) {
 	HAL_UART_Transmit_DMA(GNSS->huart, getDeviceID,
 			sizeof(getDeviceID) / sizeof(uint8_t));
 	HAL_UART_Receive_DMA(GNSS->huart, GNSS->uartWorkingBuffer, 17);
-	GNSS_WaitForReply(GNSS);
+	GNSS_WaitForReply(GNSS, getDeviceID);
 }
 
 /*!
@@ -149,7 +160,7 @@ void GNSS_GetNavigatorData(GNSS_StateHandle *GNSS) {
 	HAL_UART_Transmit_DMA(GNSS->huart, getNavigatorData,
 			sizeof(getNavigatorData) / sizeof(uint8_t));
 	HAL_UART_Receive_DMA(GNSS->huart, GNSS->uartWorkingBuffer, 28);
-	GNSS_WaitForReply(GNSS);
+	GNSS_WaitForReply(GNSS, getNavigatorData);
 }
 
 /*!
@@ -163,7 +174,7 @@ void GNSS_GetPOSLLHData(GNSS_StateHandle *GNSS) {
 	HAL_UART_Transmit_DMA(GNSS->huart, getPOSLLHData,
 			sizeof(getPOSLLHData) / sizeof(uint8_t));
 	HAL_UART_Receive_DMA(GNSS->huart, GNSS->uartWorkingBuffer, 36);
-	GNSS_WaitForReply(GNSS);
+	GNSS_WaitForReply(GNSS, getPOSLLHData);
 }
 
 /*!
@@ -177,7 +188,7 @@ void GNSS_GetPVTData(GNSS_StateHandle *GNSS) {
 	HAL_UART_Transmit_DMA(GNSS->huart, getPVTData,
 			sizeof(getPVTData) / sizeof(uint8_t));
 	HAL_UART_Receive_DMA(GNSS->huart, GNSS->uartWorkingBuffer, 100);
-	GNSS_WaitForReply(GNSS);
+	GNSS_WaitForReply(GNSS, getPVTData);
 }
 
 /*!
@@ -226,7 +237,7 @@ void GNSS_SetMode(GNSS_StateHandle *GNSS, short gnssMode) {
 		HAL_UART_Transmit_DMA(GNSS->huart, setBikeMode,sizeof(setBikeMode) / sizeof(uint8_t));
 	}
 	HAL_UART_Receive_DMA(GNSS->huart, GNSS->uartWorkingBuffer, 10);
-	GNSS_WaitForReply(GNSS);
+	GNSS_WaitForReply(GNSS, setBikeMode);
 
 	GNSS->selectedMode = gnssMode;
 }
@@ -375,7 +386,7 @@ void GNSS_LoadConfig(GNSS_StateHandle *GNSS) {
 	HAL_UART_Transmit_DMA(GNSS->huart, configUBX,
 			sizeof(configUBX) / sizeof(uint8_t));
 	HAL_UART_Receive_DMA(GNSS->huart, GNSS->uartWorkingBuffer, 10);
-	GNSS_WaitForReply(GNSS);
+	GNSS_WaitForReply(GNSS, configUBX);
 
 	printf("Sending NMEA410 config...\r\n");
 	GNSS->txDone = 0x00;
@@ -383,7 +394,7 @@ void GNSS_LoadConfig(GNSS_StateHandle *GNSS) {
 	HAL_UART_Transmit_DMA(GNSS->huart, setNMEA410,
 			sizeof(setNMEA410) / sizeof(uint8_t));
 	HAL_UART_Receive_DMA(GNSS->huart, GNSS->uartWorkingBuffer, 10);
-	GNSS_WaitForReply(GNSS);
+	GNSS_WaitForReply(GNSS, setNMEA410);
 
 	printf("Sending GNSS config...\r\n");
 	GNSS->txDone = 0x00;
@@ -391,7 +402,7 @@ void GNSS_LoadConfig(GNSS_StateHandle *GNSS) {
 	HAL_UART_Transmit_DMA(GNSS->huart, setGNSS,
 			sizeof(setGNSS) / sizeof(uint8_t));
 	HAL_UART_Receive_DMA(GNSS->huart, GNSS->uartWorkingBuffer, 10);
-	GNSS_WaitForReply(GNSS);
+	GNSS_WaitForReply(GNSS, setGNSS);
 }
 
 

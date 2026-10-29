@@ -200,6 +200,9 @@ int main(void)
 
   GNSS_StateHandle *gnss = (GNSS_StateHandle *)&GNSS_Handle;
   uint8_t foxPaused = 0;
+  // the GPS occasionally leaves a NAV-PVT poll unanswered; only a run of
+  // failed updates counts as a GPS fault
+  uint8_t gpsFailures = 0;
   // first fox transmission right away
   uint32_t lastFox = HAL_GetTick() - FOX_PERIOD_MS;
 
@@ -218,10 +221,13 @@ int main(void)
 		  uint32_t timeouts = GNSS_timeouts;
 		  gpsUpdateDue = 0;
 		  gpsUpdate();
-		  if (GNSS_timeouts != timeouts)
-			  diag_set_error(DIAG_ERR_GPS);
-		  else if (ppsLockStatus)
+		  if (GNSS_timeouts != timeouts) {
+			  if (++gpsFailures >= 3)
+				  diag_set_error(DIAG_ERR_GPS);
+		  } else if (ppsLockStatus) {
+			  gpsFailures = 0;
 			  diag_clear_error(DIAG_ERR_GPS);
+		  }
 	  }
 	  diag_set_gps_fix(ppsLockStatus && gnss->fixType >= Fix3D);
 
