@@ -27,7 +27,8 @@
   * enabled in CubeMX, move this onto the HAL instead.
   *
   * Channels: PA0 = ADC_IN0 (supply input via divider), PB1 = ADC_IN9 (supply
-  * current monitor), 16 = temperature sensor, 17 = VREFINT. Every reading is
+  * current monitor), PC2 = ADC_IN12 (USB VBUS via divider), 16 = temperature
+  * sensor, 17 = VREFINT. Every reading is
   * scaled by VDDA measured from VREFINT, so it doesn't assume a 3.3 V rail.
   ******************************************************************************
   */
@@ -37,6 +38,7 @@
 
 #define CH_VIN			0
 #define CH_IIN			9
+#define CH_USB			12
 #define CH_TEMP			16
 #define CH_VREFINT		17
 
@@ -51,9 +53,11 @@ void analog_init(void) {
 	/* PCLK2 24 MHz / 2 = 12 MHz, the STM32F100 maximum */
 	MODIFY_REG(RCC->CFGR, RCC_CFGR_ADCPRE, RCC_CFGR_ADCPRE_DIV2);
 	SET_BIT(RCC->APB2ENR, RCC_APB2ENR_ADC1EN | RCC_APB2ENR_IOPAEN | RCC_APB2ENR_IOPBEN);
-	/* PA0 and PB1 analog (CNF/MODE 0000) */
+	/* PA0, PB1 and PC2 analog (CNF/MODE 0000) */
+	SET_BIT(RCC->APB2ENR, RCC_APB2ENR_IOPCEN);
 	MODIFY_REG(GPIOA->CRL, 0xFUL << 0, 0);
 	MODIFY_REG(GPIOB->CRL, 0xFUL << 4, 0);
+	MODIFY_REG(GPIOC->CRL, 0xFUL << 8, 0);
 
 	/* longest sample time (239.5 cycles) for the high-impedance inputs */
 	ADC1->SMPR1 = 0x00FFFFFF;
@@ -92,8 +96,9 @@ void analog_read(analog_reading *r) {
 	uint32_t vref = read_raw(CH_VREFINT);
 	uint32_t vin = read_raw(CH_VIN);
 	uint32_t iin = read_raw(CH_IIN);
+	uint32_t temp = read_raw(CH_TEMP);
 
-	analog_convert(r, vref, vin, iin, read_raw(CH_TEMP));
+	analog_convert(r, vref, vin, iin, temp, read_raw(CH_USB));
 }
 
 /*
@@ -103,7 +108,7 @@ void analog_read(analog_reading *r) {
  * from VREFINT
  */
 void analog_convert(analog_reading *r, uint32_t vref, uint32_t vin_raw,
-		uint32_t iin_raw, uint32_t temp_raw) {
+		uint32_t iin_raw, uint32_t temp_raw, uint32_t usb_raw) {
 	if (vref == 0)
 		vref = 1;
 	uint32_t vdda = VREFINT_MV * 4095UL / vref;
@@ -118,4 +123,9 @@ void analog_convert(analog_reading *r, uint32_t vref, uint32_t vin_raw,
 	r->vin_mv = (uint16_t)(vin_pin * ANALOG_VIN_DIVIDER);
 	r->iin_ma = (uint16_t)(iin_pin * ANALOG_I_MA_PER_V / 1000.0f);
 	r->temp_c = (int16_t)(25 + (TEMP_V25_MV - temp_pin) * 1000 / TEMP_SLOPE_UV);
+
+	uint32_t usb_pin = usb_raw * vdda / 4095;
+	r->usb_raw = usb_raw;
+	r->usb_mv = (uint16_t)(usb_pin * ANALOG_USB_DIVIDER);
+	r->on_usb = usb_pin > ANALOG_USB_PRESENT_MV;
 }

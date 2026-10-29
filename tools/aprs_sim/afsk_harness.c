@@ -56,6 +56,8 @@ void analog_read(analog_reading *r) {
 	r->vin_mv = 4660;
 	r->iin_ma = 54;
 	r->temp_c = 31;
+	r->usb_mv = 5020;
+	r->on_usb = 1;
 }
 
 /* the TIM15 ISR: processAprsTick() from tim.c, one tick at a time, waiting

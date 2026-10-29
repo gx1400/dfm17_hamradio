@@ -56,7 +56,7 @@
  * the APRS data buffer
  * contains ASCII data
  */
-static const char aprs_pos_template[APRS_POS_LEN + 1] = "/ddhhmmz/xxxxyyyyOaa1|ss001122|";
+static const char aprs_pos_template[APRS_POS_LEN + 1] = "/ddhhmmz/xxxxyyyyOaa1|ss00112233|";
 char aprs_buf[APRS_BUF_SIZE];
 /* number of bytes of aprs_buf that are sent */
 uint8_t aprs_len;
@@ -286,7 +286,8 @@ uint8_t aprs_prepare_fix(GNSS_StateHandle *GNSS, uint8_t fix_valid, uint8_t back
 	}
 
 	/* telemetry channels: MCU temperature (C + APRS_TLM_TEMP_OFFSET), supply
-	 * voltage in mV and supply current in mA, each 0..8280 in base91 */
+	 * voltage in mV, supply current in mA and USB voltage in mV (0 on
+	 * battery), each 0..8280 in base91 */
 	analog_reading analog;
 	analog_read(&analog);
 	temp_aprs = analog.temp_c + APRS_TLM_TEMP_OFFSET;
@@ -295,6 +296,7 @@ uint8_t aprs_prepare_fix(GNSS_StateHandle *GNSS, uint8_t fix_valid, uint8_t back
 	base91_encode_tlm(&aprs_buf[APRS_TEMP_START], (uint16_t)temp_aprs);
 	base91_encode_tlm(&aprs_buf[APRS_VOLT_START], analog.vin_mv);
 	base91_encode_tlm(&aprs_buf[APRS_VSOL_START], analog.iin_ma);
+	base91_encode_tlm(&aprs_buf[APRS_USB_START], analog.on_usb ? analog.usb_mv : 0);
 
 	calculate_fcs();
 	return 1;
@@ -304,9 +306,9 @@ uint8_t aprs_prepare_fix(GNSS_StateHandle *GNSS, uint8_t fix_valid, uint8_t back
  * aprs_prepare_status
  *
  * prepares a status packet without a position, for when there is no GPS fix:
- * ">nofix 2D 4sv 4674mV 55mA 30C" (GPS fix type and satellites from the last
- * NAV-PVT, or "nopps" without GPS PPS; supply voltage, supply current, MCU
- * temperature). the GPS state comes first, a TH-D72 shows only 20 characters.
+ * ">nofix 2D 4sv 4674mV 55mA 30C USB" (GPS fix type and satellites from the
+ * last NAV-PVT, or "nopps" without GPS PPS; supply voltage, supply current, MCU
+ * temperature, USB or BAT power). the GPS state comes first, a TH-D72 shows only 20 characters.
  * the station is identified by the source callsign in the header.
  */
 void aprs_prepare_status(GNSS_StateHandle *GNSS) {
@@ -343,6 +345,8 @@ void aprs_prepare_status(GNSS_StateHandle *GNSS) {
 		n += i16toav(analog.temp_c, &aprs_buf[n]);
 	}
 	aprs_buf[n++] = 'C';
+	__builtin_memcpy(&aprs_buf[n], analog.on_usb ? " USB" : " BAT", 4);
+	n += 4;
 	aprs_len = n;
 
 	calculate_fcs();

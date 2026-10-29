@@ -11,7 +11,8 @@
 
 volatile uint16_t aprs_bit, aprs_tick, aprs_baud_tick;
 volatile uint8_t ppsLockStatus;
-static analog_reading fake_analog = { .vin_mv = 4672, .iin_ma = 63, .temp_c = 30 };
+static analog_reading fake_analog = { .vin_mv = 4672, .iin_ma = 63, .temp_c = 30,
+		.usb_mv = 5020, .on_usb = 1 };
 
 void analog_read(analog_reading *r) { *r = fake_analog; }
 void si4060_setup(uint8_t mod_type) { (void)mod_type; }
@@ -162,6 +163,18 @@ static void position_packet_fields(void) {
 	CHECK_EQ(base91_2(&aprs_buf[APRS_TEMP_START]), 30 + APRS_TLM_TEMP_OFFSET);
 	CHECK_EQ(base91_2(&aprs_buf[APRS_VOLT_START]), 4672);
 	CHECK_EQ(base91_2(&aprs_buf[APRS_VSOL_START]), 63);
+	CHECK_EQ(base91_2(&aprs_buf[APRS_USB_START]), 5020);
+}
+
+static void usb_channel_zero_on_battery(void) {
+	GNSS_StateHandle g = fix_3d();
+	analog_reading saved = fake_analog;
+	fake_analog.on_usb = 0;
+	fake_analog.usb_mv = 120;		/* leakage, below the presence threshold */
+	ppsLockStatus = 1;
+	aprs_prepare_buffer(&g, 0);
+	CHECK_EQ(base91_2(&aprs_buf[APRS_USB_START]), 0);
+	fake_analog = saved;
 }
 
 static void telemetry_sequence(void) {
@@ -194,7 +207,7 @@ static void no_pps_sends_status(void) {
 
 	CHECK_EQ(aprs_prepare_buffer(&g, 0), 0);
 	status_text(s);
-	CHECK_STR(s, ">nofix nopps 4672mV 63mA 30C");
+	CHECK_STR(s, ">nofix nopps 4672mV 63mA 30C USB");
 }
 
 static void no_fix_status_shows_gps_state(void) {
@@ -206,7 +219,7 @@ static void no_fix_status_shows_gps_state(void) {
 
 	CHECK_EQ(aprs_prepare_buffer(&g, 0), 0);
 	status_text(s);
-	CHECK_STR(s, ">nofix 1D 3sv 4672mV 63mA 30C");
+	CHECK_STR(s, ">nofix 1D 3sv 4672mV 63mA 30C USB");
 	/* a TH-D72 shows 20 characters: the GPS state must be among them */
 	CHECK(memcmp(s + 1, "nofix 1D 3sv", 12) == 0);
 }
@@ -217,11 +230,12 @@ static void status_negative_temperature(void) {
 	analog_reading saved = fake_analog;
 	fake_analog.temp_c = -12;
 	fake_analog.iin_ma = 0;
+	fake_analog.on_usb = 0;
 	ppsLockStatus = 0;
 
 	aprs_prepare_buffer(&g, 0);
 	status_text(s);
-	CHECK_STR(s, ">nofix nopps 4672mV 0mA -12C");
+	CHECK_STR(s, ">nofix nopps 4672mV 0mA -12C BAT");
 	fake_analog = saved;
 }
 
@@ -293,6 +307,7 @@ TEST_MAIN("aprs",
 	TEST(crc_reference_vector),
 	TEST(base91_telemetry_values),
 	TEST(position_packet_fields),
+	TEST(usb_channel_zero_on_battery),
 	TEST(telemetry_sequence),
 	TEST(low_altitude_clamped),
 	TEST(no_pps_sends_status),
