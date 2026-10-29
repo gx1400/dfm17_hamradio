@@ -24,7 +24,9 @@
   ******************************************************************************
   * Each cycle wakes the GPS, waits until a 3D fix has held for
   * TRACKER_SETTLE_MS (or TRACKER_FIX_TIMEOUT_MS has passed), sends one APRS
-  * packet and puts the GPS back into software backup until the next cycle.
+  * packet and puts the GPS back into software backup until the next cycle. With
+  * a poor sky view (a parked car) the fix can come and go; at the timeout the
+  * last 3D fix seen during the cycle is sent, if there was one.
   * The packet is a position with the supply voltage, current and temperature
   * telemetry, or a status packet with the same values as text when there is no
   * fix. Every packet carries the callsign as its AX.25 source address.
@@ -50,6 +52,9 @@ static uint32_t cycle_start;
 static uint32_t fix_start;
 static uint8_t fixing;
 static uint8_t had_fix;
+/* the last 3D fix of this cycle */
+static GNSS_StateHandle last_fix;
+static uint8_t have_last_fix;
 
 /*
  * tracker_start
@@ -60,6 +65,7 @@ void tracker_start(void) {
 	state = TRK_ACQUIRE;
 	cycle_start = HAL_GetTick();
 	fixing = 0;
+	have_last_fix = 0;
 }
 
 /* returns 1 if the packet carried a position */
@@ -67,7 +73,10 @@ static uint8_t send_aprs(GNSS_StateHandle *GNSS) {
 	uint8_t position;
 
 	diag_set_tx(1);
-	position = aprs_prepare_buffer(GNSS, 0);
+	if (fixing || !have_last_fix)
+		position = aprs_prepare_buffer(GNSS, 0);
+	else
+		position = aprs_prepare_fix(&last_fix, 1, 0);
 	tx_aprs();
 	diag_set_tx(0);
 	return position;
@@ -88,6 +97,17 @@ void tracker_poll(GNSS_StateHandle *GNSS) {
 				fixing = 1;
 				fix_start = now;
 			}
+			/* GNSS is only updated by gpsUpdate() in the main loop, so this
+			 * copy can't catch a half-parsed NAV-PVT */
+			last_fix.fixType = GNSS->fixType;
+			last_fix.numSV = GNSS->numSV;
+			last_fix.lat = GNSS->lat;
+			last_fix.lon = GNSS->lon;
+			last_fix.hMSL = GNSS->hMSL;
+			last_fix.day = GNSS->day;
+			last_fix.hour = GNSS->hour;
+			last_fix.min = GNSS->min;
+			have_last_fix = 1;
 		} else {
 			fixing = 0;
 		}
@@ -107,6 +127,7 @@ void tracker_poll(GNSS_StateHandle *GNSS) {
 			gpsWake();
 			cycle_start = now;
 			fixing = 0;
+			have_last_fix = 0;
 			state = TRK_ACQUIRE;
 		}
 		break;

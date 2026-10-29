@@ -171,6 +171,7 @@ void gpsWake(void) {
 
 	HAL_UART_Transmit(GNSS_Handle.huart, wake, sizeof(wake), 100);
 	GNSS_Handle.fixType = 0;
+	GNSS_Handle.numSV = 0;
 	gpsAsleep = 0;
 }
 

@@ -214,9 +214,19 @@ void base91_encode_latlon(char *buf, uint32_t value) {
  * aprs_prepare_buffer
  *
  * prepares the buffer for APRS transmission with the fix given as a reference.
- * checks for validity of the fix. if the fix is unsuitable for transmission, the
- * fixed APRS_TEST_* position is sent when APRS_TEST_POSITION is defined, otherwise
- * a status packet with the telemetry as text (see aprs_prepare_status).
+ * checks for validity of the fix (GPS PPS and at least a 2D fix), then works as
+ * aprs_prepare_fix().
+ */
+uint8_t aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix) {
+	return aprs_prepare_fix(GNSS, ppsLockStatus && GNSS->fixType >= Fix2D, backlog_fix);
+}
+
+/*
+ * aprs_prepare_fix
+ *
+ * prepares the buffer with the fix in GNSS if fix_valid; otherwise the fixed
+ * APRS_TEST_* position is sent when APRS_TEST_POSITION is defined, or else a
+ * status packet with the telemetry as text (see aprs_prepare_status).
  *
  * backlog_fix contains a flag marking the fix as a backlog fix, containing a zero TLM sequence ID
  *
@@ -224,14 +234,14 @@ void base91_encode_latlon(char *buf, uint32_t value) {
  *
  * returns: 1 if the packet carries a position, 0 for a status packet
  */
-uint8_t aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix) {
+uint8_t aprs_prepare_fix(GNSS_StateHandle *GNSS, uint8_t fix_valid, uint8_t backlog_fix) {
 	int16_t temp_aprs = 0;
 	uint16_t seq_tmp;
 	static uint16_t aprs_seqnum = 0;
 	float lat, lon, alt_ft;
 	uint8_t day, hour, min;
 
-	if (ppsLockStatus && GNSS->fixType >= Fix2D) {
+	if (fix_valid) {
 		/* u-blox PVT: lat/lon in 1e-7 degrees, height above MSL in mm */
 		lat = (float)GNSS->lat / 10000000.0f;
 		lon = (float)GNSS->lon / 10000000.0f;
@@ -248,7 +258,7 @@ uint8_t aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix) {
 		hour = 0;
 		min = 0;
 #else
-		aprs_prepare_status();
+		aprs_prepare_status(GNSS);
 		return 0;
 #endif
 	}
@@ -294,16 +304,30 @@ uint8_t aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix) {
  * aprs_prepare_status
  *
  * prepares a status packet without a position, for when there is no GPS fix:
- * ">no GPS fix 4674mV 55mA 30C" (supply voltage, supply current, MCU
- * temperature). the station is identified by the source callsign in the header.
+ * ">nofix 2D 4sv 4674mV 55mA 30C" (GPS fix type and satellites from the last
+ * NAV-PVT, or "nopps" without GPS PPS; supply voltage, supply current, MCU
+ * temperature). the GPS state comes first, a TH-D72 shows only 20 characters.
+ * the station is identified by the source callsign in the header.
  */
-void aprs_prepare_status(void) {
-	static const char text[] = ">no GPS fix ";
+void aprs_prepare_status(GNSS_StateHandle *GNSS) {
+	static const char text[] = ">nofix ";
 	analog_reading analog;
 	uint8_t n = sizeof(text) - 1;
 
 	analog_read(&analog);
 	__builtin_memcpy(aprs_buf, text, n);
+	if (!ppsLockStatus) {
+		__builtin_memcpy(&aprs_buf[n], "nopps ", 6);
+		n += 6;
+	} else {
+		n += i16toav(GNSS->fixType, &aprs_buf[n]);
+		aprs_buf[n++] = 'D';
+		aprs_buf[n++] = ' ';
+		n += i16toav(GNSS->numSV, &aprs_buf[n]);
+		aprs_buf[n++] = 's';
+		aprs_buf[n++] = 'v';
+		aprs_buf[n++] = ' ';
+	}
 	n += i16toav(analog.vin_mv, &aprs_buf[n]);
 	aprs_buf[n++] = 'm';
 	aprs_buf[n++] = 'V';
