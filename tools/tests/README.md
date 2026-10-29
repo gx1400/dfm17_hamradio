@@ -14,6 +14,7 @@ and a summary, and the run fails if any check does.
 | `test_si4063` | si4063.c | PLL settings reproduce every frequency in 420-450 MHz to the synthesizer step, band selection, deviation and offset units, modulation modes, START_TX / READY, the CTS timeout, the fast SPI mode for sine AFSK |
 | `test_fox` | fox.c | the Morse ID decoded back from the tone timeline, element and gap timing, hunt tone length, APRS every 10th cycle, the button test transmissions |
 | `test_diag` | diag.c | button debounce, contact bounce, short/medium/long presses, a press held at power-on ignored, LED feedback while held, heartbeat, red blink codes, PPS flash, the PPS cycle count across the counter wrap |
+| `test_ppsdisc` | ppsdisc.c | the TCXO correction: estimate from a full window, slow and fast TCXOs, the corrected carrier, sub-cycle resolution, one-sided outliers trimmed, missed pulses / wake-up / HSI samples rejected, estimate kept without GPS, retune threshold, disable, queue overflow |
 | `test_analog` | analog.c | VDDA from VREFINT, supply voltage and current, independence from VDDA, temperature |
 
 How it works:

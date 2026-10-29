@@ -9,7 +9,7 @@ SANITIZE ?= -fsanitize=undefined,bounds-strict -fsanitize-trap=all
 # -iquote: Core/Inc/string.h must not shadow the system <string.h>
 CFLAGS   = -std=gnu11 -Wall -Werror -g -O1 $(SANITIZE) -iquote . -iquote fakehal -iquote $(CORE)/Inc
 
-TESTS = aprs tracker gps gnss si4063 fox diag analog
+TESTS = aprs tracker gps gnss si4063 fox diag analog ppsdisc
 
 # firmware sources linked into each test
 SRC_aprs    = aprs.c string.c
@@ -20,6 +20,7 @@ SRC_si4063  = si4063.c
 SRC_fox     = fox.c
 SRC_diag    = diag.c
 SRC_analog  = analog.c
+SRC_ppsdisc = ppsdisc.c
 
 BINS = $(TESTS:%=$(BUILD)/test_%)
 
