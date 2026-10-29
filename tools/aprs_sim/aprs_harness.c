@@ -32,6 +32,15 @@ void si4060_setup(uint8_t mod_type) { (void)mod_type; }
 void si4060_start_tx(uint8_t channel) { (void)channel; }
 void si4060_stop_tx(void) {}
 
+/* fixed telemetry, values like the survey measured on the bench */
+#include "analog.h"
+void analog_read(analog_reading *r) {
+	r->vdda_mv = 3310;
+	r->vin_mv = 4660;
+	r->iin_ma = 54;
+	r->temp_c = 31;
+}
+
 /* non-static functions/state from aprs.c that have no prototype in aprs.h */
 extern volatile uint8_t finished;
 extern volatile uint16_t aprs_state;

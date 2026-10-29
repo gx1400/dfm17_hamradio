@@ -54,6 +54,12 @@ static volatile uint8_t tx = 0;
 static volatile uint8_t gps_fix = 0;
 static volatile uint8_t paused = 0;
 static volatile uint32_t last_pps = 0;
+
+/* CPU cycles (DWT CYCCNT) between the last two GPS PPS pulses: 24000000 when
+ * SYSCLK is exactly 24 MHz, so (pps_cycles - 24e6) / 24 = clock error in ppm.
+ * with SYSCLK from the Si4063 TCXO this measures the TCXO against GPS */
+volatile uint32_t pps_cycles = 0;
+static uint32_t pps_cyccnt = 0;
 static volatile uint32_t ack_until = 0;
 static volatile diag_button button_event = DIAG_BUTTON_NONE;
 
@@ -73,6 +79,11 @@ static void set_red(uint8_t on) { if (on) ledOnRed(); else ledOffRed(); }
  * all LEDs on for half a second at boot, then hands the LEDs to diag_tick()
  */
 void diag_selftest(void) {
+	/* cycle counter for diag_pps() */
+	CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+	DWT->CYCCNT = 0;
+	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+
 	ledOnGreen();
 	ledOnYellow();
 	ledOnRed();
@@ -81,6 +92,19 @@ void diag_selftest(void) {
 	ledOffYellow();
 	ledOffRed();
 	ready = 1;
+}
+
+/*
+ * diag_leds_off
+ *
+ * stops diag_tick() driving the LEDs and turns them off (low-power measurements);
+ * diag_selftest() hands them back
+ */
+void diag_leds_off(void) {
+	ready = 0;
+	ledOffGreen();
+	ledOffYellow();
+	ledOffRed();
 }
 
 static void button_sample(uint32_t now) {
@@ -164,6 +188,9 @@ void diag_tick(void) {
 
 /* call from the GPS PPS interrupt */
 void diag_pps(void) {
+	uint32_t now = DWT->CYCCNT;
+	pps_cycles = now - pps_cyccnt;
+	pps_cyccnt = now;
 	last_pps = HAL_GetTick();
 }
 

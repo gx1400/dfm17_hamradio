@@ -34,6 +34,7 @@
 #include "tim.h"
 #include "si4063.h"
 #include "diag.h"
+#include "analog.h"
 
 
 extern UART_HandleTypeDef huart2;
@@ -56,6 +57,8 @@ void initHw(void) {
 	MX_GPIO_Init();
 	// all LEDs on for 0.5 s, then diag_tick() drives them
 	diag_selftest();
+	// supply voltage/current and temperature for APRS telemetry
+	analog_init();
 	MX_DMA_Init();
 	MX_USART1_UART_Init();
 	MX_USART2_UART_Init();

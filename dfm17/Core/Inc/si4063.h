@@ -50,9 +50,10 @@
 #define RF_FREQ_HZ_2M_AUS		145175000.0f
 #define RF_FREQ_HZ_2M_NZ		144575000.0f
 #define RF_FREQ_HZ_2M_THAI		145525000.0f
-/* DFM-17 transmit settings. 432.500 MHz: 70 cm amateur band (IARU R1 70 cm APRS),
- * close to the 400-406 MHz the DFM-17 RF output stage was designed for */
-#define RF_FREQ_HZ_DFM			432500000UL
+/* DFM-17 transmit settings. 446.175 MHz: 70 cm amateur band, the local APRS
+ * iGate (KD0JWD-5). 432.500 MHz (IARU R1 70 cm APRS) also works. The DFM-17 RF
+ * output stage was designed for 400-406 MHz */
+#define RF_FREQ_HZ_DFM			446175000UL
 #define RF_DEV_HZ_DFM			2600UL		/* FM deviation of the GPIO3 square wave */
 #define RF_TX_POWER_DFM			0x20		/* PA_PWR_LVL, 0x00..0x7f */
 
