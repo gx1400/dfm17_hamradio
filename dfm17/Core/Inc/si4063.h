@@ -71,8 +71,8 @@
 #define FDEV_APRS		((((uint32_t)1 << 19) * OUTDIV_2M * RF_APRS_DEV_HZ)/(2*XO_FREQ))
 
 
-/* number of retries for SPI transmission (reading CTS) */
-#define SI_TIMEOUT		100
+/* longest wait for CTS from the Si4063 (POWER_UP needs several ms) */
+#define SI_TIMEOUT_MS		50
 
 /* function prototypes */
 

@@ -210,32 +210,34 @@ uint16_t si4060_part_info(void) {
 /*
  * si4060_get_cts
  *
- * waits for a CTS from the Si4060, includes a "time out"
+ * waits for a CTS from the Si4060, giving up after SI_TIMEOUT_MS. POWER_UP
+ * takes several ms: a too-short timeout here sent the next commands before the
+ * chip was ready, and it silently dropped them.
  *
  * read_response: do not deselect the slave, if you want to read from it afterwards
+ *
+ * returns: 0 on CTS, 1 on timeout
  */
 uint8_t si4060_get_cts(uint8_t read_response) {
 	uint8_t temp = 0;
-	uint8_t timeout = 0;
+	uint32_t start = HAL_GetTick();
 	if (!read_response) {
-		while (si4060_read_cmd_buf(1) != 0xff && timeout < SI_TIMEOUT) {
-			timeout++;
+		while (si4060_read_cmd_buf(1) != 0xff) {
+			if (HAL_GetTick() - start > SI_TIMEOUT_MS)
+				return 1;
 			delay_us(5);
 		}
 	} else {
-		while (temp != 0xff && timeout < SI_TIMEOUT) {
-			timeout++;
+		while (temp != 0xff) {
+			if (HAL_GetTick() - start > SI_TIMEOUT_MS)
+				return 1;
 			temp = si4060_read_cmd_buf(0);
 			if (temp != 0xff) {
 				spi_deselect();
 			}
 		}
 	}
-	//printf("timeout count: %d\r\n", timeout);
-
-	// todo add error return if timeout is reached
 	return 0;
-
 }
 
 /*

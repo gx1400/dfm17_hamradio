@@ -42,6 +42,11 @@ extern GNSS_StateHandle GNSS_Handle;
 extern uint8_t txDone;
 extern uint8_t rxDone;
 
+/* uncomment to record Si4063 clock-output diagnostics at boot (radio_probe.c),
+ * read back over SWD */
+//#define RADIO_CLOCK_PROBE
+void radio_clock_probe(void);
+
 /* set by the clock security system when the Si4063 clock on OSC_IN stops */
 static volatile uint8_t radioClockLost = 0;
 
@@ -61,6 +66,9 @@ void initHw(void) {
 
 	//initialize radio
 	initRadio();
+#ifdef RADIO_CLOCK_PROBE
+	radio_clock_probe();
+#endif
 
 	// run the MCU from the radio's TCXO instead of the +-1% HSI
 	if (switchToRadioClock() != HAL_OK) {
