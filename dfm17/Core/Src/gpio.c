@@ -77,41 +77,41 @@ void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOC, oLED_G_Pin|oLED_Y_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : PtPin */
+  /*Configure GPIO pin : oSpiGPIO2_Pin */
   GPIO_InitStruct.Pin = oSpiGPIO2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(oSpiGPIO2_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PCPin PCPin PCPin PCPin */
+  /*Configure GPIO pins : oBattOn_Pin oSiSDN_Pin oLED_G_Pin oLED_Y_Pin */
   GPIO_InitStruct.Pin = oBattOn_Pin|oSiSDN_Pin|oLED_G_Pin|oLED_Y_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PtPin */
+  /*Configure GPIO pin : oSpiGPIO3_Pin */
   GPIO_InitStruct.Pin = oSpiGPIO3_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(oSpiGPIO3_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PBPin PBPin PBPin */
+  /*Configure GPIO pins : oSpiCS_Pin oLED_R_Pin oTestPoint_Pin */
   GPIO_InitStruct.Pin = oSpiCS_Pin|oLED_R_Pin|oTestPoint_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PtPin */
+  /*Configure GPIO pin : iButton_Pin */
   GPIO_InitStruct.Pin = iButton_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(iButton_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PtPin */
+  /*Configure GPIO pin : intGpsPPS_Pin */
   GPIO_InitStruct.Pin = intGpsPPS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
