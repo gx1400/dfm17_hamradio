@@ -75,3 +75,7 @@ ctrlp.root
 [Rr]elease
 [Dd]ebug
 .launch
+
+# command-line builds (make firmware, make test)
+/build/
+tools/tests/build/

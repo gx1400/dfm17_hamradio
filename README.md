@@ -1,5 +1,7 @@
 # dfm17_hamradio
 
+[![CI](https://github.com/gx1400/dfm17_hamradio/actions/workflows/ci.yml/badge.svg)](https://github.com/gx1400/dfm17_hamradio/actions/workflows/ci.yml)
+
 This repo is a development implementation of code to run on a Graw DFM-17 radiosonde
 
 Current firmware (`TRACKER` in main.c): an APRS tracker on 446.175 MHz. Every
@@ -10,6 +12,17 @@ packet (`>no GPS fix 4668mV 54mA 31C`) without a fix. The GPS stays on until
 its first fix. Without `TRACKER` it is a 70 cm fox (Morse ID, hunt tone every
 30 s, APRS every 5 min). Both have button and LED diagnostics. Tested on
 hardware with a HackRF and Dire Wolf.
+
+## Building and testing
+
+- STM32CubeIDE: open the `dfm17/` project as before.
+- Command line: `make firmware` builds every variant into `build/<variant>/`
+  (`tracker`, `fox`, `hw_survey`, `rf_test`) with warnings as errors, using
+  `arm-none-eabi-gcc` from PATH or the one inside STM32CubeIDE.
+- `make test` runs the host unit tests (`tools/tests`) and checks that the
+  APRS packets decode with Dire Wolf (`tools/aprs_sim`).
+- GitHub Actions (`.github/workflows/ci.yml`) does both on every pull request
+  and push to `main`, and keeps the built firmware as an artifact.
 
 ## Documentation
 
@@ -22,6 +35,7 @@ hardware with a HackRF and Dire Wolf.
   APRS encoder, decodes with Dire Wolf
 - `tools/hw_survey/`: read the hardware survey and live analog values over SWD
 - `tools/rf_sweep/`: transmitter frequency sweep with a HackRF
+- [tools/tests/README.md](tools/tests/README.md): host unit tests
 
 ## Using the board
 
@@ -32,7 +46,7 @@ hardware with a HackRF and Dire Wolf.
   while paused). Yellow: flashes with GPS PPS, solid with a 3D fix. Red: blink
   code, 1 = radio not found, 2 = not running from the radio clock,
   3 = GPS not answering
-- Settings are `#define`s for now: mode (`TRACKER`) in `main.c`, tracker
+- Settings are `#define`s for now: mode (`TRACKER`, or build with `-DFOX`) in `main.c`, tracker
   timing in `tracker.h`, frequency and power in `si4063.h`, fox timing, callsign, `FOX_SEND_APRS` / `FOX_APRS_EVERY` / `FOX_START_PAUSED` in
   `fox.h`
 

@@ -1,0 +1,188 @@
+/*
+ * test_diag.c - button debouncing and classification, LED patterns, blink
+ * codes and the PPS cycle counter (diag.c), driven 1 ms at a time like SysTick
+ */
+#include "test.h"
+#include "fake_hal.h"
+#include "diag.h"
+
+/* ---- fakes ------------------------------------------------------------------ */
+
+volatile uint8_t ppsLockStatus;
+static int button;
+static int green, yellow, red;
+
+GPIO_PinState HAL_GPIO_ReadPin(GPIO_TypeDef *port, uint16_t pin) {
+	(void)port; (void)pin;
+	return button ? GPIO_PIN_SET : GPIO_PIN_RESET;
+}
+void ledOnGreen(void) { green = 1; }
+void ledOffGreen(void) { green = 0; }
+void ledOnYellow(void) { yellow = 1; }
+void ledOffYellow(void) { yellow = 0; }
+void ledOnRed(void) { red = 1; }
+void ledOffRed(void) { red = 0; }
+
+/* SysTick: one diag_tick() per millisecond */
+static void ms(uint32_t n) {
+	while (n--) {
+		fake_tick++;
+		diag_tick();
+	}
+}
+
+static void press(uint32_t held) {
+	button = 1;
+	ms(held);
+	button = 0;
+	ms(100);
+}
+
+/* ---- tests (in order: the first relies on the button state after boot) ---- */
+
+static void held_at_boot_is_ignored(void) {
+	/* the button was held to power the board on */
+	button = 1;
+	diag_selftest();
+	ms(1500);
+	button = 0;
+	ms(100);
+	CHECK_EQ(diag_get_button(), DIAG_BUTTON_NONE);
+}
+
+static void short_medium_long(void) {
+	press(300);
+	CHECK_EQ(diag_get_button(), DIAG_BUTTON_SHORT);
+	press(1500);
+	CHECK_EQ(diag_get_button(), DIAG_BUTTON_MEDIUM);
+	press(3500);
+	CHECK_EQ(diag_get_button(), DIAG_BUTTON_LONG);
+}
+
+static void event_read_once(void) {
+	press(300);
+	CHECK_EQ(diag_get_button(), DIAG_BUTTON_SHORT);
+	CHECK_EQ(diag_get_button(), DIAG_BUTTON_NONE);
+}
+
+static void glitch_ignored(void) {
+	press(10);		/* shorter than the 20 ms debounce */
+	CHECK_EQ(diag_get_button(), DIAG_BUTTON_NONE);
+}
+
+static void contact_bounce_is_one_press(void) {
+	for (int i = 0; i < 6; i++) {	/* bouncing closed */
+		button = i & 1;
+		ms(2);
+	}
+	button = 1;
+	ms(400);
+	for (int i = 0; i < 6; i++) {	/* bouncing open */
+		button = !(i & 1);
+		ms(2);
+	}
+	button = 0;
+	ms(100);
+	CHECK_EQ(diag_get_button(), DIAG_BUTTON_SHORT);
+	CHECK_EQ(diag_get_button(), DIAG_BUTTON_NONE);
+}
+
+static void hold_feedback_leds(void) {
+	button = 1;
+	ms(500);
+	CHECK(!green);
+	ms(1000);			/* 1.5 s: a release now is a medium press */
+	CHECK(green && !yellow && !red);
+	ms(2000);			/* 3.5 s: long press */
+	CHECK(green && yellow && red);
+	button = 0;
+	ms(100);
+	diag_get_button();
+}
+
+static int green_ms(uint32_t n) {
+	int on = 0;
+	while (n--) {
+		ms(1);
+		on += green;
+	}
+	return on;
+}
+
+static void heartbeat(void) {
+	ms(2000 - fake_tick % 2000);	/* align to the heartbeat period */
+	ms(300);			/* past the button acknowledgement */
+	CHECK_EQ(green_ms(2000), 50);
+	diag_set_paused(1);
+	CHECK_EQ(green_ms(2000), 100);	/* double flash */
+	diag_set_paused(0);
+	diag_set_tx(1);
+	CHECK_EQ(green_ms(2000), 2000);
+	diag_set_tx(0);
+}
+
+static int red_blinks(uint32_t n) {
+	int blinks = 0, prev = red;
+	while (n--) {
+		ms(1);
+		blinks += red && !prev;
+		prev = red;
+	}
+	return blinks;
+}
+
+static void blink_codes(void) {
+	CHECK_EQ(red_blinks(6000), 0);
+	diag_set_error(DIAG_ERR_GPS);
+	/* code 3: three 200 ms blinks in 3 x 500 ms, then 1.5 s off */
+	CHECK_EQ(red_blinks(3 * 3000), 9);
+	diag_set_error(DIAG_ERR_RADIO);		/* the lowest code wins */
+	CHECK_EQ(red_blinks(4 * 2000), 4);
+	diag_clear_error(DIAG_ERR_RADIO);
+	diag_clear_error(DIAG_ERR_GPS);
+	CHECK_EQ(red_blinks(6000), 0);
+}
+
+static void yellow_fix_and_pps(void) {
+	diag_set_gps_fix(1);
+	ms(10);
+	CHECK(yellow);
+	diag_set_gps_fix(0);
+	ppsLockStatus = 1;
+	diag_pps();
+	ms(50);
+	CHECK(yellow);		/* PPS flash */
+	ms(100);
+	CHECK(!yellow);
+	ppsLockStatus = 0;
+}
+
+static void pps_cycle_count(void) {
+	DWT->CYCCNT = 0xFFFFF000u;		/* about to wrap */
+	diag_pps();
+	DWT->CYCCNT = 0xFFFFF000u + 23999970u;
+	diag_pps();
+	CHECK_EQ(pps_cycles, 23999970u);	/* -1.25 ppm, across the wrap */
+}
+
+static void leds_off_stops_patterns(void) {
+	diag_set_tx(1);
+	diag_leds_off();
+	ms(100);
+	CHECK(!green && !yellow && !red);
+	diag_set_tx(0);
+	diag_selftest();
+}
+
+TEST_MAIN("diag",
+	TEST(held_at_boot_is_ignored),
+	TEST(short_medium_long),
+	TEST(event_read_once),
+	TEST(glitch_ignored),
+	TEST(contact_bounce_is_one_press),
+	TEST(hold_feedback_leds),
+	TEST(heartbeat),
+	TEST(blink_codes),
+	TEST(yellow_fix_and_pps),
+	TEST(pps_cycle_count),
+	TEST(leds_off_stops_patterns))
