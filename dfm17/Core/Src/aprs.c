@@ -155,7 +155,9 @@ void base91_encode_latlon(char *buf, uint32_t value) {
  * aprs_prepare_buffer
  *
  * prepares the buffer for APRS transmission with the fix given as a reference.
- * checks for validity of the fix, does not change the buffer if the fix is unsuitable for transmission.
+ * checks for validity of the fix. if the fix is unsuitable for transmission, the
+ * fixed APRS_TEST_* position is sent when APRS_TEST_POSITION is defined, otherwise
+ * the buffer is not changed.
  *
  * backlog_fix contains a flag marking the fix as a backlog fix, containing a zero TLM sequence ID
  *
@@ -166,24 +168,41 @@ void aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix) {
 	int16_t temp_aprs = 0;
 	uint16_t seq_tmp;
 	static uint16_t aprs_seqnum = 0;
+	float lat, lon, alt_ft;
+	uint8_t day, hour, min;
 
-	if (!ppsLockStatus)
+	if (ppsLockStatus && GNSS->fixType >= Fix2D) {
+		/* u-blox PVT: lat/lon in 1e-7 degrees, height above MSL in mm */
+		lat = (float)GNSS->lat / 10000000.0f;
+		lon = (float)GNSS->lon / 10000000.0f;
+		alt_ft = (float)GNSS->hMSL / 1000.0f * 3.28084f;
+		day = GNSS->day;
+		hour = GNSS->hour;
+		min = GNSS->min;
+	} else {
+#ifdef APRS_TEST_POSITION
+		lat = APRS_TEST_LAT;
+		lon = APRS_TEST_LON;
+		alt_ft = APRS_TEST_ALT_M * 3.28084f;
+		day = 1;
+		hour = 0;
+		min = 0;
+#else
 		return;
+#endif
+	}
 
-	i16toa(22, 2, &aprs_buf[APRS_TIME_START]);
-	i16toa(18, 2, &aprs_buf[APRS_TIME_START + 2]);
-	i16toa(13, 2, &aprs_buf[APRS_TIME_START + 4]);
-	//i16toa(fix->day, 2, &aprs_buf[APRS_TIME_START]); 			// todo link to gps info
-	//i16toa(fix->hour, 2, &aprs_buf[APRS_TIME_START + 2]);		// todo link to gps info
-	//i16toa(fix->min, 2, &aprs_buf[APRS_TIME_START + 4]);		// todo link to gps info
+	/* compressed altitude is log1.002(feet), which cannot go below 1 ft */
+	if (alt_ft < 1.0f)
+		alt_ft = 1.0f;
 
-	//base91_encode_latlon(&aprs_buf[APRS_LAT_START], 380926.0f * (90.0f - (float)fix->lat/10000000.0f)); 	// todo link to gps info
-	//base91_encode_latlon(&aprs_buf[APRS_LON_START], 190463.0f * (180.0f + (float)fix->lon/10000000.0f));	// todo link to gps info
-	//base91_encode_tlm(&aprs_buf[APRS_ALT_START], logf((float)fix->alt * 3.28f)/logf(1.002f));				// todo link to gps info
+	i16toa(day, 2, &aprs_buf[APRS_TIME_START]);
+	i16toa(hour, 2, &aprs_buf[APRS_TIME_START + 2]);
+	i16toa(min, 2, &aprs_buf[APRS_TIME_START + 4]);
 
-	base91_encode_latlon(&aprs_buf[APRS_LAT_START], 380926.0f * (90.0f - (float)38.9987994f/10000000.0f));
-	base91_encode_latlon(&aprs_buf[APRS_LON_START], 190463.0f * (180.0f + (float)-94.6819493557f/10000000.0f));
-	base91_encode_tlm(&aprs_buf[APRS_ALT_START], logf((float)100.0f * 3.28f)/logf(1.002f));
+	base91_encode_latlon(&aprs_buf[APRS_LAT_START], 380926.0f * (90.0f - lat));
+	base91_encode_latlon(&aprs_buf[APRS_LON_START], 190463.0f * (180.0f + lon));
+	base91_encode_tlm(&aprs_buf[APRS_ALT_START], logf(alt_ft)/logf(1.002f));
 
 	if (backlog_fix) {
 		seq_tmp = 0;

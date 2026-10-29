@@ -196,9 +196,6 @@ int main(void)
 
 
 
-  aprs_prepare_buffer(&GNSS_Handle, 0);
-  calculate_fcs();
-
   stopGpsLockTimer();
   stopGpsTickTimer();
 
@@ -213,6 +210,10 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 	  HAL_Delay(2000);
+	  /* rebuild each packet so it carries the latest fix and sequence number;
+	   * calculate_fcs() covers the case where no fix left the buffer unchanged */
+	  aprs_prepare_buffer(&GNSS_Handle, 0);
+	  calculate_fcs();
 	  tx_aprs();
 
   }
