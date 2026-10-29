@@ -93,6 +93,7 @@
 #include "gps.h"
 #include "analog.h"
 #include "tracker.h"
+#include "ppsdisc.h"
 
 /* USER CODE END Includes */
 
@@ -258,6 +259,9 @@ int main(void)
 	  rf_test_poll();
 	  continue;
 #endif
+	  // between transmissions: retune for the TCXO error measured from GPS PPS
+	  pps_disc_update();
+
 #ifdef TRACKER
 	  if (!foxPaused)
 		  tracker_poll(gnss);

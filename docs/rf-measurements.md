@@ -68,11 +68,7 @@ every second whenever the GPS has PPS.
 
 ## Recommendations
 
-- **GPS frequency correction**: average `pps_cycles` for a few seconds with a
-  fix, then program the synthesizer for `f / (1 + error)` (the fractional
-  divider has far finer resolution than needed). Simpler than RS41ng's
-  XO_TUNE perturb-and-observe loop and enough to put the carrier within
-  ~0.1 ppm. Re-measure periodically for temperature.
+- **GPS frequency correction**: implemented, see below.
 - **Output filter response** is unknown (the stage was designed for
   400-406 MHz). The levels in these captures are leakage past a terminator
   and say nothing reliable about it. To measure: DFM-17 output -> 30-40 dB of
@@ -80,6 +76,43 @@ every second whenever the GPS has PPS.
   sweep PA 0x00 across the band and compare levels. Only then use an antenna
   with a known-good match, at low power first.
 - Keep `RF_FREQ_HZ_DFM` within 420-450 MHz (compile-time check in si4063.c).
+
+## 1PPS frequency discipline (`Core/Src/ppsdisc.c`)
+
+The carrier and the CPU clock come from the same TCXO, so the CPU cycles
+between GPS PPS pulses measure the carrier's error too. The firmware programs
+`f * (1 - error)` so the carrier lands on `f`.
+
+- **Samples:** `diag_pps()` (the PPS interrupt) passes the DWT cycle count and
+  the HAL tick interval to `pps_disc_sample()`. A sample is rejected unless:
+  - the interval is 1 s +-50 ms by the tick (this drops the first pulse after
+    a GPS wake-up and missed pulses);
+  - it is within +-10 ppm of 24 000 000;
+  - SYSCLK runs from the TCXO (not on the HSI fallback).
+- **Estimate:** a trimmed mean of the last 16 good samples, dropping the 4
+  highest and 4 lowest. That removes pulses whose interrupt was held back by
+  TIM15 (APRS) or SysTick, and resolves better than one cycle (41.7 ppb).
+  It is kept while the GPS sleeps.
+- **Applying it:** `pps_disc_update()` in the main loop, which only runs
+  between transmissions (the PLL can't be retuned while transmitting),
+  retunes when the estimate has moved by 10 ppb or more. 10 ppb is 4.5 Hz;
+  the synthesizer step is 12.2 Hz.
+- **Not corrected:** the `RF_TEST_SWD` build, so sweeps measure the raw TCXO.
+- **Over SWD:**
+
+  | Variable | Meaning |
+  |---|---|
+  | `pps_disc_enable` | 0 = nominal frequency |
+  | `pps_disc_valid` | a full window of samples |
+  | `pps_disc_ppb` | TCXO error, + = fast |
+  | `pps_disc_applied_ppb` | correction in the synthesizer |
+  | `pps_disc_samples`, `pps_disc_rejected` | sample counts |
+
+- **Expected result:** board 1 should measure about -1400 ppb, a +630 Hz
+  correction at 446.175 MHz. That would put the carrier within about 0.1 ppm
+  instead of -1.47 ppm. The TCXO warm-up drift during a long transmission
+  (-0.15 ppm over 100 s) isn't corrected until the next pause.
+- **Hardware test:** issue #9.
 
 ## Receiving
 
@@ -99,6 +132,7 @@ cannot take commands over the air as built. Options for remote commands:
 
 | Path | Purpose |
 |---|---|
+| `Core/Src/ppsdisc.c` | carrier correction from the GPS PPS (above) |
 | `Core/Src/rf_test.c` | carrier on a frequency/power written over SWD (`RF_TEST_SWD` in main.c) |
 | `tools/rf_sweep/sweep.sh` | sweep with a HackRF: `sweep.sh dfm17.elf [power] [freq_hz ...]` |
 | `tools/rf_sweep/measure.py` | carrier frequency from on/off captures, spur rejection |

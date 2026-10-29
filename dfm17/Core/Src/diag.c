@@ -38,6 +38,7 @@
 #include "main.h"
 #include "gps.h"
 #include "led.h"
+#include "ppsdisc.h"
 
 #define DEBOUNCE_MS			20
 #define HEARTBEAT_MS		2000
@@ -189,9 +190,11 @@ void diag_tick(void) {
 /* call from the GPS PPS interrupt */
 void diag_pps(void) {
 	uint32_t now = DWT->CYCCNT;
+	uint32_t tick = HAL_GetTick();
 	pps_cycles = now - pps_cyccnt;
 	pps_cyccnt = now;
-	last_pps = HAL_GetTick();
+	pps_disc_sample(pps_cycles, tick - last_pps);
+	last_pps = tick;
 }
 
 void diag_set_error(diag_error err) {

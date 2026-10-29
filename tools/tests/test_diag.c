@@ -11,6 +11,12 @@
 volatile uint8_t ppsLockStatus;
 static int button;
 static int green, yellow, red;
+static uint32_t sample_cycles, sample_ms;
+
+void pps_disc_sample(uint32_t cycles, uint32_t ms) {
+	sample_cycles = cycles;
+	sample_ms = ms;
+}
 
 GPIO_PinState HAL_GPIO_ReadPin(GPIO_TypeDef *port, uint16_t pin) {
 	(void)port; (void)pin;
@@ -161,8 +167,12 @@ static void pps_cycle_count(void) {
 	DWT->CYCCNT = 0xFFFFF000u;		/* about to wrap */
 	diag_pps();
 	DWT->CYCCNT = 0xFFFFF000u + 23999970u;
+	ms(1000);
 	diag_pps();
 	CHECK_EQ(pps_cycles, 23999970u);	/* -1.25 ppm, across the wrap */
+	/* handed to the discipline with the tick interval */
+	CHECK_EQ(sample_cycles, 23999970u);
+	CHECK_EQ(sample_ms, 1000);
 }
 
 static void leds_off_stops_patterns(void) {
