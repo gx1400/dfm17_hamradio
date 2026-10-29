@@ -65,6 +65,7 @@ void tracker_start(void) {
 	state = TRK_ACQUIRE;
 	cycle_start = HAL_GetTick();
 	fixing = 0;
+	had_fix = 0;
 	have_last_fix = 0;
 }
 

@@ -90,15 +90,29 @@ static uint32_t read_raw(uint8_t ch) {
  */
 void analog_read(analog_reading *r) {
 	uint32_t vref = read_raw(CH_VREFINT);
+	uint32_t vin = read_raw(CH_VIN);
+	uint32_t iin = read_raw(CH_IIN);
+
+	analog_convert(r, vref, vin, iin, read_raw(CH_TEMP));
+}
+
+/*
+ * analog_convert
+ *
+ * converts raw 12-bit averages to the values in r, scaling by VDDA measured
+ * from VREFINT
+ */
+void analog_convert(analog_reading *r, uint32_t vref, uint32_t vin_raw,
+		uint32_t iin_raw, uint32_t temp_raw) {
 	if (vref == 0)
 		vref = 1;
 	uint32_t vdda = VREFINT_MV * 4095UL / vref;
 	r->vref_raw = vref;
-	r->vin_raw = read_raw(CH_VIN);
-	r->iin_raw = read_raw(CH_IIN);
+	r->vin_raw = vin_raw;
+	r->iin_raw = iin_raw;
 	uint32_t vin_pin = r->vin_raw * vdda / 4095;
 	uint32_t iin_pin = r->iin_raw * vdda / 4095;
-	int32_t temp_pin = read_raw(CH_TEMP) * vdda / 4095;
+	int32_t temp_pin = temp_raw * vdda / 4095;
 
 	r->vdda_mv = vdda;
 	r->vin_mv = (uint16_t)(vin_pin * ANALOG_VIN_DIVIDER);

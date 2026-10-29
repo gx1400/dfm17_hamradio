@@ -212,6 +212,7 @@ void spi_deselect(void) {
 
 uint8_t spi_write(uint8_t data) {
 	SpiWriteData(sizeof(data), &data);
+	return 0;
 }
 
 uint8_t spi_read(void) {

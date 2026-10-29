@@ -36,28 +36,30 @@
 
 #include "main.h"
 
+/* fixed-width members: the same layout on the target and on a PC (host tests),
+ * where long is 64 bits */
 union u_Short
 {
 	uint8_t bytes[2];
-	unsigned short uShort;
+	uint16_t uShort;
 };
 
 union i_Short
 {
 	uint8_t bytes[2];
-	signed short iShort;
+	int16_t iShort;
 };
 
 union u_Long
 {
 	uint8_t bytes[4];
-	unsigned long uLong;
+	uint32_t uLong;
 };
 
 union i_Long
 {
 	uint8_t bytes[4];
-	signed long iLong;
+	int32_t iLong;
 };
 
 enum GNSSMode {

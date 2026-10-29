@@ -113,7 +113,8 @@ void GNSS_Init(GNSS_StateHandle *GNSS, UART_HandleTypeDef *huart, uint8_t *txDon
  */
 void GNSS_ParseBuffer(GNSS_StateHandle *GNSS) {
 	//printf("Parsing Buffer...\r\n");
-	for (int var = 0; var <= 100; ++var) {
+	/* a header needs 4 bytes: sync, sync, class, id */
+	for (int var = 0; var + 3 < (int)sizeof(GNSS->uartWorkingBuffer); ++var) {
 		if (GNSS->uartWorkingBuffer[var] == 0xB5
 				&& GNSS->uartWorkingBuffer[var + 1] == 0x62) {
 			if (GNSS->uartWorkingBuffer[var + 2] == 0x27

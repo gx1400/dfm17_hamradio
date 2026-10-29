@@ -111,8 +111,11 @@
  * for frequency sweeps with tools/rf_sweep */
 //#define RF_TEST_SWD
 /* APRS tracker (tracker.c) instead of the fox: GPS on only for a fix, one
- * position/telemetry packet every 5 min, no hunt tone */
+ * position/telemetry packet every 5 min, no hunt tone. build with -DFOX for
+ * the fox */
+#ifndef FOX
 #define TRACKER
+#endif
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -145,39 +148,6 @@ void rf_test_poll(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-static uint16_t calc_aprscrc (uint16_t crcStart, uint8_t *frame, uint8_t frame_len)
-{
-
-    uint8_t i, j;
-    // Preload the CRC register with ones
-    //uint16_t crc = 0xffff;
-    uint16_t crc = crcStart;
-
-
-    // Iterate over every octet in the frame
-    for (i = 0; i < frame_len; i++)
-    {
-        // Iterate over every bit, LSb first
-        for (j = 0; j < 8; j++)
-        {
-            uint8_t bit = (frame[i] >> j) & 0x01;
-
-            // Divide by a bit - reversed 0x1021
-            if ((crc & 0x0001) != bit)
-            {
-                crc = (crc >> 1) ^ 0x8408;
-            }
-            else
-            {
-                crc = crc >> 1;
-            }
-        }
-    }
-
-
-    return crc;
-}
-
 /* USER CODE END 0 */
 
 /**

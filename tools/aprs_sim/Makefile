@@ -34,7 +34,27 @@ test: aprs_harness
 		atest $(OUT)/$$m.wav 2>&1 | grep -E "^\[|decoded|packets"; \
 	done
 
+# pass/fail version of test and afsk-test, for CI: every packet must decode
+# (si-sync is left out, it is the known-bad mode the firmware doesn't use)
+check: aprs_harness afsk_harness
+	@mkdir -p $(OUT)
+	@set -e; \
+	decodes() { atest $$1 2>&1 | grep -q "1 packets decoded" || { echo "FAIL: $$1 did not decode"; exit 1; }; }; \
+	for fix in fix nofix; do \
+		./aprs_harness $$fix > $(OUT)/bits_$$fix.txt; \
+		for m in ideal firmware; do \
+			python3 aprs_sim.py --mode $$m -o $(OUT)/$$fix-$$m.wav < $(OUT)/bits_$$fix.txt | grep -q "FCS GOOD" \
+				|| { echo "FAIL: $$fix $$m frame check"; exit 1; }; \
+			decodes $(OUT)/$$fix-$$m.wav; \
+		done; \
+	done; \
+	for m in square sine; do for d in '' --deemph; do \
+		./afsk_harness $$m | python3 afsk_sim.py $$d -o $(OUT)/afsk_$$m$$d.wav > /dev/null; \
+		decodes $(OUT)/afsk_$$m$$d.wav; \
+	done; done; \
+	echo "aprs_sim: all packets decoded"
+
 clean:
 	rm -rf aprs_harness afsk_harness $(OUT)
 
-.PHONY: test afsk-test clean
+.PHONY: test afsk-test check clean

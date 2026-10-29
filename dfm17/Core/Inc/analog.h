@@ -52,5 +52,7 @@ extern analog_reading analog_last;
 
 void analog_init(void);
 void analog_read(analog_reading *r);
+void analog_convert(analog_reading *r, uint32_t vref, uint32_t vin_raw,
+		uint32_t iin_raw, uint32_t temp_raw);
 
 #endif /* INC_ANALOG_H_ */
