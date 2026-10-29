@@ -47,9 +47,12 @@
 #define FOX_TEST_MS			5000
 #define FOX_TEST_TONE_HALF_TICKS	11
 
-/* send an APRS position packet after each tone. it gives the fox's location away
- * to anyone decoding APRS, so comment this out for an actual hunt */
+/* send an APRS position packet after every FOX_APRS_EVERY-th tone (every
+ * 5 min with the defaults; an iGate shouldn't be sent more often than that).
+ * it gives the fox's location away to anyone decoding APRS, so comment
+ * FOX_SEND_APRS out for an actual hunt */
 #define FOX_SEND_APRS
+#define FOX_APRS_EVERY		10
 
 /* boot with the fox paused (no transmissions until a long button press) */
 //#define FOX_START_PAUSED

@@ -106,6 +106,9 @@
  * fox then starts paused. results are read over SWD, see
  * docs/hardware-investigation.md */
 //#define HW_SURVEY
+/* uncomment to replace the fox with a carrier controlled over SWD (rf_test.c),
+ * for frequency sweeps with tools/rf_sweep */
+//#define RF_TEST_SWD
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -132,6 +135,7 @@ volatile uint16_t aprs_baud_tick;
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 void hw_survey_run(void);
+void rf_test_poll(void);
 
 /* USER CODE END PFP */
 
@@ -268,6 +272,10 @@ int main(void)
 		  break;
 	  }
 
+#ifdef RF_TEST_SWD
+	  rf_test_poll();
+	  continue;
+#endif
 	  if (!foxPaused && HAL_GetTick() - lastFox >= FOX_PERIOD_MS) {
 		  lastFox = HAL_GetTick();
 		  fox_transmit(gnss);
