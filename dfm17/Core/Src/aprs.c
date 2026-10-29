@@ -66,7 +66,7 @@ extern volatile uint8_t ppsLockStatus;
 
 const unsigned char aprs_header[APRS_HEADER_LEN] = {
 	'A'*2, 'P'*2, 'Z'*2, 'D'*2, 'F'*2, 'M'*2, SSID_RESC + (DST_SSID << 1),
-	'K'*2, 'E'*2, '0'*2, 'P'*2, 'R'*2, 'Y'*2, SSID_RESC + (SRC_SSID << 1),
+	'N'*2, 'Z'*2, '0'*2, 'P'*2, ' '*2, ' '*2, SSID_RESC + (SRC_SSID << 1),
 	'W'*2, 'I'*2, 'D'*2, 'E'*2, '1'*2, ' '*2, SSID_RESC + (WIDE_SSID << 1) + HEADER_END,
 	CONTROL_UI, PID_NONE};
 
