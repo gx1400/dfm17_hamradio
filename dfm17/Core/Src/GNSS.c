@@ -98,7 +98,8 @@ void GNSS_ParseBuffer(GNSS_StateHandle *GNSS) {
 			}
 		}
 	}
-	memset(GNSS->uartWorkingBuffer, 0, 101);
+	// builtin: Core/Inc/string.h shadows the C library <string.h>
+	__builtin_memset(GNSS->uartWorkingBuffer, 0, 101);
 }
 
 /*!

@@ -35,16 +35,21 @@
 #include "spi.h"
 #include "tim.h"
 
+/* keep the DFM-17 transmitter inside the US 70 cm amateur band */
+_Static_assert((uint32_t)RF_FREQ_HZ_DFM_APRS >= 420000000UL &&
+		(uint32_t)RF_FREQ_HZ_DFM_APRS <= 450000000UL,
+		"RF_FREQ_HZ_DFM_APRS is outside the 420-450 MHz amateur band");
+
 void si4060_freq_aprs_dfm17(void) {
-	si4060_set_aprs_params_TESTING();
+	si4060_set_aprs_params_dfm17();
 	/* set up the integer divider */
 	si4060_set_property_8(PROP_FREQ_CONTROL,
 			FREQ_CONTROL_INTE,
-			(uint8_t)FDIV_INTE_DFM);
+			(uint8_t)FDIV_INTE_DFM(RF_FREQ_HZ_DFM_APRS));
 	/* set up the fractional divider */
 	si4060_set_property_24(PROP_FREQ_CONTROL,
 			FREQ_CONTROL_FRAC,
-			(uint32_t)FDEV_DFM);
+			(uint32_t)FDIV_FRAC_DFM(RF_FREQ_HZ_DFM_APRS));
 }
 
 /*
@@ -445,10 +450,12 @@ void si4060_setup(uint8_t mod_type) {
 			PREAMBLE_TX_LENGTH,
 			0);
 
-	/* use 2FSK from async GPIO0 */
+	/* modulate directly from GPIO3. async: the radio follows the pin edges as they
+	 * happen instead of sampling it on its TX data clock, which would mangle the
+	 * MCU-timed AFSK square wave. async only supports 2FSK/OOK, not 2GFSK. */
 	si4060_set_property_8(PROP_MODEM,
 			MODEM_MOD_TYPE,
-			MOD_DIRECT_MODE_SYNC | MOD_GPIO_3 | MOD_SOURCE_DIRECT | (mod_type & 0x07));
+			MOD_DIRECT_MODE_ASYNC | MOD_GPIO_3 | MOD_SOURCE_DIRECT | (mod_type & 0x07));
 
 	/* setup the NCO data rate for APRS */
 	si4060_set_property_24(PROP_MODEM,
@@ -563,12 +570,12 @@ void si4060_set_aprs_params(void) {
 }
 
 
-void si4060_set_aprs_params_TESTING(void) {
-	/* use 2GFSK from async GPIO0 */
+void si4060_set_aprs_params_dfm17(void) {
+	/* use 2FSK from async GPIO3 */
 	si4060_set_property_8(PROP_MODEM,
 			MODEM_MOD_TYPE,
-			MOD_TYPE_2GFSK | MOD_SOURCE_DIRECT | MOD_GPIO_3 | MOD_DIRECT_MODE_SYNC);
-	/* setup divider to 10 (for DFMtesting at 400Mhz) */
+			MOD_TYPE_2FSK | MOD_SOURCE_DIRECT | MOD_GPIO_3 | MOD_DIRECT_MODE_ASYNC);
+	/* setup divider to 10 (for the DFM-17 70cm band) */
 	si4060_set_property_8(PROP_MODEM,
 			MODEM_CLKGEN_BAND,
 			SY_SEL_1 | FVCO_DIV_10);

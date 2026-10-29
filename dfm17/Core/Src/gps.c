@@ -80,13 +80,13 @@ void gpsUpdate(void) {
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)	{
 	//printf("  TxComplete callback!\r\n");
-	GNSS_Handle.txDone = 1;
+	GNSS_Handle.txDone = (uint8_t *)1;	// used as a flag by GNSS.c, not dereferenced
 }
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	//printf("  RxComplete callback!\r\n");
 	GNSS_ParseBuffer(&GNSS_Handle);
-	GNSS_Handle.rxDone = 1; //todo try *GNSS to mitigate warning
+	GNSS_Handle.rxDone = (uint8_t *)1;	// used as a flag by GNSS.c, not dereferenced
 }
 
 /**

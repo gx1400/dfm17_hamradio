@@ -86,6 +86,7 @@
 #include "GNSS.h"
 #include "init.h"
 #include "aprs.h"
+#include "si4063.h"
 
 /* USER CODE END Includes */
 
@@ -167,6 +168,7 @@ static uint16_t calc_aprscrc (uint16_t crcStart, uint8_t *frame, uint8_t frame_l
   */
 int main(void)
 {
+
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
@@ -208,7 +210,6 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-
 
     /* USER CODE BEGIN 3 */
 	  HAL_Delay(2000);
@@ -283,8 +284,7 @@ void Error_Handler(void)
   }
   /* USER CODE END Error_Handler_Debug */
 }
-
-#ifdef  USE_FULL_ASSERT
+#ifdef USE_FULL_ASSERT
 /**
   * @brief  Reports the name of the source file and the source line number
   *         where the assert_param error has occurred.

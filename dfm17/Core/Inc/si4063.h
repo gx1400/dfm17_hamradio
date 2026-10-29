@@ -50,7 +50,9 @@
 #define RF_FREQ_HZ_2M_AUS		145175000.0f
 #define RF_FREQ_HZ_2M_NZ		144575000.0f
 #define RF_FREQ_HZ_2M_THAI		145525000.0f
-#define RF_FREQ_DFM17_TESTING	400000000.0f
+/* DFM-17 APRS frequency: 70 cm amateur band (IARU R1 70 cm APRS), close to the
+ * 400-406 MHz the DFM-17 RF output stage was designed for */
+#define RF_FREQ_HZ_DFM_APRS		432500000.0f
 
 #define RF_RTTY_DEV_HZ			200.0f
 #define RF_APRS_DEV_HZ			1300.0f
@@ -58,19 +60,20 @@
 
 #define F_INT_70CM				(2 * XO_FREQ / 8)
 #define F_INT_2M				(2 * XO_FREQ / 24)
-#define F_INT_DFM				(2 * XO_FREQ / )
+#define F_INT_DFM				(2 * XO_FREQ / OUTDIV_DFM)
 #define OUTDIV_70CM				8
 #define OUTDIV_2M				24
 #define OUTDIV_DFM				10
 
 #define FDIV_INTE_2M(freq)	((RF_FREQ_HZ_2M_ ## freq / F_INT_2M) - 1)
-#define FDIV_FRAC_2M(freq)	((RF_FREQ_HZ_2M_ ## freq - F_INT_2M * (int)FDIV_INTE_2M(freq))*((uint32_t)1 << 19)) / F_INT_2M
+#define FDIV_FRAC_2M(freq)	(((RF_FREQ_HZ_2M_ ## freq - F_INT_2M * (int)FDIV_INTE_2M(freq))*((uint32_t)1 << 19)) / F_INT_2M)
 #define FDEV_RTTY			((((uint32_t)1 << 19) * OUTDIV_2M * RF_RTTY_DEV_HZ)/(2*XO_FREQ))
 #define FDEV_APRS		((((uint32_t)1 << 19) * OUTDIV_2M * RF_APRS_DEV_HZ)/(2*XO_FREQ))
 #define FDEV_APRS_DFM		((((uint32_t)1 << 19) * OUTDIV_DFM * RF_APRS_DEV_HZ)/(2*XO_FREQ))
 
-#define FDIV_INTE_DFM		77
-#define FDEV_DFM			0x90000
+/* 400 MHz gave INTE 77 / FRAC 0x90000, the values previously hard-coded here */
+#define FDIV_INTE_DFM(freq)	((freq / F_INT_DFM) - 1)
+#define FDIV_FRAC_DFM(freq)	(((freq - F_INT_DFM * (int)FDIV_INTE_DFM(freq))*((uint32_t)1 << 19)) / F_INT_DFM)
 
 
 /* number of retries for SPI transmission (reading CTS) */
@@ -111,7 +114,7 @@ void si4060_setup(uint8_t mod_type);
 void si4060_set_filter(void);
 void si4060_gpio_pin_cfg(uint8_t gpio0, uint8_t gpio1, uint8_t gpio2, uint8_t gpio3, uint8_t drvstrength);
 void si4060_set_aprs_params(void);
-void si4060_set_aprs_params_TESTING(void);
+void si4060_set_aprs_params_dfm17(void);
 void __delay_cycles(uint32_t delay);
 
 

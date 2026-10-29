@@ -49,6 +49,7 @@
 #include "string.h"
 #include <math.h>
 #include "led.h"
+#include "gpio.h"
 
 /*
  * the APRS data buffer
@@ -77,11 +78,7 @@ volatile uint8_t onecnt = 0;
 volatile uint8_t finished = 0;
 volatile uint8_t stuffing = 0;
 
-uint16_t rev16(uint16_t x) {
-  return (x << 8) | (x >>8);
-}
-
-static uint16_t calc_aprscrc (uint8_t crcStart, uint8_t *frame, uint8_t frame_len)
+static uint16_t calc_aprscrc (uint16_t crcStart, const uint8_t *frame, uint8_t frame_len)
 {
 
     uint8_t i, j;
@@ -121,13 +118,13 @@ void calculate_fcs(void) {
 
 	// pass header calculation back into crc calc to process buffer
 	uint16_t crcval2 = 0;
-	crcval2 = calc_aprscrc(crcval1, aprs_buf, APRS_BUF_LEN);
+	crcval2 = calc_aprscrc(crcval1, (const uint8_t *)aprs_buf, APRS_BUF_LEN);
 
 	// Take the one's compliment of the calculated CRC
 	crcval2 = crcval2 ^ 0xffff;
 
-	// bytes are swapped, so reverse
-	fcs = rev16(crcval2);
+	// AX.25 sends the FCS low byte first, which get_next_byte() already does
+	fcs = crcval2;
 
 }
 
@@ -343,8 +340,8 @@ void tx_aprs(void) {
 	deassertSiGPIO3();
 	startAprsTickTimer();
 
-	/* use 2FSK mode so we can adjust the OFFSET register */
-	si4060_setup(MOD_TYPE_2GFSK);
+	/* async direct 2FSK, GPIO3 drives the deviation */
+	si4060_setup(MOD_TYPE_2FSK);
 	si4060_start_tx(0);
 	/* add some TX delay */
 	HAL_Delay(250);
