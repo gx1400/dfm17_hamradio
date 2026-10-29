@@ -38,12 +38,22 @@
 /* PB1 is the supply current monitor, about 1 V per A */
 #define ANALOG_I_MA_PER_V		1000.0f
 
+/* PC2 is the mini-USB VBUS through a divider (traced on the PCB, see
+ * docs/hardware-investigation.md). 2.0 is a placeholder until measured */
+#define ANALOG_USB_DIVIDER		2.0f
+/* USB power is present when PC2 itself reads above this; on battery it reads
+ * near 0, so this works whatever the divider turns out to be */
+#define ANALOG_USB_PRESENT_MV	500
+
 typedef struct {
 	uint16_t vin_raw, iin_raw, vref_raw;	/* 12-bit averages, for calibration */
 	uint16_t vdda_mv;		/* from the internal reference */
 	uint16_t vin_mv;		/* supply input, PA0 */
 	uint16_t iin_ma;		/* supply current, PB1 */
 	int16_t temp_c;			/* STM32 internal sensor, +-several C */
+	uint16_t usb_raw;		/* 12-bit average, PC2 */
+	uint16_t usb_mv;		/* USB VBUS */
+	uint8_t on_usb;			/* USB power present */
 } analog_reading;
 
 /* refreshed every second by the main loop, for reading over SWD
@@ -53,6 +63,6 @@ extern analog_reading analog_last;
 void analog_init(void);
 void analog_read(analog_reading *r);
 void analog_convert(analog_reading *r, uint32_t vref, uint32_t vin_raw,
-		uint32_t iin_raw, uint32_t temp_raw);
+		uint32_t iin_raw, uint32_t temp_raw, uint32_t usb_raw);
 
 #endif /* INC_ANALOG_H_ */

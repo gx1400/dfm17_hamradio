@@ -15,6 +15,7 @@ unconfirmed scale factor it says so.
 |---|---|
 | PA0 | **Supply input voltage through a divider**, not VCC: 2.33 V on the pin from USB 5 V, and it sags under load. Divider assumed 2:1 (gives 4.67 V = 5 V minus a diode drop). **Needs bench calibration.** |
 | PB1 | **Supply current monitor**, consistent with **1 V = 1 A**: GPS ~20-25 mA, radio READY ~6-10 mA, TX steps with PA level. **Needs meter calibration.** |
+| PC2 | **USB VBUS through a divider** (ADC1_IN12): traced on the PCB from the mini-USB connector ([data_dfm17_RE, Analog Inputs](https://github.com/gx1400/data_dfm17_RE/blob/master/imgs/signaltrace/Analog%20Inputs.png)). Read since the USB-sense change; USB power is reported present when the pin is above 0.5 V. **Divider ratio and battery-only reading not measured yet.** |
 | APRS telemetry | **Implemented**: temperature, supply mV, supply mA in the existing base91 telemetry fields. Decoded over the air by Dire Wolf. |
 | EEPROM (M24LR04E-R) | On I2C (PB6/PB7) at 0x53 (user) / 0x57 (system). 512 bytes: **0x000-0x15F Graw factory data**, **0x160-0x1FF free**. **Writable over I2C without a password** (tested at 0x1FC, restored). Good home for settings. Over NFC every sector is locked behind Graw's RF password; sector 3 can probably be opened by the MCU with the I2C password (default `00000000`, untested). |
 | 32.768 kHz crystal (LSE) | **Present and starts**, so the RTC can wake the MCU from Stop/Standby on an accurate schedule. |

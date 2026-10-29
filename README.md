@@ -68,7 +68,8 @@ hardware with a HackRF and Dire Wolf.
 - [X] Implement APRS with fixed packet data
 - [X] Integrate GPS with APRS data
 - [ ] Implement RTTY data
-- [ ] Power-up check if running from battery or usb
+- [ ] Power-up check if running from battery or usb (PC2 read and reported,
+  divider to measure)
 - [X] Decide on use case for button
 - [X] Read ADC samples (battery voltage, usb voltage, current)
 - [ ] Calibrate ADC (bench supply sweep, both boards)

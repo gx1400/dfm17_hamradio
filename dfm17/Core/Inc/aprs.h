@@ -93,7 +93,7 @@ void calculate_fcs(void);
 
 /*
  * position packet length
- * example: /ddhhmmz/xxxxyyyyOaa1|ss001122|
+ * example: /ddhhmmz/xxxxyyyyOaa1|ss00112233|
  * 1 report indicator (real time, no APRS messaging)
  * 2 + 2 + 2 + 1: day / hour / minute / zulu time indicator
  * 1 symbol table
@@ -106,9 +106,10 @@ void calculate_fcs(void);
  * 2 tlm temperature
  * 2 tlm supply voltage (mV)
  * 2 tlm supply current (mA)
+ * 2 tlm USB voltage (mV, 0 on battery)
  * 1 tlm delimiter
  */
-#define APRS_POS_LEN	(1 + 7 + 1 + 4 + 4 + 1 + 3 + 1 + 2 + 2 + 2 + 2 + 1)
+#define APRS_POS_LEN	(1 + 7 + 1 + 4 + 4 + 1 + 3 + 1 + 2 + 2 + 2 + 2 + 2 + 1)
 /* room for the position packet or a status packet (">" and text) */
 #define APRS_BUF_SIZE	64
 
@@ -128,6 +129,8 @@ void calculate_fcs(void);
 #define APRS_VOLT_LEN	1
 #define APRS_VSOL_START	28
 #define APRS_VSOL_LEN	1
+#define APRS_USB_START	30
+#define APRS_USB_LEN	1
 
 #define AX25_SFLAGS	75
 #define AX25_EFLAGS	2

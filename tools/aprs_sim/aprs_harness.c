@@ -44,6 +44,8 @@ void analog_read(analog_reading *r) {
 	r->vin_mv = 4660;
 	r->iin_ma = 54;
 	r->temp_c = 31;
+	r->usb_mv = 5020;
+	r->on_usb = 1;
 }
 
 /* non-static functions/state from aprs.c that have no prototype in aprs.h */
