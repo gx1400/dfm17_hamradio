@@ -50,9 +50,11 @@
 #define RF_FREQ_HZ_2M_AUS		145175000.0f
 #define RF_FREQ_HZ_2M_NZ		144575000.0f
 #define RF_FREQ_HZ_2M_THAI		145525000.0f
-/* DFM-17 APRS frequency: 70 cm amateur band (IARU R1 70 cm APRS), close to the
- * 400-406 MHz the DFM-17 RF output stage was designed for */
-#define RF_FREQ_HZ_DFM_APRS		432500000.0f
+/* DFM-17 transmit settings. 432.500 MHz: 70 cm amateur band (IARU R1 70 cm APRS),
+ * close to the 400-406 MHz the DFM-17 RF output stage was designed for */
+#define RF_FREQ_HZ_DFM			432500000UL
+#define RF_DEV_HZ_DFM			2600UL		/* FM deviation of the GPIO3 square wave */
+#define RF_TX_POWER_DFM			0x20		/* PA_PWR_LVL, 0x00..0x7f */
 
 #define RF_RTTY_DEV_HZ			200.0f
 #define RF_APRS_DEV_HZ			1300.0f
@@ -60,20 +62,13 @@
 
 #define F_INT_70CM				(2 * XO_FREQ / 8)
 #define F_INT_2M				(2 * XO_FREQ / 24)
-#define F_INT_DFM				(2 * XO_FREQ / OUTDIV_DFM)
 #define OUTDIV_70CM				8
 #define OUTDIV_2M				24
-#define OUTDIV_DFM				10
 
 #define FDIV_INTE_2M(freq)	((RF_FREQ_HZ_2M_ ## freq / F_INT_2M) - 1)
 #define FDIV_FRAC_2M(freq)	(((RF_FREQ_HZ_2M_ ## freq - F_INT_2M * (int)FDIV_INTE_2M(freq))*((uint32_t)1 << 19)) / F_INT_2M)
 #define FDEV_RTTY			((((uint32_t)1 << 19) * OUTDIV_2M * RF_RTTY_DEV_HZ)/(2*XO_FREQ))
 #define FDEV_APRS		((((uint32_t)1 << 19) * OUTDIV_2M * RF_APRS_DEV_HZ)/(2*XO_FREQ))
-#define FDEV_APRS_DFM		((((uint32_t)1 << 19) * OUTDIV_DFM * RF_APRS_DEV_HZ)/(2*XO_FREQ))
-
-/* 400 MHz gave INTE 77 / FRAC 0x90000, the values previously hard-coded here */
-#define FDIV_INTE_DFM(freq)	((freq / F_INT_DFM) - 1)
-#define FDIV_FRAC_DFM(freq)	(((freq - F_INT_DFM * (int)FDIV_INTE_DFM(freq))*((uint32_t)1 << 19)) / F_INT_DFM)
 
 
 /* number of retries for SPI transmission (reading CTS) */
@@ -90,7 +85,11 @@ void si4060_freq_aprs_nz(void);
 void si4060_freq_aprs_aus(void);
 void si4060_freq_aprs_brazil(void);
 void si4060_freq_2m_rtty(void);
-void si4060_freq_aprs_dfm17(void);
+void si4060_config_dfm17(void);
+void si4060_set_cw(uint8_t on);
+void si4060_set_frequency(uint32_t freq_hz);
+void si4060_set_deviation(uint32_t dev_hz);
+void si4060_set_tx_power(uint8_t level);
 
 void si4060_set_offset(uint16_t offset);
 void si4060_start_tx(uint8_t channel);
@@ -114,7 +113,6 @@ void si4060_setup(uint8_t mod_type);
 void si4060_set_filter(void);
 void si4060_gpio_pin_cfg(uint8_t gpio0, uint8_t gpio1, uint8_t gpio2, uint8_t gpio3, uint8_t drvstrength);
 void si4060_set_aprs_params(void);
-void si4060_set_aprs_params_dfm17(void);
 void __delay_cycles(uint32_t delay);
 
 
@@ -155,6 +153,10 @@ void __delay_cycles(uint32_t delay);
 #define GLOBAL_CLK_CFG					0x01
 #define GLOBAL_CONFIG					0x03
 
+/* PROP_INT_CTL / PROP_FRR_CTL properties */
+#define INT_CTL_ENABLE					0x00
+#define FRR_CTL_A_MODE					0x00
+
 /* preamble properties */
 #define PREAMBLE_TX_LENGTH				0x00
 
@@ -181,6 +183,7 @@ void __delay_cycles(uint32_t delay);
 
 /* PA properties */
 #define PA_BIAS_CLKDUTY					0x02
+#define PA_PWR_LVL						0x01
 
 /* synthesizer properties */
 #define SYNTH_PFDCP_CPFF				0x00
@@ -214,11 +217,11 @@ void __delay_cycles(uint32_t delay);
 #define DIV_CLK_EN						0x40	/* enable divided clock output */
 #define DIV_CLK_SEL_1					0x00	/* divide clock / 1 */
 #define DIV_CLK_SEL_2					0x08	/* divide clock / 2 */
-#define DIV_CLK_SEL_3					0x09	/* divide clock / 3 */
-#define DIV_CLK_SEL_7_5					0x0A	/* divide clock / 7.5 */
-#define DIV_CLK_SEL_10					0x0B	/* divide clock / 10 */
-#define DIV_CLK_SEL_15					0x0C	/* divide clock / 15 */
-#define DIV_CLK_SEL_30					0x0D	/* divide clock / 30 */
+#define DIV_CLK_SEL_3					0x10	/* divide clock / 3 */
+#define DIV_CLK_SEL_7_5					0x18	/* divide clock / 7.5 */
+#define DIV_CLK_SEL_10					0x20	/* divide clock / 10 */
+#define DIV_CLK_SEL_15					0x28	/* divide clock / 15 */
+#define DIV_CLK_SEL_30					0x30	/* divide clock / 30 */
 #define CLK_32K_SEL_XTAL				0x02	/* internal crystal oscillator */
 #define CLK_32K_SEL_RC					0x01	/* internal rc oscillator*/
 #define CLK_32K_SEL_OFF					0x00	/* 32kHz clock disabled */
@@ -311,7 +314,6 @@ void __delay_cycles(uint32_t delay);
 #define SY_SEL_1			(0x01 << 3) 	/* default */
 #define FVCO_DIV_4			0x00 			/* default */
 #define FVCO_DIV_6			0x01
-#define FVCO_DIV_10			0x01            /* for si4063 */
 #define FVCO_DIV_8			0x02 			/* for 70cm ISM band */
 #define FVCO_DIV_12			0x03
 #define FVCO_DIV_16			0x04

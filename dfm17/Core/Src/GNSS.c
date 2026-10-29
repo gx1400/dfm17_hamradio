@@ -40,6 +40,28 @@ volatile union i_Short iShort;
 volatile union u_Long uLong;
 volatile union i_Long iLong;
 
+/* number of GPS requests that got no reply within GNSS_TIMEOUT_MS */
+volatile uint32_t GNSS_timeouts = 0;
+
+/*!
+ * Wait for the UART DMA transmit and receive started by the caller to complete.
+ * Gives up after GNSS_TIMEOUT_MS so a silent GPS can't hang the firmware.
+ * @param GNSS Pointer to main GNSS structure.
+ * @return 1 if the reply arrived, 0 on timeout.
+ */
+static uint8_t GNSS_WaitForReply(GNSS_StateHandle *GNSS) {
+	uint32_t start = HAL_GetTick();
+
+	while ((GNSS->txDone == 0x00) || (GNSS->rxDone == 0x00)) {
+		if (HAL_GetTick() - start > GNSS_TIMEOUT_MS) {
+			HAL_UART_Abort(GNSS->huart);
+			GNSS_timeouts++;
+			return 0;
+		}
+	}
+	return 1;
+}
+
 /*!
  * Structure initialization.
  * @param GNSS Pointer to main GNSS structure.
@@ -113,7 +135,7 @@ void GNSS_GetUniqID(GNSS_StateHandle *GNSS) {
 	HAL_UART_Transmit_DMA(GNSS->huart, getDeviceID,
 			sizeof(getDeviceID) / sizeof(uint8_t));
 	HAL_UART_Receive_DMA(GNSS->huart, GNSS->uartWorkingBuffer, 17);
-	while((GNSS->txDone == 0x00) || (GNSS->rxDone == 0x00)) {};
+	GNSS_WaitForReply(GNSS);
 }
 
 /*!
@@ -127,7 +149,7 @@ void GNSS_GetNavigatorData(GNSS_StateHandle *GNSS) {
 	HAL_UART_Transmit_DMA(GNSS->huart, getNavigatorData,
 			sizeof(getNavigatorData) / sizeof(uint8_t));
 	HAL_UART_Receive_DMA(GNSS->huart, GNSS->uartWorkingBuffer, 28);
-	while((GNSS->txDone == 0x00) || (GNSS->rxDone == 0x00)) {};
+	GNSS_WaitForReply(GNSS);
 }
 
 /*!
@@ -141,7 +163,7 @@ void GNSS_GetPOSLLHData(GNSS_StateHandle *GNSS) {
 	HAL_UART_Transmit_DMA(GNSS->huart, getPOSLLHData,
 			sizeof(getPOSLLHData) / sizeof(uint8_t));
 	HAL_UART_Receive_DMA(GNSS->huart, GNSS->uartWorkingBuffer, 36);
-	while((GNSS->txDone == 0x00) || (GNSS->rxDone == 0x00)) {};
+	GNSS_WaitForReply(GNSS);
 }
 
 /*!
@@ -155,7 +177,7 @@ void GNSS_GetPVTData(GNSS_StateHandle *GNSS) {
 	HAL_UART_Transmit_DMA(GNSS->huart, getPVTData,
 			sizeof(getPVTData) / sizeof(uint8_t));
 	HAL_UART_Receive_DMA(GNSS->huart, GNSS->uartWorkingBuffer, 100);
-	while((GNSS->txDone == 0x00) || (GNSS->rxDone == 0x00)) {};
+	GNSS_WaitForReply(GNSS);
 }
 
 /*!
@@ -204,7 +226,7 @@ void GNSS_SetMode(GNSS_StateHandle *GNSS, short gnssMode) {
 		HAL_UART_Transmit_DMA(GNSS->huart, setBikeMode,sizeof(setBikeMode) / sizeof(uint8_t));
 	}
 	HAL_UART_Receive_DMA(GNSS->huart, GNSS->uartWorkingBuffer, 10);
-	while((GNSS->txDone == 0x00) || (GNSS->rxDone == 0x00)) {};
+	GNSS_WaitForReply(GNSS);
 
 	GNSS->selectedMode = gnssMode;
 }
@@ -353,7 +375,7 @@ void GNSS_LoadConfig(GNSS_StateHandle *GNSS) {
 	HAL_UART_Transmit_DMA(GNSS->huart, configUBX,
 			sizeof(configUBX) / sizeof(uint8_t));
 	HAL_UART_Receive_DMA(GNSS->huart, GNSS->uartWorkingBuffer, 10);
-	while((GNSS->txDone == 0x00) || (GNSS->rxDone == 0x00)) {};
+	GNSS_WaitForReply(GNSS);
 
 	printf("Sending NMEA410 config...\r\n");
 	GNSS->txDone = 0x00;
@@ -361,7 +383,7 @@ void GNSS_LoadConfig(GNSS_StateHandle *GNSS) {
 	HAL_UART_Transmit_DMA(GNSS->huart, setNMEA410,
 			sizeof(setNMEA410) / sizeof(uint8_t));
 	HAL_UART_Receive_DMA(GNSS->huart, GNSS->uartWorkingBuffer, 10);
-	while((GNSS->txDone == 0x00) || (GNSS->rxDone == 0x00)) {};
+	GNSS_WaitForReply(GNSS);
 
 	printf("Sending GNSS config...\r\n");
 	GNSS->txDone = 0x00;
@@ -369,7 +391,7 @@ void GNSS_LoadConfig(GNSS_StateHandle *GNSS) {
 	HAL_UART_Transmit_DMA(GNSS->huart, setGNSS,
 			sizeof(setGNSS) / sizeof(uint8_t));
 	HAL_UART_Receive_DMA(GNSS->huart, GNSS->uartWorkingBuffer, 10);
-	while((GNSS->txDone == 0x00) || (GNSS->rxDone == 0x00)) {};
+	GNSS_WaitForReply(GNSS);
 }
 
 

@@ -82,11 +82,15 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdio.h>
 #include "led.h"
 #include "GNSS.h"
 #include "init.h"
 #include "aprs.h"
 #include "si4063.h"
+#include "fox.h"
+#include "diag.h"
+#include "gps.h"
 
 /* USER CODE END Includes */
 
@@ -194,11 +198,10 @@ int main(void)
   initHw();
   si4060_stop_tx();
 
-
-
-  stopGpsLockTimer();
-  stopGpsTickTimer();
-
+  GNSS_StateHandle *gnss = (GNSS_StateHandle *)&GNSS_Handle;
+  uint8_t foxPaused = 0;
+  // first fox transmission right away
+  uint32_t lastFox = HAL_GetTick() - FOX_PERIOD_MS;
 
   /* USER CODE END 2 */
 
@@ -209,12 +212,39 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  HAL_Delay(2000);
-	  /* rebuild each packet so it carries the latest fix and sequence number;
-	   * calculate_fcs() covers the case where no fix left the buffer unchanged */
-	  aprs_prepare_buffer(&GNSS_Handle, 0);
-	  calculate_fcs();
-	  tx_aprs();
+	  checkRadioClock();
+
+	  if (gpsUpdateDue) {
+		  uint32_t timeouts = GNSS_timeouts;
+		  gpsUpdateDue = 0;
+		  gpsUpdate();
+		  if (GNSS_timeouts != timeouts)
+			  diag_set_error(DIAG_ERR_GPS);
+		  else if (ppsLockStatus)
+			  diag_clear_error(DIAG_ERR_GPS);
+	  }
+	  diag_set_gps_fix(ppsLockStatus && gnss->fixType >= Fix3D);
+
+	  switch (diag_get_button()) {
+	  case DIAG_BUTTON_SHORT:
+		  fox_test_carrier();
+		  break;
+	  case DIAG_BUTTON_MEDIUM:
+		  fox_test_tone_aprs(gnss);
+		  break;
+	  case DIAG_BUTTON_LONG:
+		  foxPaused = !foxPaused;
+		  diag_set_paused(foxPaused);
+		  printf("fox %s\r\n", foxPaused ? "paused" : "running");
+		  break;
+	  default:
+		  break;
+	  }
+
+	  if (!foxPaused && HAL_GetTick() - lastFox >= FOX_PERIOD_MS) {
+		  lastFox = HAL_GetTick();
+		  fox_transmit(gnss);
+	  }
 
   }
   /* USER CODE END 3 */
@@ -237,7 +267,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI_DIV2;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL4;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL6;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();

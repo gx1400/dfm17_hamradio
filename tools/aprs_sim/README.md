@@ -18,5 +18,5 @@ number of packets `atest` decoded:
 | `si-sync`  | same, re-sampled on the Si4063 TX data clock (direct sync mode)    |
 
 `--tick-period N` sets TIM15 counts per tick ((PSC+1)*(ARR+1), firmware is
-606) to try other timer settings or MCU clock error. WAVs land in `out/`; open
+909 at 24 MHz) to try other timer settings or MCU clock error. WAVs land in `out/`; open
 them in Audacity's spectrogram view to see the tones.

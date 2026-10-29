@@ -48,7 +48,6 @@ extern "C" {
 void MX_GPIO_Init(void);
 
 /* USER CODE BEGIN Prototypes */
-void toggleSiGPIO2(void);
 void toggleSiGPIO3(void);
 void togglePB9(void);
 void assertSiGPIO3(void);

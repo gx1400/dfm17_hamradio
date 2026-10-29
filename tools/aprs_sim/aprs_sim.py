@@ -23,7 +23,7 @@ import numpy as np
 from scipy import signal
 
 # firmware constants (dfm17/Core/Inc/aprs.h, tim.c, main.c, si4063.h)
-SYSCLK = 16e6           # HSI/2 * PLL x4
+SYSCLK = 24e6           # Si4063 12.8 MHz / 8 * 15 (or HSI/2 * 6)
 APRS_MARK = 0
 APRS_SPACE = 1
 APRS_MARK_TICKS = 11
@@ -176,8 +176,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--mode', choices=['ideal', 'firmware', 'si-sync'], default='ideal')
-    ap.add_argument('--tick-period', type=int, default=606,
-                    help='TIM15 counts per tick, (PSC+1)*(ARR+1); firmware uses 1*606=606')
+    ap.add_argument('--tick-period', type=int, default=909,
+                    help='TIM15 counts per tick, (PSC+1)*(ARR+1); firmware uses 1*909=909')
     ap.add_argument('--seed', type=int, default=1)
     ap.add_argument('-o', '--output', default='aprs.wav')
     args = ap.parse_args()

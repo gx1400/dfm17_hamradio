@@ -56,6 +56,8 @@ void assertGpsLock(void);
 void startAprsTickTimer(void);
 void stopAprsTickTimer(void);
 void processAprsTick(void);
+void resetGpsLockTimer(void);
+extern volatile uint16_t tone_half_ticks;
 void startGpsTickTimer(void);
 void stopGpsTickTimer(void);
 void startGpsLockTimer(void);

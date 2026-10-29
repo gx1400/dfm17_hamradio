@@ -359,8 +359,9 @@ void tx_aprs(void) {
 	deassertSiGPIO3();
 	startAprsTickTimer();
 
-	/* async direct 2FSK, GPIO3 drives the deviation */
-	si4060_setup(MOD_TYPE_2FSK);
+	/* radio was set up once in initRadio(): async direct 2FSK, GPIO3 drives the
+	 * deviation. not re-running si4060_setup() here avoids reconfiguring GPIO2,
+	 * whose DIV_CLK output clocks the STM32 */
 	si4060_start_tx(0);
 	/* add some TX delay */
 	HAL_Delay(250);

@@ -32,6 +32,7 @@
 
 extern GNSS_StateHandle GNSS_Handle;
 volatile uint8_t ppsLockStatus;
+volatile uint8_t gpsUpdateDue = 0;
 
 
 void gpsUpdate(void) {
