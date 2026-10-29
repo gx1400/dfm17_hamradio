@@ -31,8 +31,14 @@
   * telemetry, or a status packet with the same values as text when there is no
   * fix. Every packet carries the callsign as its AX.25 source address.
   *
-  * Until the GPS has had its first fix it stays on: a cold start has to
-  * download the almanac and ephemeris, which backup mode would interrupt.
+  * The GPS only goes back to sleep after a cycle that sent a position. After a
+  * cycle without one it stays on until it has a fix again: getting a fix back
+  * means downloading fresh ephemeris, about 30 s of uninterrupted signal per
+  * satellite, which a weak signal (a parked car) can't deliver within
+  * TRACKER_FIX_TIMEOUT_MS windows cut short by backup mode. Seen on
+  * 2026-10-29: 31 cycles without a fix in one parking spot, a fix within
+  * 5 min of a restart that kept the GPS on, same spot. The same applies to
+  * the cold start after power-up.
   ******************************************************************************
   */
 
@@ -51,7 +57,6 @@ static uint32_t cycle_start;
 /* start of the current run of 3D fixes */
 static uint32_t fix_start;
 static uint8_t fixing;
-static uint8_t had_fix;
 /* the last 3D fix of this cycle */
 static GNSS_StateHandle last_fix;
 static uint8_t have_last_fix;
@@ -65,7 +70,6 @@ void tracker_start(void) {
 	state = TRK_ACQUIRE;
 	cycle_start = HAL_GetTick();
 	fixing = 0;
-	had_fix = 0;
 	have_last_fix = 0;
 }
 
@@ -115,10 +119,9 @@ void tracker_poll(GNSS_StateHandle *GNSS) {
 		if ((fixing && now - fix_start >= TRACKER_SETTLE_MS)
 				|| now - cycle_start >= TRACKER_FIX_TIMEOUT_MS) {
 			uint8_t position = send_aprs(GNSS);
-			if (position)
-				had_fix = 1;
 			printf("tracker: sent %s\r\n", position ? "position" : "status, no fix");
-			if (had_fix)
+			/* no fix: keep the GPS on so it can finish reacquiring */
+			if (position)
 				gpsSleep();
 			state = TRK_WAIT;
 		}

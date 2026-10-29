@@ -103,6 +103,9 @@ static int never(uint32_t t) { (void)t; return -1; }
 static int pps_but_2d(uint32_t t) { (void)t; return Fix2D; }
 /* 3D at every other 5 s poll: never holds for 10 s */
 static int flaky(uint32_t t) { return (t / 5000) % 2 ? Fix3D : NoFix; }
+/* time (PPS) but no position until 150 s of uninterrupted signal, longer
+ * than TRACKER_FIX_TIMEOUT_MS: a cold start, or reacquiring with fresh
+ * ephemeris in a parked car */
 static int fix_after_150s(uint32_t t) { return t >= 150000 ? Fix3D : NoFix; }
 
 /* ---- tests -------------------------------------------------------------------- */
@@ -169,8 +172,8 @@ static void last_fix_does_not_carry_over(void) {
 	CHECK_EQ(nsent, 2);
 	CHECK_EQ(sent[1].from_last_fix, 0);
 	CHECK(!POSITION(1));
-	/* had a fix since power-up: the GPS sleeps even after a failed cycle */
-	CHECK_EQ(sleeps, 2);
+	/* no position this cycle: the GPS stays on to reacquire */
+	CHECK_EQ(sleeps, 1);
 }
 
 static void stale_fix_after_wake_is_ignored(void) {
@@ -194,6 +197,29 @@ static void late_first_fix(void) {
 	CHECK_EQ(sleeps, 1);
 }
 
+static void reacquires_after_losing_fix(void) {
+	/* 2026-10-29: after a fix on the drive, 31 cycles of 2 min windows in a
+	 * parked car never got the fix back; the GPS must stay on until it does */
+	reset(fix_after_5s);
+	run(TRACKER_PERIOD_MS - 1000);
+	CHECK_EQ(nsent, 1);
+	CHECK(POSITION(0));
+	CHECK_EQ(sleeps, 1);
+
+	script = fix_after_150s;
+	run(TRACKER_PERIOD_MS);			/* cycle 2: times out */
+	CHECK_EQ(nsent, 2);
+	CHECK(!POSITION(1));
+	CHECK_EQ(sleeps, 1);			/* stayed on */
+	run(TRACKER_PERIOD_MS);			/* cycle 3: the fix is back */
+	CHECK_EQ(nsent, 3);
+	CHECK(POSITION(2));
+	/* sent as soon as the fix has settled, not at the timeout */
+	CHECK(sent[2].at - sent[1].at < TRACKER_PERIOD_MS - TRACKER_FIX_TIMEOUT_MS
+			+ TRACKER_SETTLE_MS + 10000);
+	CHECK_EQ(sleeps, 2);
+}
+
 TEST_MAIN("tracker",
 	TEST(quick_fix_sends_position_and_sleeps),
 	TEST(cycle_repeats_every_period),
@@ -202,4 +228,5 @@ TEST_MAIN("tracker",
 	TEST(flaky_fix_sends_last_3d_fix),
 	TEST(last_fix_does_not_carry_over),
 	TEST(stale_fix_after_wake_is_ignored),
-	TEST(late_first_fix))
+	TEST(late_first_fix),
+	TEST(reacquires_after_losing_fix))
