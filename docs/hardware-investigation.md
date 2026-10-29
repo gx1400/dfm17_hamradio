@@ -240,10 +240,18 @@ discharge; 2S, 3 x AA lithium, or 2 x CR123A suit it better.
 
 ## Other observations
 
-- **PPS lock during GPS backup**: `ppsLockStatus` still read 1 three seconds
-  after the backup request, although TIM7 should clear it after 2 s without a
-  pulse. Either the receiver kept PPS going briefly or the TIM7 lock-loss path
-  needs a look.
+- **Timing caveat**: until commit 5368a9d, `HSE_VALUE` was 8 MHz, so once the
+  MCU ran from the radio clock every HAL millisecond was really 0.625 ms. The
+  survey's waits were therefore shorter than written (e.g. the 3 s GPS backup
+  wait was ~1.9 s); none of the conclusions depend on them. The same applies
+  to the GPS reply timeout work: the NAV-PVT replies measured as "more than
+  1.4 s" were really up to ~0.9 s, consistent with answers at the next 1 Hz
+  navigation epoch.
+
+- **PPS lock during GPS backup**: `ppsLockStatus` still read 1 after the
+  backup request; with the timing caveat above that wait was really ~1.9 s,
+  shorter than TIM7's 2 s lock-loss timeout, so this is probably expected.
+  Re-check with the corrected clock.
 - **Flashing a running board** with `STM32_Programmer_CLI` in hot-plug + halt
   mode fails on the first attempt about half the time ("failed to erase" /
   "failed to download Sector[0]") and succeeds on a retry.

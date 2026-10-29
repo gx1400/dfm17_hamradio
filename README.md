@@ -2,18 +2,21 @@
 
 This repo is a development implementation of code to run on a Graw DFM-17 radiosonde
 
-Current firmware: a 70 cm fox transmitter on 432.500 MHz (Morse ID, hunt tone,
-APRS position with telemetry) with button and LED diagnostics. Tested on
-hardware with a HackRF and Dire Wolf.
+Current firmware: a 70 cm fox transmitter on 446.175 MHz (Morse ID, hunt tone
+every 30 s, APRS position with telemetry every 5 min) with button and LED
+diagnostics. Tested on hardware with a HackRF and Dire Wolf.
 
 ## Documentation
 
 - [docs/hardware-investigation.md](docs/hardware-investigation.md): analog inputs
   (supply voltage and current), NFC EEPROM contents and settings proposal,
   low-power measurements and battery-life estimates
+- [docs/rf-measurements.md](docs/rf-measurements.md): frequency accuracy across
+  420-450 MHz, warm-up drift, TCXO vs GPS, and why the board can't receive
 - [tools/aprs_sim/README.md](tools/aprs_sim/README.md): host simulator for the
   APRS encoder, decodes with Dire Wolf
 - `tools/hw_survey/`: read the hardware survey and live analog values over SWD
+- `tools/rf_sweep/`: transmitter frequency sweep with a HackRF
 
 ## Using the board
 
@@ -25,7 +28,8 @@ hardware with a HackRF and Dire Wolf.
   code, 1 = radio not found, 2 = not running from the radio clock,
   3 = GPS not answering
 - Settings are `#define`s for now: frequency and power in `si4063.h`, fox
-  timing, callsign and `FOX_SEND_APRS` / `FOX_START_PAUSED` in `fox.h`
+  timing, callsign, `FOX_SEND_APRS` / `FOX_APRS_EVERY` / `FOX_START_PAUSED` in
+  `fox.h`
 
 ## TODO
 
