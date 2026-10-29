@@ -11,14 +11,14 @@ jobs:
     name: Firmware build (all variants)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install ARM toolchain
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi libnewlib-arm-none-eabi
       - name: Build tracker, fox, hw_survey and rf_test
         run: make firmware
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dfm17-firmware
           path: |
@@ -31,18 +31,24 @@ jobs:
     name: Host tests and APRS decoding
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: tools/requirements.txt
       - name: Install test tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gcc make python3-numpy python3-scipy direwolf
+          sudo apt-get install -y --no-install-recommends gcc make direwolf
+          pip install -r tools/requirements.txt
       - name: Unit tests (firmware sources against a fake HAL)
         run: make -C tools/tests
       - name: APRS packets decode with Dire Wolf
         run: make -C tools/aprs_sim check
       - name: Test logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-logs
           path: tools/tests/build/*.log

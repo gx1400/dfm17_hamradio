@@ -467,16 +467,21 @@ uint8_t get_next_bit(void) {
 	return bit_d;
 }
 
-/*
- * tx_aprs
- *
- * transmits an APRS packet.
- *
- */
-void tx_aprs(void) {
-	uint8_t sine = aprs_afsk_sine;
+/* whether the packet being sent uses sine AFSK, fixed at aprs_tx_start() */
+static uint8_t tx_sine;
 
-	if (sine) {
+/*
+ * aprs_tx_start
+ *
+ * keys up the transmitter for the packet prepared in aprs_buf; then call
+ * aprs_tx_poll() until it returns 0, and aprs_tx_stop(). tx_aprs() does all
+ * three; the parts are separate so a host simulation can run the TIM15 tick
+ * between polls (tools/aprs_sim).
+ */
+void aprs_tx_start(void) {
+	tx_sine = aprs_afsk_sine;
+
+	if (tx_sine) {
 		afsk_amp_mark = si4060_offset_units(aprs_mark_dev_hz);
 		afsk_amp_space = si4060_offset_units(aprs_space_dev_hz);
 		afsk_inc_mark = afsk_inc(1200);
@@ -498,42 +503,49 @@ void tx_aprs(void) {
 	/* add some TX delay */
 	HAL_Delay(250);
 
-	if (sine) {
+	if (tx_sine) {
 		/* from here on only the TIM15 ISR uses the SPI */
 		si4060_spi_fast(1);
 		afsk_run = 1;
 	}
 	aprs_tick = 0;
-	do {
-		if (aprs_tick) {
-			/* running with APRS sample clock */
-			aprs_tick = 0;
-			if (!sine)
-				toggleSiGPIO3();
-			if (aprs_baud_tick) {
-				/* running with bit clock (1200 / sec) */
-				//WDTCTL = WDTPW + WDTCNTCL + WDTIS1;
-				aprs_baud_tick = 0;
-				//toggleSiGPIO3();
+}
 
-				if (get_next_bit()) {
-					aprs_bit = APRS_SPACE;
-				} else {
-					aprs_bit = APRS_MARK;
-				}
+/*
+ * aprs_tx_poll
+ *
+ * handles the TIM15 tick flags: toggles GPIO3 for the square wave and fetches
+ * the next bit at each baud tick
+ *
+ * returns: 0 once the packet has been sent
+ */
+uint8_t aprs_tx_poll(void) {
+	if (aprs_tick) {
+		/* running with APRS sample clock */
+		aprs_tick = 0;
+		if (!tx_sine)
+			toggleSiGPIO3();
+		if (aprs_baud_tick) {
+			/* running with bit clock (1200 / sec) */
+			aprs_baud_tick = 0;
+			if (get_next_bit()) {
+				aprs_bit = APRS_SPACE;
+			} else {
+				aprs_bit = APRS_MARK;
 			}
-
-			/* tell us when we fail to meet the timing */
-//			if (aprs_tick) {
-//				while(1) {
-//					WDTCTL = WDTPW + WDTCNTCL + WDTIS1;
-//				}
-//			}
 		}
-	} while(!finished);
+	}
+	return !finished;
+}
 
+/*
+ * aprs_tx_stop
+ *
+ * unkeys the transmitter after the packet and restores the radio settings
+ */
+void aprs_tx_stop(void) {
 	deassertSiGPIO3();
-	if (sine) {
+	if (tx_sine) {
 		afsk_run = 0;
 		si4060_spi_fast(0);
 		si4060_set_offset(0);
@@ -542,9 +554,21 @@ void tx_aprs(void) {
 	HAL_Delay(100);
 	si4060_stop_tx();
 	stopAprsTickTimer();
-	if (sine)
+	if (tx_sine)
 		si4060_set_deviation(RF_DEV_HZ_DFM);
 	ledOffGreen();
+}
+
+/*
+ * tx_aprs
+ *
+ * transmits the APRS packet prepared in aprs_buf
+ */
+void tx_aprs(void) {
+	aprs_tx_start();
+	while (aprs_tx_poll())
+		;
+	aprs_tx_stop();
 }
 
 

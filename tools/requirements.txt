@@ -1,0 +1,5 @@
+# Python packages for tools/aprs_sim (and the other analysis scripts in tools/).
+# Pinned so CI is reproducible; Dependabot (.github/dependabot.yml) proposes
+# updates.
+numpy==2.5.4
+scipy==1.18.1
