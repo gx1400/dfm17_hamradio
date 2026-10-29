@@ -20,9 +20,12 @@ hardware with a HackRF and Dire Wolf.
   (`tracker`, `fox`, `hw_survey`, `rf_test`) with warnings as errors, using
   `arm-none-eabi-gcc` from PATH or the one inside STM32CubeIDE.
 - `make test` runs the host unit tests (`tools/tests`) and checks that the
-  APRS packets decode with Dire Wolf (`tools/aprs_sim`).
+  APRS packets decode with Dire Wolf (`tools/aprs_sim`, Python packages in
+  `tools/requirements.txt`).
 - GitHub Actions (`.github/workflows/ci.yml`) does both on every pull request
-  and push to `main`, and keeps the built firmware as an artifact.
+  and push to `main`, and keeps the built firmware as an artifact. Dependabot
+  (`.github/dependabot.yml`) proposes updates to the pinned actions and Python
+  packages weekly.
 
 ## Documentation
 
