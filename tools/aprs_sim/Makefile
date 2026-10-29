@@ -10,7 +10,7 @@ aprs_harness: aprs_harness.c $(CORE)/Src/aprs.c $(CORE)/Src/string.c stubs/*.h
 	$(CC) $(CFLAGS) -o $@ aprs_harness.c $(CORE)/Src/aprs.c $(CORE)/Src/string.c -lm
 
 afsk_harness: afsk_harness.c $(CORE)/Src/aprs.c $(CORE)/Src/string.c stubs/*.h
-	$(CC) $(CFLAGS) -o $@ afsk_harness.c $(CORE)/Src/aprs.c $(CORE)/Src/string.c -lm -lpthread
+	$(CC) $(CFLAGS) -o $@ afsk_harness.c $(CORE)/Src/aprs.c $(CORE)/Src/string.c -lm
 
 # square wave vs sine AFSK through an FM receiver with and without de-emphasis
 afsk-test: afsk_harness

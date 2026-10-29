@@ -47,6 +47,9 @@ void aprs_afsk_tick(void);
 /* sine AFSK sample rate: TIM15 26402.6 Hz / 2 = 13201.3 Hz */
 #define APRS_AFSK_TICKS_PER_SAMPLE	2
 void tx_aprs(void);
+void aprs_tx_start(void);
+uint8_t aprs_tx_poll(void);
+void aprs_tx_stop(void);
 void calculate_fcs(void);
 
 
