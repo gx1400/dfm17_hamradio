@@ -50,6 +50,7 @@
 #include <math.h>
 #include "led.h"
 #include "gpio.h"
+#include "analog.h"
 
 /*
  * the APRS data buffer
@@ -211,19 +212,16 @@ void aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix) {
 		seq_tmp = aprs_seqnum;
 	}
 
-	//temp_aprs = fix->temperature_int + APRS_TLM_TEMP_OFFSET;
-
-	//base91_encode_tlm(&aprs_buf[APRS_SEQ_START], seq_tmp);
-	//	base91_encode_tlm(&aprs_buf[APRS_TEMP_START], (uint16_t)temp_aprs);
-	//base91_encode_tlm(&aprs_buf[APRS_VOLT_START], fix->voltage_bat);
-	//base91_encode_tlm(&aprs_buf[APRS_VSOL_START], fix->voltage_sol);
-
-	temp_aprs = 32 + APRS_TLM_TEMP_OFFSET;
+	/* telemetry channels: MCU temperature (C + APRS_TLM_TEMP_OFFSET), supply
+	 * voltage in mV and supply current in mA, each 0..8280 in base91 */
+	analog_reading analog;
+	analog_read(&analog);
+	temp_aprs = analog.temp_c + APRS_TLM_TEMP_OFFSET;
 
 	base91_encode_tlm(&aprs_buf[APRS_SEQ_START], seq_tmp);
 	base91_encode_tlm(&aprs_buf[APRS_TEMP_START], (uint16_t)temp_aprs);
-	base91_encode_tlm(&aprs_buf[APRS_VOLT_START], 3000);
-	base91_encode_tlm(&aprs_buf[APRS_VSOL_START], 3100);
+	base91_encode_tlm(&aprs_buf[APRS_VOLT_START], analog.vin_mv);
+	base91_encode_tlm(&aprs_buf[APRS_VSOL_START], analog.iin_ma);
 
 	calculate_fcs();
 }

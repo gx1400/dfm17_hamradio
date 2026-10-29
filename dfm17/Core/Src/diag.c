@@ -83,6 +83,19 @@ void diag_selftest(void) {
 	ready = 1;
 }
 
+/*
+ * diag_leds_off
+ *
+ * stops diag_tick() driving the LEDs and turns them off (low-power measurements);
+ * diag_selftest() hands them back
+ */
+void diag_leds_off(void) {
+	ready = 0;
+	ledOffGreen();
+	ledOffYellow();
+	ledOffRed();
+}
+
 static void button_sample(uint32_t now) {
 	/* PC8 reads high while pressed */
 	uint8_t raw = HAL_GPIO_ReadPin(iButton_GPIO_Port, iButton_Pin) == GPIO_PIN_SET;

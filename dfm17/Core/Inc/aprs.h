@@ -89,8 +89,8 @@ void calculate_fcs(void);
  * 1 tlm delimiter
  * 2 tlm sequence id
  * 2 tlm temperature
- * 2 tlm battery
- * 2 tlm solar
+ * 2 tlm supply voltage (mV)
+ * 2 tlm supply current (mA)
  * 1 tlm delimiter
  */
 #define APRS_BUF_LEN	1 + 7 + 1 + 4 + 4 + 1 + 3 + 1 + 2 + 2 + 2 + 2 + 1

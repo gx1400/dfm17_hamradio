@@ -49,6 +49,7 @@ typedef enum {
 #define DIAG_BUTTON_LONG_MS		3000
 
 void diag_selftest(void);
+void diag_leds_off(void);
 void diag_tick(void);
 void diag_pps(void);
 void diag_set_error(diag_error err);
