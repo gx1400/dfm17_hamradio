@@ -8,7 +8,7 @@ and a summary, and the run fails if any check does.
 | Suite | Source under test | What it covers |
 |---|---|---|
 | `test_aprs` | aprs.c | position and status packets field by field (base91 position, altitude, telemetry), sequence numbers, fix validity, AX.25 header, FCS, and the line bit stream decoded back to the frame (NRZI, flags, bit stuffing) |
-| `test_tracker` | tracker.c | the GPS duty cycle against a scripted GPS: quick fix, timeouts, 2D only, a fix that comes and goes (last 3D fix sent), no stale fix after a wake-up, a cold start longer than the timeout, the 5 min cadence |
+| `test_tracker` | tracker.c | the GPS duty cycle against a scripted GPS: quick fix, timeouts, 2D only, a fix that comes and goes (last 3D fix sent), no stale fix after a wake-up, a cold start longer than the timeout, reacquiring a lost fix that needs more than one wake window, the 5 min cadence |
 | `test_gps` | gps.c | the exact UBX-RXM-PMREQ sleep command, wake-up bytes, no polling while asleep or without PPS, configuration retries, UBX checksums of every canned message, the UBX-only CFG-PRT |
 | `test_gnss` | GNSS.c, gps.c | NAV-PVT replies through the UART callbacks (negative lat/lon/altitude), corrupt replies ignored, a silent GPS timing out, the buffer scan staying in bounds |
 | `test_si4063` | si4063.c | PLL settings reproduce every frequency in 420-450 MHz to the synthesizer step, band selection, deviation and offset units, modulation modes, START_TX / READY, the CTS timeout, the fast SPI mode for sine AFSK |
