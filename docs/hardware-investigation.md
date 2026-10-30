@@ -206,7 +206,9 @@ RF. Opening sector 3 needs its SSS rewritten, which only the MCU can do:
 3. Read it back.
 
 **Done on board 1, 2026-10-29** with the `nfc_tool` test build
-(`make firmware`, then `tools/hw_survey/nfc_tool.sh`, issue #8):
+(`make firmware`, then `tools/hw_survey/nfc_tool.sh`, issue #8). Full test
+procedure, expected output and the pending phone steps:
+[tests/nfc-sector-lock.md](tests/nfc-sector-lock.md).
 
 | Step | Result |
 |---|---|

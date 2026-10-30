@@ -32,6 +32,8 @@ hardware with a HackRF and Dire Wolf.
 - [docs/hardware-investigation.md](docs/hardware-investigation.md): analog inputs
   (supply voltage and current), NFC EEPROM contents and settings proposal,
   low-power measurements and battery-life estimates
+- [docs/tests/nfc-sector-lock.md](docs/tests/nfc-sector-lock.md): test procedure
+  for opening the NFC EEPROM's sector 3 (issue #8), with board 1 results
 - [docs/rf-measurements.md](docs/rf-measurements.md): frequency accuracy across
   420-450 MHz, warm-up drift, TCXO vs GPS, and why the board can't receive
 - [tools/aprs_sim/README.md](tools/aprs_sim/README.md): host simulator for the
