@@ -1,0 +1,73 @@
+name: Release
+
+# Push a tag like v0.1.0 (or v0.2.0-rc1, published as a pre-release) to build
+# every firmware variant and publish them as a GitHub Release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Build and publish the release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # create the release and upload its files
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # git describe needs the tags
+          persist-credentials: false # gh uses GH_TOKEN below; no git pushes
+      - name: Install ARM toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi libnewlib-arm-none-eabi
+      - name: Build every variant
+        run: make firmware
+      - name: Check each build is stamped with the tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          for elf in build/*/dfm17.elf; do
+            variant=$(basename "$(dirname "$elf")")
+            v=$(strings -a "build/$variant/dfm17.bin" | grep -m1 '^DFMFW ' || true)
+            if [ "$v" != "DFMFW $TAG $variant" ]; then
+              echo "::error::build/$variant is stamped '$v', expected 'DFMFW $TAG $variant'"
+              exit 1
+            fi
+          done
+      - name: Size report
+        run: python3 tools/size/size_report.py --head build > size-report.md
+      - name: Package the builds and checksums
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          mkdir dist
+          for elf in build/*/dfm17.elf; do
+            variant=$(basename "$(dirname "$elf")")
+            for ext in elf hex bin; do
+              cp "build/$variant/dfm17.$ext" "dist/dfm17-$TAG-$variant.$ext"
+            done
+          done
+          (cd dist && sha256sum -- * > SHA256SUMS)
+          cat > notes.md <<'NOTES'
+          > **Callsign:** until the settings move to the EEPROM (#18), the `tracker` and `fox`
+          > builds transmit as **NZ0P**. Don't flash them on your own board as they are:
+          > build from source with your callsign instead.
+          >
+          > Back up the board's EEPROM first (`tools/hw_survey/eeprom_backup.sh`), and see
+          > the README, "Releases and flashing".
+
+          NOTES
+          cat size-report.md >> notes.md
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          pre=()
+          case "$TAG" in *-*) pre=(--prerelease) ;; esac
+          gh release create "$TAG" dist/* --verify-tag --title "$TAG" \
+            --notes "$(cat notes.md)" --generate-notes "${pre[@]}" # notes go before the generated ones
