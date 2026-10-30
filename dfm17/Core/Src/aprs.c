@@ -311,7 +311,7 @@ uint8_t aprs_prepare_fix(GNSS_StateHandle *GNSS, uint8_t fix_valid, uint8_t back
  * temperature, USB or BAT power). the GPS state comes first, a TH-D72 shows only 20 characters.
  * the station is identified by the source callsign in the header.
  */
-void aprs_prepare_status(GNSS_StateHandle *GNSS) {
+void aprs_prepare_status(const GNSS_StateHandle *GNSS) {
 	static const char text[] = ">nofix ";
 	analog_reading analog;
 	uint8_t n = sizeof(text) - 1;
@@ -384,6 +384,7 @@ uint8_t get_next_byte(void) {
 			stuffing = 0;
 			aprs_state = SFLAG;
 			i = 0;
+			/* fall through */
 		case SFLAG:
 			retval = AX25_FLAG;
 			if (++i >= AX25_SFLAGS) {

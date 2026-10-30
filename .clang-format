@@ -1,0 +1,27 @@
+# Style of our own sources (tabs, K&R braces). Not applied to the STM32CubeMX
+# generated files or the vendor drivers: see tools/lint/format.sh.
+BasedOnStyle: LLVM
+UseTab: Always
+IndentWidth: 4
+TabWidth: 4
+ContinuationIndentWidth: 8
+ColumnLimit: 100
+BreakBeforeBraces: Attach
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+IndentCaseLabels: false
+AlignAfterOpenBracket: DontAlign
+AlignConsecutiveMacros: AcrossComments
+AlignTrailingComments:
+  Kind: Always
+AlignOperands: DontAlign
+BreakBeforeBinaryOperators: All
+PointerAlignment: Right
+SpaceAfterCStyleCast: false
+SortIncludes: Never
+ReflowComments: false
+IncludeBlocks: Preserve
+MaxEmptyLinesToKeep: 2

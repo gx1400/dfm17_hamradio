@@ -1,0 +1,15 @@
+# cppcheck suppressions, one per line: id[:file[:line]]. Keep each justified.
+
+# system headers aren't on the include path; not an issue in our code
+missingIncludeSystem
+
+# false positives: fields of anonymous structs (struct { ... } volatile x;)
+# are reported as "outer variables". gcc -Wshadow (Makefile WARN) covers
+# real shadowing.
+shadowVariable
+
+# signatures fixed by the HAL callbacks (MspInit/DeInit) and newlib (_write);
+# they can't take const pointers
+constParameterPointer:dfm17/Core/Src/spi.c
+constParameterPointer:dfm17/Core/Src/tim.c
+constParameterPointer:dfm17/Core/Src/syscalls.c

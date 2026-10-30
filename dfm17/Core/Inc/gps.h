@@ -47,8 +47,8 @@ void deassertGpsLock(void);
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart);
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart);
 
-uint8_t checkUbxCrc(uint8_t *packet, uint8_t size);
-uint8_t buildUbxPacket(uint8_t *packet, uint8_t *payload, uint8_t sizeOfPayload);
+uint8_t checkUbxCrc(const uint8_t *packet, uint8_t size);
+uint8_t buildUbxPacket(uint8_t *packet, const uint8_t *payload, uint8_t sizeOfPayload);
 
 
 #endif /* INC_GPS_H_ */

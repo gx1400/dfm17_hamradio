@@ -1,5 +1,8 @@
+# shellcheck shell=bash
 # shared helpers: locate the STM32CubeIDE toolchain and CubeProgrammer CLI,
 # and read target RAM over SWD without halting the MCU (hot-plug)
+# the install paths are fixed and globbed only to find the version: ls is fine
+# shellcheck disable=SC2012
 IDE=$(ls -d /opt/st/stm32cubeide_* 2>/dev/null | sort | tail -1)
 NM=$(ls "$IDE"/plugins/*gnu-tools-for-stm32*/tools/bin/arm-none-eabi-nm 2>/dev/null | tail -1)
 PROG=$(ls "$IDE"/plugins/*cubeprogrammer.linux64*/tools/bin/STM32_Programmer_CLI 2>/dev/null | tail -1)

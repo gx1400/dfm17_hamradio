@@ -203,9 +203,8 @@ uint8_t i16toav(uint16_t in, volatile char *out) {
  */
 void i16tox(uint16_t x, char *out) {
 	uint8_t i;
-	uint8_t tmp;
 	for (i = 0; i < 4; i++) {
-		tmp = (uint8_t) ((x >> (4*i)) & 0x000f);
+		uint8_t tmp = (uint8_t)((x >> (4 * i)) & 0x000f);
 		if (tmp < 10) {
 			*(out+3-i) = '0' + tmp;
 		} else {
