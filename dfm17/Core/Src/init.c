@@ -37,6 +37,7 @@
 #include "analog.h"
 #include "gps.h"
 #include "version.h"
+#include "settings.h"
 
 
 extern UART_HandleTypeDef huart2;
@@ -70,6 +71,10 @@ void initHw(void) {
 	MX_TIM6_Init();
 	MX_TIM17_Init();
 	delay_us(50);
+
+	// station settings from the EEPROM (or the defaults: N0CALL, no TX);
+	// the radio setup below uses them
+	settings_init();
 
 	//initialize radio
 	initRadio();

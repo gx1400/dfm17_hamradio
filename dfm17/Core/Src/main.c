@@ -94,6 +94,7 @@
 #include "analog.h"
 #include "tracker.h"
 #include "ppsdisc.h"
+#include "settings.h"
 #include "nfc_tool.h"
 
 /* USER CODE END Includes */
@@ -114,12 +115,8 @@
 /* uncomment to replace the fox with a carrier controlled over SWD (rf_test.c),
  * for frequency sweeps with tools/rf_sweep */
 //#define RF_TEST_SWD
-/* APRS tracker (tracker.c) instead of the fox: GPS on only for a fix, one
- * position/telemetry packet every 5 min, no hunt tone. build with -DFOX for
- * the fox */
-#ifndef FOX
-#define TRACKER
-#endif
+/* tracker or fox: settings mode (settings.c, from the EEPROM); building with
+ * -DFOX only changes the default */
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -192,12 +189,9 @@ int main(void)
   // failed updates counts as a GPS fault
   uint8_t gpsFailures = 0;
   uint32_t lastAnalog = 0;
-#ifdef TRACKER
   tracker_start();
-#else
   // first fox transmission right away
-  uint32_t lastFox = HAL_GetTick() - FOX_PERIOD_MS;
-#endif
+  uint32_t lastFox = HAL_GetTick() - cfg.fox_period_s * 1000UL;
 
 #ifdef HW_SURVEY
   hw_survey_run();
@@ -206,10 +200,12 @@ int main(void)
   nfc_tool_start();
 #endif
 #if defined(HW_SURVEY) || defined(HW_NFC) || defined(FOX_START_PAUSED)
-  // a long button press resumes the fox
   foxPaused = 1;
-  diag_set_paused(1);
 #endif
+  if (cfg.flags & SETTINGS_FLAG_START_PAUSED)
+	  foxPaused = 1;
+  // a long button press resumes the fox/tracker
+  diag_set_paused(foxPaused);
 
   /* USER CODE END 2 */
 
@@ -274,18 +270,21 @@ int main(void)
 	  rf_test_poll();
 	  continue;
 #endif
+	  // settings changes over SWD, and the runtime check of the live settings
+	  settings_poll();
 	  // between transmissions: retune for the TCXO error measured from GPS PPS
 	  pps_disc_update();
 
-#ifdef TRACKER
-	  if (!foxPaused)
+	  if (foxPaused) {
+		  // nothing to do
+	  } else if (cfg.mode == MODE_FOX) {
+		  if (HAL_GetTick() - lastFox >= cfg.fox_period_s * 1000UL) {
+			  lastFox = HAL_GetTick();
+			  fox_transmit(gnss);
+		  }
+	  } else {
 		  tracker_poll(gnss);
-#else
-	  if (!foxPaused && HAL_GetTick() - lastFox >= FOX_PERIOD_MS) {
-		  lastFox = HAL_GetTick();
-		  fox_transmit(gnss);
 	  }
-#endif
 
   }
   /* USER CODE END 3 */

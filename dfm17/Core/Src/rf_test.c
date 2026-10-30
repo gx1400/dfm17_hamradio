@@ -33,6 +33,7 @@
 
 #include "main.h"
 #include "si4063.h"
+#include "settings.h"
 #include "diag.h"
 
 volatile uint32_t rf_test_freq_hz = 0;
@@ -53,15 +54,15 @@ void rf_test_poll(void) {
 		/* off (or refused): back to the normal settings */
 		current = 0;
 		si4060_set_cw(0);
-		si4060_set_tx_power(RF_TX_POWER_DFM);
-		si4060_set_frequency(RF_FREQ_HZ_DFM);
-		si4060_set_deviation(RF_DEV_HZ_DFM);
+		si4060_set_tx_power(cfg.pa_level);
+		si4060_set_frequency(cfg.freq_hz);
+		si4060_set_deviation(cfg.dev_hz);
 		return;
 	}
 	si4060_set_cw(1);
 	si4060_set_tx_power(rf_test_power);
 	si4060_set_frequency(f);
-	si4060_set_deviation(RF_DEV_HZ_DFM);
+	si4060_set_deviation(cfg.dev_hz);
 	si4060_start_tx(0);
 	diag_set_tx(1);
 }

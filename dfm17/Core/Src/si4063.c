@@ -34,10 +34,12 @@
 #include "si4063.h"
 #include "spi.h"
 #include "tim.h"
+#include "settings.h"
+#include <stdio.h>
 
-/* keep the DFM-17 transmitter inside the US 70 cm amateur band */
-_Static_assert(RF_FREQ_HZ_DFM >= 420000000UL && RF_FREQ_HZ_DFM <= 450000000UL,
-		"RF_FREQ_HZ_DFM is outside the 420-450 MHz amateur band");
+/* key-ups refused because the settings don't allow transmitting (no callsign
+ * set up, or settings that fail settings_check()) */
+volatile uint32_t si4060_tx_refused;
 
 /* VCO output divider of the band in use, needed for the deviation setting */
 static uint8_t si4060_outdiv = 8;
@@ -46,16 +48,17 @@ static uint8_t si4060_outdiv = 8;
  * si4060_config_dfm17
  *
  * sets up the DFM-17 transmitter: async direct 2FSK from GPIO3 (the MCU-timed
- * square wave), RF_FREQ_HZ_DFM, RF_DEV_HZ_DFM deviation and RF_TX_POWER_DFM.
+ * square wave), with the frequency, deviation and PA level from the settings
+ * (cfg, settings.c; the frequency is limited to 420-450 MHz there).
  */
 void si4060_config_dfm17(void) {
 	si4060_set_cw(0);
 	si4060_set_property_16(PROP_MODEM,
 			MODEM_FREQ_OFFSET,
 			0);
-	si4060_set_frequency(RF_FREQ_HZ_DFM);
-	si4060_set_deviation(RF_DEV_HZ_DFM);
-	si4060_set_tx_power(RF_TX_POWER_DFM);
+	si4060_set_frequency(cfg.freq_hz);
+	si4060_set_deviation(cfg.dev_hz);
+	si4060_set_tx_power(cfg.pa_level);
 }
 
 /*
@@ -315,6 +318,13 @@ void si4060_change_state(uint8_t state) {
  * channel:	the channel to start transmission on
  */
 void si4060_start_tx(uint8_t channel) {
+	/* every transmission comes through here: nothing goes on the air without a
+	 * callsign set up and valid settings */
+	if (!settings_tx_allowed()) {
+		if (si4060_tx_refused++ == 0)
+			printf("TX refused: no callsign set up (tools/config/dfmcfg.py)\r\n");
+		return;
+	}
 	si4060_get_cts(0);
 	spi_select();
 	spi_write(CMD_START_TX);
