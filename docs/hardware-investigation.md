@@ -139,6 +139,8 @@ later) and use sector 3.
 
 ### Proposed settings block (sector 3, 0x180-0x1FF)
 
+**Implemented** (version 1, 64 bytes at 0x180): see [settings.md](settings.md). The table below was the first proposal.
+
 | Offset | Size | Field |
 |---|---|---|
 | 0x180 | 4 | magic `DFMS` |
