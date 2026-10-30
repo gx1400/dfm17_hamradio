@@ -44,8 +44,16 @@ jobs:
           fi
       - name: Firmware size, budget and soft-double check
         run: |
-          python3 tools/size/size_report.py --head build \
+          python3 tools/size/size_report.py --head build --markdown size-report.md \
             ${SIZE_BASE:+--base "$SIZE_BASE" --base-label "$SIZE_BASE_LABEL"}
+      - name: Keep the size report for the PR comment
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pr-size-report
+          path: size-report.md
+          if-no-files-found: ignore
+          retention-days: 7
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dfm17-firmware
@@ -85,6 +93,14 @@ jobs:
         with:
           name: coverage-html
           path: tools/tests/build-cov/html/
+      - name: Keep the coverage table for the PR comment
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pr-coverage-report
+          path: tools/tests/build-cov/coverage.md
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Test logs
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -130,3 +146,82 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }} # read-only; enables the online audits
         run: zizmor --format github .github/
+
+  # One comment per PR with the job results, the size report and the coverage
+  # table, edited in place on every new push or re-run. Only this job can
+  # write to the PR. PRs from forks get a read-only token, so they get no
+  # comment (their results are in the job summaries); a workflow_run-based
+  # commenter could do it, but would run with write access next to output
+  # from untrusted code.
+  pr-report:
+    name: PR report comment
+    needs: [firmware, host-tests, lint]
+    if: >-
+      always() && github.event_name == 'pull_request'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write # create or update the report comment
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: pr-*-report
+          path: reports
+          merge-multiple: true
+      - name: Post or update the report comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          FIRMWARE: ${{ needs.firmware.result }}
+          TESTS: ${{ needs.host-tests.result }}
+          LINT: ${{ needs.lint.result }}
+        run: |
+          marker='<!-- dfm17-ci-report -->'
+          icon() {
+            case "$1" in
+            success) echo "✅" ;; failure) echo "❌" ;; cancelled) echo "⏹️" ;; *) echo "➖" ;;
+            esac
+          }
+          # the reports' own headings, demoted to fit a comment
+          demote() { sed -e 's/^# /#### /' -e 's/^## /#### /' "$1"; }
+          {
+            echo "$marker"
+            echo "### CI report for ${SHA:0:7}"
+            echo
+            echo "| Job | Result |"
+            echo "|---|---|"
+            echo "| Firmware build (all variants) | $(icon "$FIRMWARE") $FIRMWARE |"
+            echo "| Host tests and APRS decoding | $(icon "$TESTS") $TESTS |"
+            echo "| Lint and format checks | $(icon "$LINT") $LINT |"
+            echo
+            if [ -f reports/size-report.md ]; then
+              demote reports/size-report.md
+            else
+              echo "_No size report: the firmware build stopped before it._"
+            fi
+            echo
+            if [ -f reports/coverage.md ]; then
+              echo "<details><summary>Host test coverage</summary>"
+              echo
+              demote reports/coverage.md
+              echo
+              echo "</details>"
+            else
+              echo "_No coverage report: the host tests stopped before it._"
+            fi
+            echo
+            echo "[Full run]($RUN_URL). This comment is updated on every push."
+          } > comment.md
+          id=$(gh api --paginate "repos/$REPO/issues/$PR/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" \
+            | head -1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@comment.md > /dev/null
+            echo "updated comment $id"
+          else
+            gh api "repos/$REPO/issues/$PR/comments" -F body=@comment.md > /dev/null
+            echo "posted a new comment"
+          fi

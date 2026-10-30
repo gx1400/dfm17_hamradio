@@ -6,7 +6,8 @@
 Reads every variant built into DIR/<variant>/dfm17.elf (default head: build/).
 With --base (e.g. a build of main), it shows each variant's change and the
 symbols that grew or shrank. Prints Markdown, appends it to
-$GITHUB_STEP_SUMMARY when set, and emits GitHub annotations in CI.
+$GITHUB_STEP_SUMMARY when set and to --markdown FILE if given (CI's PR
+comment), and emits GitHub annotations in CI.
 
 Exit status 1 if a variant is over budget or links the software
 double-precision routines. Budgets are set here, in one place (issue #22).
@@ -102,6 +103,7 @@ def main():
     ap.add_argument("--base")
     ap.add_argument("--base-label", help="how to name the base in the report, e.g. main @ abc1234")
     ap.add_argument("--prefix", default=os.environ.get("ARM", "arm-none-eabi-"))
+    ap.add_argument("--markdown", help="also write the report to this file (for the PR comment)")
     a = ap.parse_args()
 
     # the tracker (the default build) first
@@ -187,6 +189,9 @@ def main():
     md += ["", f"Reserved heap + stack (in the RAM figures): {span}.", "", *details]
     report = "\n".join(md)
     print(report)
+    if a.markdown:
+        with open(a.markdown, "w") as f:
+            f.write(report + "\n")
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a") as f:

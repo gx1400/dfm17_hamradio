@@ -93,7 +93,11 @@ backup is in `docs/data/`.
   (`.github/ISSUE_TEMPLATE/hardware-test.yml`).
 - GitHub Actions (`.github/workflows/ci.yml`) runs the build, the tests and
   the lint checks on every pull request and push to `main`, and keeps the
-  built firmware as an artifact. Dependabot
+  built firmware as an artifact. On a PR from this repository, a `PR report`
+  job posts one comment with the job results, the size report and the
+  coverage table, and edits that same comment on every new push or re-run.
+  PRs from forks get no comment, as their token is read-only; the results are
+  in the job summaries. Dependabot
   (`.github/dependabot.yml`) proposes updates to the pinned actions and Python
   packages weekly.
 
