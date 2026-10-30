@@ -71,6 +71,10 @@ backup is in `docs/data/`.
   - `ruff check .` and `ruff format --check .` for the Python tools.
   - `git ls-files -z '*.sh' | xargs -0 shellcheck -x -P SCRIPTDIR -P .` and
     `actionlint`.
+- Pull requests get a checklist (`.github/pull_request_template.md`): size,
+  tests, what ran on hardware, RF and station-ID changes, CubeMX, EEPROM
+  backups. Hardware test results go in a "Hardware test report" issue
+  (`.github/ISSUE_TEMPLATE/hardware-test.yml`).
 - GitHub Actions (`.github/workflows/ci.yml`) runs the build, the tests and
   the lint checks on every pull request and push to `main`, and keeps the
   built firmware as an artifact. Dependabot

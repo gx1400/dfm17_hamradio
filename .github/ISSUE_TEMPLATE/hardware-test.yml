@@ -1,0 +1,58 @@
+name: Hardware test report
+description: Results from running firmware on a DFM-17 board (bench, on air, field)
+title: "Test: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Record a hardware test so the results can be compared later. For a
+        plan to run later, fill in what you can and leave the results empty.
+  - type: input
+    id: board
+    attributes:
+      label: Board
+      description: PCB serial (EEPROM 0x088 or the PCB label) and/or EEPROM UID
+      placeholder: "board 1, 20050128 / E0025A675B01677B"
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: Firmware
+      description: Variant and commit (git describe), plus any SWD changes made at run time
+      placeholder: "tracker @ 38f6958, pps_disc_enable=1"
+    validations:
+      required: true
+  - type: textarea
+    id: setup
+    attributes:
+      label: Setup
+      description: |
+        Power (USB, battery pack, bench supply), antenna or dummy load, GPS
+        sky view, frequency and PA level, receivers (HackRF + Dire Wolf, D72A,
+        iGate), distances.
+    validations:
+      required: true
+  - type: textarea
+    id: procedure
+    attributes:
+      label: Procedure
+      description: What was done, step by step, with the commands or scripts used
+  - type: textarea
+    id: results
+    attributes:
+      label: Results
+      description: Measurements, decode counts, logs. Paste logs inside ``` blocks.
+  - type: textarea
+    id: conclusion
+    attributes:
+      label: Conclusion and follow-ups
+      description: What it shows, open questions, issues to open
+  - type: checkboxes
+    id: rf
+    attributes:
+      label: RF
+      options:
+        - label: Transmitted on air (identified with a valid callsign)
+        - label: Dummy load / no transmission
