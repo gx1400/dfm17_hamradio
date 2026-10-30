@@ -10,6 +10,10 @@
 /* ---- fakes ------------------------------------------------------------------ */
 
 volatile uint8_t ppsLockStatus;
+static uint8_t time_locked = 1;
+uint8_t gpsTimeLocked(void) {
+	return time_locked;
+}
 static int button;
 static int green, yellow, red;
 static uint32_t sample_cycles, sample_ms;
@@ -215,7 +219,38 @@ static void pps_capture_feeds_discipline(void) {
 	CHECK_EQ(pps_log[(pps_log_head - 1) % PPS_LOG].capture, 0);
 }
 
+/* without locked GPS time the pulse is logged but kept from the discipline
+ * (#35: the u-blox keeps pulsing from its own crystal) */
+static void pps_unlocked_not_sampled(void) {
+	pps_source = PPS_SOURCE_CAPTURE;
+	fake_tim4.SR = TIM_SR_CC3IF;
+	fake_tim4.CCR3 = 0x1000;
+	diag_pps();
+	ms(1000);
+	fake_tim4.SR = TIM_SR_CC3IF;
+	fake_tim4.CCR3 = (uint16_t)(0x1000 + 24000010u);
+	sample_cycles = 1234;
+	uint32_t unlocked = pps_unlocked, head = pps_log_head;
+	time_locked = 0;
+	diag_pps();
+	CHECK_EQ(sample_cycles, 1234); /* not called */
+	CHECK_EQ(pps_unlocked, unlocked + 1);
+	CHECK_EQ(pps_log_head, head + 1); /* still logged */
+	CHECK_EQ(pps_log[(pps_log_head - 1) % PPS_LOG].capture, 24000010u);
+
+	/* locked again: the next interval is sampled */
+	ms(1000);
+	fake_tim4.SR = TIM_SR_CC3IF;
+	fake_tim4.CCR3 = (uint16_t)(0x1000 + 2 * 24000010u);
+	time_locked = 1;
+	diag_pps();
+	CHECK_EQ(sample_cycles, 24000010u);
+	CHECK_EQ(sample_ms, 1000);
+	CHECK_EQ(pps_unlocked, unlocked + 1);
+}
+
 TEST_MAIN("diag", TEST(held_at_boot_is_ignored), TEST(short_medium_long), TEST(event_read_once),
 		TEST(glitch_ignored), TEST(contact_bounce_is_one_press), TEST(hold_feedback_leds),
 		TEST(heartbeat), TEST(blink_codes), TEST(yellow_fix_and_pps), TEST(pps_cycle_count),
-		TEST(pps_capture_feeds_discipline), TEST(leds_off_stops_patterns))
+		TEST(pps_capture_feeds_discipline), TEST(pps_unlocked_not_sampled),
+		TEST(leds_off_stops_patterns))
