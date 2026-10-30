@@ -81,6 +81,38 @@ backup is in `docs/data/`.
   (`.github/dependabot.yml`) proposes updates to the pinned actions and Python
   packages weekly.
 
+## Firmware version, releases and flashing
+
+Every build carries its version, `git describe` plus the variant (e.g.
+`v0.1.0 tracker`, or `abc1234-dirty fox` for an untagged or modified tree;
+STM32CubeIDE builds say `unknown cubeide`):
+
+- printed at boot on the UART on the mini-USB connector (USART1, PA9,
+  115200 8N1);
+- read from a running board over SWD with `tools/hw_survey/read_version.sh`.
+  It finds the string in a flash dump, so it works whatever build is on it.
+
+Pushing a `v*` tag (e.g. `v0.1.0`; `v0.2.0-rc1` becomes a pre-release) runs
+`.github/workflows/release.yml`. It builds every variant, checks each is
+stamped with the tag, and publishes a GitHub Release with
+`dfm17-<tag>-<variant>.elf/.hex/.bin`, `SHA256SUMS`, the size report and
+notes from the merged PRs. Release builds use Ubuntu's GCC 13, so they are
+about 2.4 KB larger than STM32CubeIDE builds.
+
+To flash a release build:
+
+1. **Back up the EEPROM first** (see above): `tools/hw_survey/eeprom_backup.sh`.
+2. Check the download: `sha256sum -c SHA256SUMS --ignore-missing`.
+3. Flash over SWD with STM32CubeProgrammer:
+   `STM32_Programmer_CLI -c port=SWD -d dfm17-<tag>-<variant>.hex -v -rst`.
+   The `.hex` carries its address; a `.bin` needs `0x08000000` after the
+   file name. A running board may need `mode=HOTPLUG` and a retry or two.
+4. Confirm it: `tools/hw_survey/read_version.sh`.
+
+**Callsign:** until the settings move to the EEPROM (#18), the `tracker` and
+`fox` builds transmit as NZ0P. Build from source with your own callsign
+instead of flashing those release builds on your board.
+
 ## Documentation
 
 - [docs/hardware-investigation.md](docs/hardware-investigation.md): analog inputs
