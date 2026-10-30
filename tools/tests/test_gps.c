@@ -97,6 +97,20 @@ static void no_polling_without_pps(void) {
 	CHECK_EQ(pvt_polls, 1);
 }
 
+/* with a fix, the poll logs it and sets the automotive dynamic model once */
+static void poll_with_fix(void) {
+	reset();
+	assertGpsLock();
+	GNSS_Handle.selectedMode = ModeNotSet;
+	GNSS_Handle.uniqueID[0] = 0;
+	GNSS_Handle.fixType = Fix3D;
+	GNSS_Handle.numSV = 9;
+	gpsUpdate();
+	CHECK_EQ(pvt_polls, 1);
+	CHECK_EQ(GNSS_Handle.selectedMode, ModeAutomotive);
+	CHECK(GNSS_Handle.uniqueID[0] != 0); /* the chip ID is asked for once */
+}
+
 static void wake_clears_stale_fix(void) {
 	reset();
 	GNSS_Handle.fixType = Fix3D;
@@ -169,15 +183,8 @@ static void config_is_ubx_only_9600(void) {
 	CHECK_EQ(configUBX[20] | configUBX[21] << 8, 1);	/* outProtoMask: UBX */
 }
 
-TEST_MAIN("gps",
-	TEST(sleep_sends_pmreq_backup),
-	TEST(no_polling_while_asleep),
-	TEST(no_polling_without_pps),
-	TEST(wake_clears_stale_fix),
-	TEST(configure_first_try),
-	TEST(configure_retries_until_answered),
-	TEST(configure_gives_up),
-	TEST(ubx_crc_checks),
-	TEST(ubx_build_packet),
-	TEST(static_config_messages_valid),
-	TEST(config_is_ubx_only_9600))
+TEST_MAIN("gps", TEST(sleep_sends_pmreq_backup), TEST(no_polling_while_asleep),
+		TEST(no_polling_without_pps), TEST(wake_clears_stale_fix), TEST(poll_with_fix),
+		TEST(configure_first_try), TEST(configure_retries_until_answered), TEST(configure_gives_up),
+		TEST(ubx_crc_checks), TEST(ubx_build_packet), TEST(static_config_messages_valid),
+		TEST(config_is_ubx_only_9600))

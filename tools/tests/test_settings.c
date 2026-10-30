@@ -15,7 +15,7 @@
 /* ---- fakes --------------------------------------------------------------- */
 
 static uint8_t eeprom[512];
-static int ee_fail_reads, ee_fail_writes;
+static int ee_fail_reads, ee_fail_writes, ee_never_ready;
 static uint32_t radio_freq, radio_dev;
 static uint8_t radio_pa;
 static int station_sets;
@@ -38,7 +38,7 @@ uint8_t ee_write(uint8_t dev, uint16_t addr, const uint8_t *buf, uint8_t len) {
 }
 uint8_t ee_poll(uint8_t dev) {
 	(void)dev;
-	return 3;
+	return ee_never_ready ? 0xFF : 3; /* 0xFF: no ACK within the write time */
 }
 void aprs_set_station(void) {
 	station_sets++;
@@ -78,7 +78,7 @@ static uint8_t command(uint8_t cmd) {
 
 void test_setup(void) {
 	memset(eeprom, 0xFF, sizeof(eeprom));
-	ee_fail_reads = ee_fail_writes = 0;
+	ee_fail_reads = ee_fail_writes = ee_never_ready = 0;
 	radio_freq = radio_dev = radio_pa = 0;
 	station_sets = 0;
 }
@@ -382,6 +382,11 @@ static void save_failure_reported(void) {
 	ee_fail_reads = 1;
 	CHECK_EQ(command(CMD_RELOAD), RESULT_EEPROM);
 	CHECK_EQ(settings_error, SETTINGS_ERR_EEPROM);
+
+	/* the EEPROM never finishes a page write */
+	ee_fail_reads = 0;
+	ee_never_ready = 1;
+	CHECK_EQ(command(CMD_SAVE), RESULT_EEPROM);
 }
 
 /* live settings changed outside settings_apply are put back */

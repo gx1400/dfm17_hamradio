@@ -75,15 +75,6 @@ extern volatile uint32_t si4060_tx_refused;
 
 /* function prototypes */
 
-void si4060_freq_aprs_reg1(void);
-void si4060_freq_aprs_reg2(void);
-void si4060_freq_aprs_cn(void);
-void si4060_freq_aprs_jp(void);
-void si4060_freq_aprs_thai(void);
-void si4060_freq_aprs_nz(void);
-void si4060_freq_aprs_aus(void);
-void si4060_freq_aprs_brazil(void);
-void si4060_freq_2m_rtty(void);
 void si4060_config_dfm17(void);
 void si4060_set_cw(uint8_t on);
 void si4060_set_frequency(uint32_t freq_hz);
@@ -104,7 +95,6 @@ uint8_t si4060_get_cts(uint8_t read_response);
 uint8_t si4060_read_cmd_buf(uint8_t deselect);
 void si4060_power_up(void);
 void si4060_change_state(uint8_t state);
-void si4060_nop(void);
 void si4060_set_property_8(uint8_t group, uint8_t prop, uint8_t val);
 uint8_t si4060_get_property_8(uint8_t group, uint8_t prop);
 void si4060_set_property_16(uint8_t group, uint8_t prop, uint16_t val);
@@ -114,8 +104,6 @@ void si4060_set_property_32(uint8_t group, uint8_t prop, uint32_t val);
 void si4060_setup(uint8_t mod_type);
 void si4060_set_filter(void);
 void si4060_gpio_pin_cfg(uint8_t gpio0, uint8_t gpio1, uint8_t gpio2, uint8_t gpio3, uint8_t drvstrength);
-void si4060_set_aprs_params(void);
-void __delay_cycles(uint32_t delay);
 
 
 /* ===== command definitions ===== */

@@ -49,6 +49,8 @@
 
 analog_reading analog_last;
 
+/* GCOVR_EXCL_START: register bring-up whose calibration waits on bits only
+ * the ADC hardware clears; verified on the board (docs/hardware-investigation.md) */
 void analog_init(void) {
 	/* PCLK2 24 MHz / 2 = 12 MHz, the STM32F100 maximum */
 	MODIFY_REG(RCC->CFGR, RCC_CFGR_ADCPRE, RCC_CFGR_ADCPRE_DIV2);
@@ -72,6 +74,7 @@ void analog_init(void) {
 	while (READ_BIT(ADC1->CR2, ADC_CR2_CAL))
 		;
 }
+/* GCOVR_EXCL_STOP */
 
 /* average of SAMPLES conversions, raw 12-bit */
 static uint32_t read_raw(uint8_t ch) {

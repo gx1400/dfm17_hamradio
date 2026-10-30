@@ -121,14 +121,8 @@ void GNSS_ParseBuffer(GNSS_StateHandle *GNSS) {
 					&& GNSS->uartWorkingBuffer[var + 3] == 0x03) { //Look at: 32.19.1.1 u-blox 8 Receiver description
 				GNSS_ParseUniqID(GNSS);
 			} else if (GNSS->uartWorkingBuffer[var + 2] == 0x01
-					&& GNSS->uartWorkingBuffer[var + 3] == 0x21) { //Look at: 32.17.14.1 u-blox 8 Receiver description
-				GNSS_ParseNavigatorData(GNSS);
-			} else if (GNSS->uartWorkingBuffer[var + 2] == 0x01
 					&& GNSS->uartWorkingBuffer[var + 3] == 0x07) { //ook at: 32.17.30.1 u-blox 8 Receiver description
 				GNSS_ParsePVTData(GNSS);
-			} else if (GNSS->uartWorkingBuffer[var + 2] == 0x01
-					&& GNSS->uartWorkingBuffer[var + 3] == 0x02) { // Look at: 32.17.15.1 u-blox 8 Receiver description
-				GNSS_ParsePOSLLHData(GNSS);
 			}
 		}
 	}
@@ -148,34 +142,6 @@ void GNSS_GetUniqID(GNSS_StateHandle *GNSS) {
 			sizeof(getDeviceID) / sizeof(uint8_t));
 	HAL_UART_Receive_DMA(GNSS->huart, GNSS->uartWorkingBuffer, 17);
 	GNSS_WaitForReply(GNSS, getDeviceID);
-}
-
-/*!
- * Make request for UTC time solution data.
- * @param GNSS Pointer to main GNSS structure.
- */
-void GNSS_GetNavigatorData(GNSS_StateHandle *GNSS) {
-	//printf("Sending GetNavigatorData...\r\n");
-	GNSS->txDone = 0x00;
-	GNSS->rxDone = 0x00;
-	HAL_UART_Transmit_DMA(GNSS->huart, getNavigatorData,
-			sizeof(getNavigatorData) / sizeof(uint8_t));
-	HAL_UART_Receive_DMA(GNSS->huart, GNSS->uartWorkingBuffer, 28);
-	GNSS_WaitForReply(GNSS, getNavigatorData);
-}
-
-/*!
- * Make request for geodetic position solution data.
- * @param GNSS Pointer to main GNSS structure.
- */
-void GNSS_GetPOSLLHData(GNSS_StateHandle *GNSS) {
-	//printf("Sending GetPOSLLHData...\r\n");
-	GNSS->txDone = 0x00;
-	GNSS->rxDone = 0x00;
-	HAL_UART_Transmit_DMA(GNSS->huart, getPOSLLHData,
-			sizeof(getPOSLLHData) / sizeof(uint8_t));
-	HAL_UART_Receive_DMA(GNSS->huart, GNSS->uartWorkingBuffer, 36);
-	GNSS_WaitForReply(GNSS, getPOSLLHData);
 }
 
 /*!
@@ -313,72 +279,6 @@ void GNSS_ParsePVTData(GNSS_StateHandle *GNSS) {
 }
 
 /*!
- * Parse data to UTC time solution standard.
- * Look at: 32.17.30.1 u-blox 8 Receiver description.
- * @param GNSS Pointer to main GNSS structure.
- */
-void GNSS_ParseNavigatorData(GNSS_StateHandle *GNSS) {
-	//printf("Parsing Navigator Data...\r\n");
-
-	//uint8_t res = checkUbxCrc(GNSS->uartWorkingBuffer, 100); // todo implement crc, need packet length
-	//if(!checkUbxCrc(GNSS->uartWorkingBuffer, 100)) { return; };
-
-
-	uShort.bytes[0] = GNSS->uartWorkingBuffer[18];
-	uShort.bytes[1] = GNSS->uartWorkingBuffer[19];
-	GNSS->year = uShort.uShort;
-	GNSS->month = GNSS->uartWorkingBuffer[20];
-	GNSS->day = GNSS->uartWorkingBuffer[21];
-	GNSS->hour = GNSS->uartWorkingBuffer[22];
-	GNSS->min = GNSS->uartWorkingBuffer[23];
-	GNSS->sec = GNSS->uartWorkingBuffer[24];
-}
-
-/*!
- * Parse data to geodetic position solution standard.
- * Look at: 32.17.14.1 u-blox 8 Receiver description.
- * @param GNSS Pointer to main GNSS structure.
- */
-void GNSS_ParsePOSLLHData(GNSS_StateHandle *GNSS) {
-	//printf("Parsing POS LLH Data...\r\n");
-
-	//uint8_t res = checkUbxCrc(GNSS->uartWorkingBuffer, 100); // todo implement crc, need packet length
-	//if(!checkUbxCrc(GNSS->uartWorkingBuffer, 100)) { return; };
-
-	for (int var = 0; var < 4; ++var) {
-		iLong.bytes[var] = GNSS->uartWorkingBuffer[var + 10];
-	}
-	GNSS->lon = iLong.iLong;
-	GNSS->fLon = (float)iLong.iLong / 10000000.0f;
-
-	for (int var = 0; var < 4; ++var) {
-		iLong.bytes[var] = GNSS->uartWorkingBuffer[var + 14];
-	}
-	GNSS->lat = iLong.iLong;
-	GNSS->fLat = (float)iLong.iLong / 10000000.0f;
-
-	for (int var = 0; var < 4; ++var) {
-		iLong.bytes[var] = GNSS->uartWorkingBuffer[var + 18];
-	}
-	GNSS->height = iLong.iLong;
-
-	for (int var = 0; var < 4; ++var) {
-		iLong.bytes[var] = GNSS->uartWorkingBuffer[var + 22];
-	}
-	GNSS->hMSL = iLong.iLong;
-
-	for (int var = 0; var < 4; ++var) {
-		uLong.bytes[var] = GNSS->uartWorkingBuffer[var + 26];
-	}
-	GNSS->hAcc = uLong.uLong;
-
-	for (int var = 0; var < 4; ++var) {
-		uLong.bytes[var] = GNSS->uartWorkingBuffer[var + 30];
-	}
-	GNSS->vAcc = uLong.uLong;
-}
-
-/*!
  *  Sends the basic configuration: Activation of the UBX standard, change of NMEA version to 4.10 and turn on of the Galileo system.
  * @param GNSS Pointer to main GNSS structure.
  */
@@ -406,24 +306,4 @@ void GNSS_LoadConfig(GNSS_StateHandle *GNSS) {
 			sizeof(setGNSS) / sizeof(uint8_t));
 	HAL_UART_Receive_DMA(GNSS->huart, GNSS->uartWorkingBuffer, 10);
 	GNSS_WaitForReply(GNSS, setGNSS);
-}
-
-
-
-
-/*!
- *  Creates a checksum based on UBX standard.
- * @param class Class value from UBX doc.
- * @param messageID MessageID value from UBX doc.
- * @param dataLength Data length value from UBX doc.
- * @param payload Just payload.
- * @return  Returns checksum.
- */
-uint8_t GNSS_Checksum(uint8_t class, uint8_t messageID, uint8_t dataLength,uint8_t *payload) {
-	// todo: Look at 32.4 UBX Checksum
-	(void)class;
-	(void)messageID;
-	(void)dataLength;
-	(void)payload;
-	return 0;
 }

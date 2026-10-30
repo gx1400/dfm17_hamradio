@@ -15,15 +15,19 @@ static uint8_t txDone, rxDone;
 
 static uint8_t reply[128];
 static size_t reply_len;		/* 0 = the GPS doesn't answer */
-static uint8_t last_request[4];
+static uint8_t last_request[64];
+/* class << 8 | id of every request since reset() */
+static uint16_t requests[8];
+static int nrequests;
 
 HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *h, const uint8_t *d, uint16_t n, uint32_t t) {
 	(void)h; (void)d; (void)n; (void)t;
 	return HAL_OK;
 }
 HAL_StatusTypeDef HAL_UART_Transmit_DMA(UART_HandleTypeDef *h, const uint8_t *d, uint16_t n) {
-	(void)n;
-	memcpy(last_request, d, 4);
+	memcpy(last_request, d, n < sizeof(last_request) ? n : sizeof(last_request));
+	if (nrequests < 8)
+		requests[nrequests++] = (uint16_t)(d[2] << 8 | d[3]);
 	HAL_UART_TxCpltCallback(h);
 	return HAL_OK;
 }
@@ -71,6 +75,7 @@ static void reset(void) {
 	GNSS_Init(&GNSS_Handle, &huart, &txDone, &rxDone);
 	GNSS_timeouts = 0;
 	reply_len = 0;
+	nrequests = 0;
 	fake_tick = 0;
 	fake_tick_step = 0;
 }
@@ -138,9 +143,76 @@ static void parse_buffer_stays_in_bounds(void) {
 	CHECK_EQ(GNSS_Handle.uartWorkingBuffer[100], 0);	/* cleared after parsing */
 }
 
-TEST_MAIN("gnss",
-	TEST(pvt_parsed),
-	TEST(pvt_negative_altitude),
-	TEST(corrupt_pvt_ignored),
-	TEST(silent_gps_times_out),
-	TEST(parse_buffer_stays_in_bounds))
+/* a UBX ACK-ACK for a CFG request (10 bytes, what the config calls wait for) */
+static void make_ack(void) {
+	static const uint8_t ack[] = {0xB5, 0x62, 0x05, 0x01, 0x02, 0x00, 0x06, 0x00, 0x0E, 0x37};
+	memset(reply, 0, sizeof(reply));
+	memcpy(reply, ack, sizeof(ack));
+	reply_len = sizeof(ack);
+}
+
+/* UBX-CFG-NAV5 with the dynamic platform model for each mode; mode 4 has no
+ * u-blox model of its own and stays automotive */
+static void set_mode_sends_dynamic_model(void) {
+	static const struct {
+		short mode;
+		uint8_t model;
+	} want[] = {{ModePortable, 0}, {ModeStationary, 2}, {ModePedestrian, 3}, {ModeAutomotive, 4},
+			{4, 4}, {ModeAirbone1G, 6}, {ModeAirbone2G, 7}, {ModeAirbone4G, 8}, {ModeWrist, 9},
+			{ModeBike, 10}};
+	for (unsigned i = 0; i < sizeof(want) / sizeof(want[0]); i++) {
+		reset();
+		make_ack();
+		GNSS_SetMode(&GNSS_Handle, want[i].mode);
+		CHECK_EQ(nrequests, 1);
+		CHECK_EQ(requests[0], 0x0624);
+		CHECK_EQ(last_request[6 + 2], want[i].model); /* payload byte 2: dynModel */
+		CHECK_EQ(GNSS_Handle.selectedMode, want[i].mode);
+		CHECK_EQ(GNSS_timeouts, 0);
+	}
+}
+
+/* UBX only on the UART, NMEA 4.10, then the constellations */
+static void load_config_sends_three_messages(void) {
+	reset();
+	make_ack();
+	GNSS_LoadConfig(&GNSS_Handle);
+	CHECK_EQ(nrequests, 3);
+	CHECK_EQ(requests[0], 0x0600);
+	CHECK_EQ(requests[1], 0x0617);
+	CHECK_EQ(requests[2], 0x063E);
+	CHECK_EQ(GNSS_timeouts, 0);
+}
+
+/* UBX-SEC-UNIQID: the 5-byte chip ID, only from a reply with a good checksum */
+static void unique_id_parsed(void) {
+	reset();
+	memset(reply, 0, sizeof(reply));
+	uint8_t id[] = {0xB5, 0x62, 0x27, 0x03, 9, 0, 1, 0, 0, 0, 0x12, 0x34, 0x56, 0x78, 0x9A, 0, 0};
+	uint8_t a = 0, b = 0;
+	for (int i = 2; i < 15; i++) {
+		a += id[i];
+		b += a;
+	}
+	id[15] = a;
+	id[16] = b;
+	memcpy(reply, id, sizeof(id));
+	reply_len = sizeof(id);
+	GNSS_GetUniqID(&GNSS_Handle);
+	CHECK_EQ(requests[0], 0x2703);
+	GNSS_ParseBuffer(&GNSS_Handle);
+	CHECK_EQ(GNSS_Handle.uniqueID[0], 0x12);
+	CHECK_EQ(GNSS_Handle.uniqueID[4], 0x9A);
+
+	/* a corrupt reply leaves the ID alone */
+	id[12] ^= 0xFF;
+	memcpy(reply, id, sizeof(id));
+	GNSS_GetUniqID(&GNSS_Handle);
+	GNSS_ParseBuffer(&GNSS_Handle);
+	CHECK_EQ(GNSS_Handle.uniqueID[2], 0x56);
+}
+
+TEST_MAIN("gnss", TEST(pvt_parsed), TEST(pvt_negative_altitude), TEST(corrupt_pvt_ignored),
+		TEST(silent_gps_times_out), TEST(parse_buffer_stays_in_bounds),
+		TEST(set_mode_sends_dynamic_model), TEST(load_config_sends_three_messages),
+		TEST(unique_id_parsed))

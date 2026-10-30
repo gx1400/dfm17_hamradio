@@ -43,8 +43,18 @@ uint8_t spi_write(uint8_t data) {
 	return 0;
 }
 
+/* bytes the chip answers with, in order, before falling back to cts_byte */
+static uint8_t read_q[16];
+static int read_n, read_i;
+
 uint8_t spi_read(void) {
-	return cts_byte;
+	return read_i < read_n ? read_q[read_i++] : cts_byte;
+}
+
+static void answer(const uint8_t *bytes, int n) {
+	memcpy(read_q, bytes, n);
+	read_n = n;
+	read_i = 0;
 }
 
 void delay_us(uint16_t us) { (void)us; }
@@ -55,6 +65,7 @@ static void reset(void) {
 	ntxn = 0;
 	selected = 0;
 	cts_byte = 0xFF;
+	read_n = read_i = 0;
 	memset(props, 0, sizeof(props));
 	fake_tick = 0;
 	fake_tick_step = 0;
@@ -234,6 +245,10 @@ static void cts_timeout(void) {
 	CHECK_EQ(si4060_get_cts(0), 1);
 	CHECK(fake_tick > SI_TIMEOUT_MS);
 	CHECK(fake_tick < 10 * SI_TIMEOUT_MS);
+	/* the same when a response is to be read after the CTS */
+	fake_tick = 0;
+	CHECK_EQ(si4060_get_cts(1), 1);
+	CHECK(fake_tick > SI_TIMEOUT_MS);
 	cts_byte = 0xFF;
 	fake_tick_step = 0;
 	CHECK_EQ(si4060_get_cts(0), 0);
@@ -251,6 +266,80 @@ static void fast_spi_for_afsk(void) {
 	CHECK(SPI1->CR1 & SPI_CR1_SPE);
 }
 
+/* the radio set-up after POWER_UP: the DIV_CLK that clocks the STM32 (an
+ * old bug zeroed GLOBAL_CLK_CFG and stopped it), async direct modulation
+ * from GPIO3, no packet framing, and the TX filter */
+static void setup_configures_radio(void) {
+	reset();
+	si4060_setup(MOD_TYPE_2FSK);
+	int gpio = find_cmd(CMD_GPIO_PIN_CFG);
+	CHECK(gpio >= 0);
+	CHECK_EQ(txn[gpio][1], GPIO_MODE_TX_DATA_CLK);
+	CHECK_EQ(txn[gpio][2], GPIO_MODE_EN_PA);
+	CHECK_EQ(txn[gpio][3], GPIO_MODE_DIV_CLK);	/* GPIO2: 12.8 MHz to OSC_IN */
+	CHECK_EQ(txn[gpio][4], GPIO_MODE_INPUTPIN); /* GPIO3: the modulation */
+	CHECK_EQ(props[PROP_GLOBAL][GLOBAL_CLK_CFG], DIV_CLK_EN | DIV_CLK_SEL_2);
+	CHECK_EQ(props[PROP_GLOBAL][GLOBAL_CONFIG], GLOBAL_RESERVED | POWER_MODE_HIGH_PERF);
+	CHECK_EQ(props[PROP_GLOBAL][GLOBAL_XO_TUNE], 0x62);
+	CHECK_EQ(props[PROP_MODEM][MODEM_MOD_TYPE],
+			MOD_TYPE_2FSK | MOD_SOURCE_DIRECT | MOD_GPIO_3 | MOD_DIRECT_MODE_ASYNC);
+	CHECK_EQ(props[PROP_PREAMBLE][PREAMBLE_TX_LENGTH], 0);
+	CHECK_EQ(props[PROP_SYNC][SYNC_CONFIG], SYNC_NO_XMIT);
+	CHECK_EQ(prop24(PROP_MODEM, MODEM_DATA_RATE), RF_MOD_APRS_SR);
+	/* filter (6 dB at 1200 Hz, 4400 Hz low pass): coeff[n] in COEFF_n */
+	CHECK_EQ(props[PROP_MODEM][MODEM_TX_FILTER_COEFF_8], 0x76);
+	CHECK_EQ(props[PROP_MODEM][MODEM_TX_FILTER_COEFF_0], 0x81);
+}
+
+/* POR: SDN (PC3) high then low, then POWER_UP with the TCXO frequency */
+static void reset_and_power_up(void) {
+	reset();
+	si4060_shutdown();
+	CHECK_EQ(GPIOC->BSRR, 1U << 3);
+	si4060_reset();
+	CHECK_EQ(GPIOC->BSRR, 1U << (16 + 3)); /* released last */
+	si4060_power_up();
+	int up = find_cmd(CMD_POWER_UP);
+	CHECK(up >= 0);
+	CHECK_EQ(txn[up][1], FUNC);
+	CHECK_EQ(txn[up][2], TCXO);
+	CHECK_EQ((uint32_t)txn[up][3] << 24 | txn[up][4] << 16 | txn[up][5] << 8 | txn[up][6], XO_FREQ);
+
+	si4060_change_state(7);
+	int st = find_cmd(CMD_CHANGE_STATE);
+	CHECK(st >= 0);
+	CHECK_EQ(txn[st][1], 7);
+}
+
+/* PART_INFO: CTS twice, then CHIPREV and the part number */
+static void part_info_reads_part_number(void) {
+	reset();
+	const uint8_t chip[] = {0xFF, 0xFF, 0x11, 0x40, 0x63};
+	answer(chip, sizeof(chip));
+	CHECK_EQ(si4060_part_info(), 0x4063);
+}
+
+/* GET_PROPERTY waits for CTS (retrying while the chip says not yet) before
+ * reading the value */
+static void get_property_waits_for_cts(void) {
+	reset();
+	const uint8_t busy_then_value[] = {0x00, 0x00, 0xFF, 0x5A};
+	answer(busy_then_value, sizeof(busy_then_value));
+	CHECK_EQ(si4060_get_property_8(PROP_PA, PA_PWR_LVL), 0x5A);
+	int get = find_cmd(CMD_GET_PROPERTY);
+	CHECK(get >= 0);
+	CHECK_EQ(txn[get][1], PROP_PA);
+	CHECK_EQ(txn[get][3], PA_PWR_LVL);
+}
+
+/* the AFSK offset, written without waiting for CTS */
+static void offset_written(void) {
+	reset();
+	si4060_set_offset(0x1234);
+	CHECK_EQ(props[PROP_MODEM][MODEM_FREQ_OFFSET] << 8 | props[PROP_MODEM][MODEM_FREQ_OFFSET + 1],
+			0x1234);
+}
+
 /* every test runs on a board set up as NZ0P (fake_settings.h) */
 void test_setup(void) {
 	provision();
@@ -259,4 +348,6 @@ void test_setup(void) {
 TEST_MAIN("si4063", TEST(frequency_across_70cm), TEST(frequency_default_channel),
 		TEST(band_selection), TEST(deviation_scales_with_band), TEST(offset_units),
 		TEST(modulation_modes), TEST(dfm17_config), TEST(tx_power), TEST(start_and_stop_tx),
-		TEST(tx_gate), TEST(cts_timeout), TEST(fast_spi_for_afsk))
+		TEST(tx_gate), TEST(cts_timeout), TEST(fast_spi_for_afsk), TEST(setup_configures_radio),
+		TEST(reset_and_power_up), TEST(part_info_reads_part_number),
+		TEST(get_property_waits_for_cts), TEST(offset_written))
