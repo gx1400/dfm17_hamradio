@@ -30,29 +30,19 @@
 
 #include "GNSS.h"
 
-/* station ID sent in Morse (MCW) at the start of every cycle */
-#define FOX_CALLSIGN		"NZ0P"
-#define FOX_CW_WPM			15
+/* the callsign (Morse ID at the start of every cycle), CW speed, hunt tone
+ * length, period and how often to send APRS come from the settings (cfg,
+ * settings.h). APRS gives the fox's location away to anyone decoding it: set
+ * fox_aprs_every to 0 for an actual hunt */
 
 /* audio tone for both the Morse ID and the hunt tone:
  * TIM15 tick 26402.6 Hz / (2 * 16) = 825 Hz */
 #define FOX_TONE_HALF_TICKS	16
 
-/* hunt tone length, and the time from the start of one cycle to the next */
-#define FOX_TONE_MS			10000
-#define FOX_PERIOD_MS		30000
-
 /* button test transmissions: unmodulated carrier for measuring the frequency,
  * and a 1200 Hz tone (26402.6 Hz / (2 * 11)) for checking deviation */
 #define FOX_TEST_MS			5000
 #define FOX_TEST_TONE_HALF_TICKS	11
-
-/* send an APRS position packet after every FOX_APRS_EVERY-th tone (every
- * 5 min with the defaults; an iGate shouldn't be sent more often than that).
- * it gives the fox's location away to anyone decoding APRS, so comment
- * FOX_SEND_APRS out for an actual hunt */
-#define FOX_SEND_APRS
-#define FOX_APRS_EVERY		10
 
 /* boot with the fox paused (no transmissions until a long button press) */
 //#define FOX_START_PAUSED

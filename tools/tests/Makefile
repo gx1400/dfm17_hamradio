@@ -9,31 +9,39 @@ SANITIZE ?= -fsanitize=undefined,bounds-strict -fsanitize-trap=all
 # -iquote: Core/Inc/string.h must not shadow the system <string.h>
 CFLAGS   = -std=gnu11 -Wall -Werror -g -O1 $(SANITIZE) -iquote . -iquote fakehal -iquote $(CORE)/Inc
 
-TESTS = aprs tracker gps gnss si4063 fox diag analog ppsdisc
+TESTS = aprs tracker gps gnss si4063 fox diag analog ppsdisc settings
 
 # firmware sources linked into each test
-SRC_aprs    = aprs.c string.c
-SRC_tracker = tracker.c
+SRC_aprs    = aprs.c string.c settings.c
+SRC_tracker = tracker.c settings.c
 SRC_gps     = gps.c
 SRC_gnss    = GNSS.c gps.c
-SRC_si4063  = si4063.c
-SRC_fox     = fox.c
+SRC_si4063  = si4063.c settings.c
+SRC_fox     = fox.c settings.c
 SRC_diag    = diag.c
 SRC_analog  = analog.c
-SRC_ppsdisc = ppsdisc.c
+SRC_ppsdisc = ppsdisc.c settings.c
+SRC_settings = settings.c settings_store.c
 
 BINS = $(TESTS:%=$(BUILD)/test_%)
 
 all: $(BINS)
 	@failed=""; \
 	for t in $(BINS); do \
-		$$t > $$t.log 2>&1 || failed="$$failed $${t##*/}"; \
+		SETTINGS_LAYOUT=$(BUILD)/settings_layout.txt $$t > $$t.log 2>&1 \
+			|| failed="$$failed $${t##*/}"; \
 		grep -E "^(FAIL|  FAIL)|^[a-z0-9]+: [0-9]+ checks" $$t.log; \
 	done; \
 	if [ -n "$$failed" ]; then \
 		echo "FAILED:$$failed (logs in $(BUILD)/)"; exit 1; \
 	fi; \
-	echo "all host tests passed"
+	echo "all host tests passed"; \
+	python3 ../config/dfmcfg.py --layout | diff - $(BUILD)/settings_layout.txt \
+		|| { echo "FAILED: dfmcfg.py LAYOUT doesn't match settings_t"; exit 1; }; \
+	python3 ../config/test_dfmcfg.py 2>&1 | tail -1; \
+	python3 ../config/test_dfmcfg.py >/dev/null 2>&1 \
+		|| { echo "FAILED: tools/config/test_dfmcfg.py"; exit 1; }; \
+	echo "settings layout and dfmcfg.py checks OK"
 
 .SECONDEXPANSION:
 $(BUILD)/test_%: test_%.c fake_hal.c test.h fake_hal.h fakehal/stm32f1xx_hal.h \

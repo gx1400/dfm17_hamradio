@@ -41,6 +41,7 @@
 #include "fox.h"
 #include "diag.h"
 #include "i2c_ee.h"
+#include "settings.h"
 
 extern volatile GNSS_StateHandle GNSS_Handle;
 
@@ -233,7 +234,7 @@ void hw_survey_run(void) {
 		HAL_Delay(200);
 	}
 	si4060_set_cw(0);
-	si4060_set_tx_power(RF_TX_POWER_DFM);
+	si4060_set_tx_power(cfg.pa_level);
 
 	/* radio low-power states; the MCU must leave the radio clock first */
 	hw_survey.step = 3;

@@ -6,11 +6,14 @@ CORE    = ../../dfm17/Core
 CFLAGS  = -Wall -O1 -iquote stubs -iquote $(CORE)/Inc -include stubs/GNSS.h
 OUT     = out
 
-aprs_harness: aprs_harness.c $(CORE)/Src/aprs.c $(CORE)/Src/string.c stubs/*.h
-	$(CC) $(CFLAGS) -o $@ aprs_harness.c $(CORE)/Src/aprs.c $(CORE)/Src/string.c -lm
+# settings.c: the callsign, SSID, path and symbol come from the settings
+FW_SRC  = $(CORE)/Src/aprs.c $(CORE)/Src/string.c $(CORE)/Src/settings.c
 
-afsk_harness: afsk_harness.c $(CORE)/Src/aprs.c $(CORE)/Src/string.c stubs/*.h
-	$(CC) $(CFLAGS) -o $@ afsk_harness.c $(CORE)/Src/aprs.c $(CORE)/Src/string.c -lm
+aprs_harness: aprs_harness.c $(FW_SRC) stubs/*.h
+	$(CC) $(CFLAGS) -o $@ aprs_harness.c $(FW_SRC) -lm
+
+afsk_harness: afsk_harness.c $(FW_SRC) stubs/*.h
+	$(CC) $(CFLAGS) -o $@ afsk_harness.c $(FW_SRC) -lm
 
 # square wave vs sine AFSK through an FM receiver with and without de-emphasis
 afsk-test: afsk_harness

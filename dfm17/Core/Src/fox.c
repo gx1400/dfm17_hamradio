@@ -35,6 +35,7 @@
 #include "gpio.h"
 #include "si4063.h"
 #include "tim.h"
+#include "settings.h"
 
 static void tone_on(void) {
 	tone_half_ticks = FOX_TONE_HALF_TICKS;
@@ -97,11 +98,12 @@ static const char *morse(char c) {
 /*
  * send_cw
  *
- * keys the tone in Morse at FOX_CW_WPM (PARIS timing: dit = 1200 / WPM ms).
+ * keys the tone in Morse at the settings' CW speed (PARIS timing:
+ * dit = 1200 / WPM ms).
  * the transmitter must already be on.
  */
 static void send_cw(const char *text) {
-	uint32_t dit = 1200 / FOX_CW_WPM;
+	uint32_t dit = 1200 / cfg.cw_wpm;
 
 	for (; *text; text++) {
 		if (*text == ' ') {
@@ -126,41 +128,37 @@ static void send_cw(const char *text) {
 /*
  * fox_transmit
  *
- * one fox transmission: Morse ID, FOX_TONE_MS of hunt tone, then (with
- * FOX_SEND_APRS, every FOX_APRS_EVERY-th time) an APRS position packet. the
- * caller repeats it every FOX_PERIOD_MS.
+ * one fox transmission: Morse ID, the hunt tone (fox_tone_ms), then every
+ * fox_aprs_every-th time (0 = never) an APRS position packet. the caller
+ * repeats it every fox_period_s.
  */
 void fox_transmit(GNSS_StateHandle *GNSS) {
 	tx_start();
 	/* let receiver squelch open before the ID */
 	HAL_Delay(500);
 
-	send_cw(FOX_CALLSIGN);
+	send_cw(settings_callsign());
 	HAL_Delay(500);
 
 	tone_on();
-	HAL_Delay(FOX_TONE_MS);
+	HAL_Delay(cfg.fox_tone_ms);
 	tone_off();
 	HAL_Delay(250);
 	tx_stop();
 
-#ifdef FOX_SEND_APRS
-	/* the first cycle after boot sends one, then every FOX_APRS_EVERY-th */
+	/* the first cycle after boot sends one, then every fox_aprs_every-th */
 	static uint16_t cycle = 0;
-	if (cycle++ % FOX_APRS_EVERY == 0) {
+	if (cfg.fox_aprs_every && cycle++ % cfg.fox_aprs_every == 0) {
 		HAL_Delay(1000);
 		send_aprs(GNSS);
 	}
-#else
-	(void)GNSS;
-#endif
 }
 
 /*
  * fox_test_carrier
  *
  * button short press: FOX_TEST_MS of unmodulated carrier exactly on
- * RF_FREQ_HZ_DFM, a single clean line on an SDR for reading the frequency
+ * the settings frequency, a single clean line on an SDR for reading it
  */
 void fox_test_carrier(void) {
 	si4060_set_cw(1);

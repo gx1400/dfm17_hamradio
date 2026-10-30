@@ -46,6 +46,7 @@
 #include "ppsdisc.h"
 #include "main.h"
 #include "si4063.h"
+#include "settings.h"
 
 #define QUEUE	32
 #define MAX_DEV_CYCLES	(PPS_DISC_NOMINAL / 1000000UL * PPS_DISC_MAX_PPM)
@@ -154,7 +155,7 @@ void pps_disc_update(void) {
 	if (moved >= PPS_DISC_RETUNE_PPB || moved <= -PPS_DISC_RETUNE_PPB
 			|| (want == 0 && pps_disc_applied_ppb != 0)) {
 		pps_disc_applied_ppb = want;
-		si4060_set_frequency(pps_disc_freq(RF_FREQ_HZ_DFM));
+		si4060_set_frequency(pps_disc_freq(cfg.freq_hz));
 	}
 }
 

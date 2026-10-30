@@ -51,6 +51,7 @@
 #include "led.h"
 #include "gpio.h"
 #include "analog.h"
+#include "settings.h"
 
 /*
  * the APRS data buffer
@@ -71,7 +72,7 @@ extern volatile uint8_t ppsLockStatus;
 /*
  * AFSK modulation, all settable over SWD for testing (takes effect at the next
  * packet):
- * 0: square wave on GPIO3, async direct 2FSK at +-RF_DEV_HZ_DFM
+ * 0: square wave on GPIO3, async direct 2FSK at the settings deviation
  * 1: sine AFSK from MODEM_FREQ_OFFSET writes (aprs_afsk_tick), with separate
  *    mark and space deviation. a louder space tone (pre-emphasis) makes up for
  *    the de-emphasis in FM receivers, which leaves 2200 Hz 5.3 dB below 1200 Hz
@@ -123,11 +124,26 @@ void aprs_afsk_tick(void) {
 		aprs_afsk_skipped++;
 }
 
-const unsigned char aprs_header[APRS_HEADER_LEN] = {
-	'A'*2, 'P'*2, 'Z'*2, 'D'*2, 'F'*2, 'M'*2, SSID_RESC + (DST_SSID << 1),
-	'N'*2, 'Z'*2, '0'*2, 'P'*2, ' '*2, ' '*2, SSID_RESC + (SRC_SSID << 1),
-	'W'*2, 'I'*2, 'D'*2, 'E'*2, '1'*2, ' '*2, SSID_RESC + (WIDE_SSID << 1) + HEADER_END,
-	CONTROL_UI, PID_NONE};
+/* AX.25 header: APZDFM destination, then the source callsign/SSID and the
+ * WIDEn-N path from the settings, filled in by aprs_set_station() */
+unsigned char aprs_header[APRS_HEADER_LEN] = {'A' * 2, 'P' * 2, 'Z' * 2, 'D' * 2, 'F' * 2, 'M' * 2,
+		SSID_RESC + (DST_SSID << 1), ' ' * 2, ' ' * 2, ' ' * 2, ' ' * 2, ' ' * 2, ' ' * 2,
+		SSID_RESC, 'W' * 2, 'I' * 2, 'D' * 2, 'E' * 2, '1' * 2, ' ' * 2,
+		SSID_RESC + (1 << 1) + HEADER_END, CONTROL_UI, PID_NONE};
+
+/*
+ * aprs_set_station
+ *
+ * puts the callsign, SSID and path from the settings (cfg) into the AX.25
+ * header; settings_store.c calls it whenever the settings change
+ */
+void aprs_set_station(void) {
+	for (int i = 0; i < 6; i++)
+		aprs_header[7 + i] = (cfg.callsign[i] ? cfg.callsign[i] : ' ') << 1;
+	aprs_header[13] = SSID_RESC + ((cfg.ssid & 0x0F) << 1);
+	aprs_header[18] = ('0' + (cfg.path >> 4)) << 1;
+	aprs_header[20] = SSID_RESC + ((cfg.path & 0x0F) << 1) + HEADER_END;
+}
 
 enum aprs_states {SM_INIT, SFLAG, AX25_HEADER, AX25_DATA, AX25_FCS1, AX25_FCS2, EFLAG};
 volatile uint16_t aprs_state = SM_INIT;
@@ -265,6 +281,8 @@ uint8_t aprs_prepare_fix(GNSS_StateHandle *GNSS, uint8_t fix_valid, uint8_t back
 
 	__builtin_memcpy(aprs_buf, aprs_pos_template, APRS_POS_LEN);
 	aprs_len = APRS_POS_LEN;
+	aprs_buf[APRS_SYMTAB_POS] = cfg.symbol_table;
+	aprs_buf[APRS_SYMBOL_POS] = cfg.symbol_code;
 
 	/* compressed altitude is log1.002(feet), which cannot go below 1 ft */
 	if (alt_ft < 1.0f)
@@ -560,7 +578,7 @@ void aprs_tx_stop(void) {
 	si4060_stop_tx();
 	stopAprsTickTimer();
 	if (tx_sine)
-		si4060_set_deviation(RF_DEV_HZ_DFM);
+		si4060_set_deviation(cfg.dev_hz);
 	ledOffGreen();
 }
 

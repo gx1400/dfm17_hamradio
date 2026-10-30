@@ -6,6 +6,7 @@
 #include "fake_hal.h"
 #include "si4063.h"
 #include "spi.h"
+#include "fake_settings.h"
 
 /* ---- fake SPI: logs transactions, decodes SET_PROPERTY ---------------------- */
 
@@ -104,7 +105,7 @@ static void frequency_across_70cm(void) {
 static void frequency_default_channel(void) {
 	int outdiv;
 	reset();
-	si4060_set_frequency(RF_FREQ_HZ_DFM);
+	si4060_set_frequency(cfg.freq_hz);
 	CHECK_EQ(props[PROP_MODEM][MODEM_CLKGEN_BAND], SY_SEL_1 | FVCO_DIV_8);
 	CHECK_NEAR(synthesized_hz(&outdiv), 446175000.0, 12.3);
 }
@@ -162,9 +163,9 @@ static void dfm17_config(void) {
 	reset();
 	si4060_config_dfm17();
 	CHECK_EQ(props[PROP_MODEM][MODEM_MOD_TYPE] & 0x07, MOD_TYPE_2FSK);
-	CHECK_NEAR(synthesized_hz(&outdiv), RF_FREQ_HZ_DFM, 12.3);
+	CHECK_NEAR(synthesized_hz(&outdiv), cfg.freq_hz, 12.3);
 	CHECK_EQ(prop24(PROP_MODEM, MODEM_FREQ_DEV), 212);
-	CHECK_EQ(props[PROP_PA][PA_PWR_LVL], RF_TX_POWER_DFM);
+	CHECK_EQ(props[PROP_PA][PA_PWR_LVL], cfg.pa_level);
 	CHECK_EQ(props[PROP_MODEM][MODEM_FREQ_OFFSET] << 8 | props[PROP_MODEM][MODEM_FREQ_OFFSET + 1], 0);
 }
 
@@ -191,6 +192,41 @@ static void start_and_stop_tx(void) {
 		CHECK_EQ(txn[i][1], STATE_READY);
 }
 
+/* nothing goes on the air without a callsign set up and valid settings */
+static void tx_gate(void) {
+	uint32_t refused = si4060_tx_refused;
+
+	/* the built-in defaults: N0CALL */
+	reset();
+	settings_defaults(&cfg);
+	si4060_start_tx(0);
+	CHECK(find_cmd(CMD_START_TX) < 0);
+	CHECK_EQ(si4060_tx_refused, refused + 1);
+
+	/* live settings changed without a new CRC (e.g. a stray SWD write) */
+	reset();
+	provision();
+	cfg.freq_hz = 446100000UL;
+	si4060_start_tx(0);
+	CHECK(find_cmd(CMD_START_TX) < 0);
+
+	/* sealed, but out of band */
+	reset();
+	provision();
+	cfg.freq_hz = 460000000UL;
+	settings_seal(&cfg);
+	si4060_start_tx(0);
+	CHECK(find_cmd(CMD_START_TX) < 0);
+	CHECK_EQ(si4060_tx_refused, refused + 3);
+
+	/* set up properly: transmits */
+	reset();
+	provision();
+	si4060_start_tx(0);
+	CHECK(find_cmd(CMD_START_TX) >= 0);
+	CHECK_EQ(si4060_tx_refused, refused + 3);
+}
+
 static void cts_timeout(void) {
 	reset();
 	cts_byte = 0x00;			/* radio never ready */
@@ -215,15 +251,12 @@ static void fast_spi_for_afsk(void) {
 	CHECK(SPI1->CR1 & SPI_CR1_SPE);
 }
 
-TEST_MAIN("si4063",
-	TEST(frequency_across_70cm),
-	TEST(frequency_default_channel),
-	TEST(band_selection),
-	TEST(deviation_scales_with_band),
-	TEST(offset_units),
-	TEST(modulation_modes),
-	TEST(dfm17_config),
-	TEST(tx_power),
-	TEST(start_and_stop_tx),
-	TEST(cts_timeout),
-	TEST(fast_spi_for_afsk))
+/* every test runs on a board set up as NZ0P (fake_settings.h) */
+void test_setup(void) {
+	provision();
+}
+
+TEST_MAIN("si4063", TEST(frequency_across_70cm), TEST(frequency_default_channel),
+		TEST(band_selection), TEST(deviation_scales_with_band), TEST(offset_units),
+		TEST(modulation_modes), TEST(dfm17_config), TEST(tx_power), TEST(start_and_stop_tx),
+		TEST(tx_gate), TEST(cts_timeout), TEST(fast_spi_for_afsk))

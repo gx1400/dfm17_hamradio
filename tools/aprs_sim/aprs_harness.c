@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include "aprs.h"
+#include "settings.h"
 
 /* globals that live in main.c / gps.c on the target */
 volatile uint16_t aprs_bit;
@@ -56,9 +57,20 @@ void calculate_fcs(void);
 uint8_t get_next_byte(void);
 uint8_t get_next_bit(void);
 
+/* the station the firmware would use on a board set up as NZ0P-12 */
+static void station(void) {
+	static const char call[6] = {'N', 'Z', '0', 'P', 0, 0};
+	settings_defaults(&cfg);
+	for (int i = 0; i < 6; i++)
+		cfg.callsign[i] = call[i];
+	settings_seal(&cfg);
+	aprs_set_station();
+}
+
 int main(int argc, char **argv) {
 	GNSS_StateHandle gnss = {0};
 
+	station();
 	/* "fix": simulate a 3D GPS fix; otherwise there is no fix and aprs.c
 	 * sends a status packet (or its APRS_TEST_* position, if defined) */
 	if (argc > 1 && argv[1][0] == 'f') {

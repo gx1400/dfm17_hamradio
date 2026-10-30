@@ -30,15 +30,13 @@
 
 #include "GNSS.h"
 
-/* one APRS packet per period, timed from one GPS wake-up to the next */
-#define TRACKER_PERIOD_MS		300000
-
-/* how long to wait for a fix before sending without a position */
-#define TRACKER_FIX_TIMEOUT_MS	120000
-
-/* how long a 3D fix must hold before it is sent, for a better position
- * after a hot start (NAV-PVT is polled every 5 s) */
-#define TRACKER_SETTLE_MS		10000
+/* timing from the settings (cfg, settings.h):
+ * - tracker_period_s: one APRS packet per period, from one GPS wake-up to the
+ *   next (default 300 s);
+ * - tracker_fix_timeout_s: how long to wait for a fix before sending without
+ *   a position (120 s);
+ * - tracker_settle_s: how long a 3D fix must hold before it is sent, for a
+ *   better position after a hot start; NAV-PVT is polled every 5 s (10 s) */
 
 void tracker_start(void);
 void tracker_poll(GNSS_StateHandle *GNSS);

@@ -10,6 +10,7 @@
 #include "tracker.h"
 #include "aprs.h"
 #include "gps.h"
+#include "fake_settings.h"
 
 /* ---- fakes ------------------------------------------------------------------ */
 
@@ -104,7 +105,7 @@ static int pps_but_2d(uint32_t t) { (void)t; return Fix2D; }
 /* 3D at every other 5 s poll: never holds for 10 s */
 static int flaky(uint32_t t) { return (t / 5000) % 2 ? Fix3D : NoFix; }
 /* time (PPS) but no position until 150 s of uninterrupted signal, longer
- * than TRACKER_FIX_TIMEOUT_MS: a cold start, or reacquiring with fresh
+ * than tracker_fix_timeout_s: a cold start, or reacquiring with fresh
  * ephemeris in a parked car */
 static int fix_after_150s(uint32_t t) { return t >= 150000 ? Fix3D : NoFix; }
 
@@ -114,9 +115,9 @@ static void quick_fix_sends_position_and_sleeps(void) {
 	reset(fix_after_5s);
 	run(30000);
 	CHECK_EQ(nsent, 1);
-	/* fix first seen at the 5 s poll, held TRACKER_SETTLE_MS */
-	CHECK(sent[0].at - 1000 >= 5000 + TRACKER_SETTLE_MS);
-	CHECK(sent[0].at - 1000 < 5000 + TRACKER_SETTLE_MS + 5000);
+	/* fix first seen at the 5 s poll, held tracker_settle_s */
+	CHECK(sent[0].at - 1000 >= 5000 + cfg.tracker_settle_s * 1000UL);
+	CHECK(sent[0].at - 1000 < 5000 + cfg.tracker_settle_s * 1000UL + 5000);
 	CHECK(POSITION(0));
 	CHECK_EQ(sent[0].from_last_fix, 0);
 	CHECK_EQ(sleeps, 1);
@@ -124,19 +125,19 @@ static void quick_fix_sends_position_and_sleeps(void) {
 
 static void cycle_repeats_every_period(void) {
 	reset(fix_after_5s);
-	run(3 * TRACKER_PERIOD_MS + 30000);
+	run(3 * cfg.tracker_period_s * 1000UL + 30000);
 	CHECK_EQ(nsent, 4);
 	CHECK_EQ(wakes, 3);
 	CHECK_EQ(sleeps, 4);
 	for (int i = 1; i < nsent; i++)
-		CHECK_EQ(sent[i].at - sent[i - 1].at, TRACKER_PERIOD_MS);
+		CHECK_EQ(sent[i].at - sent[i - 1].at, cfg.tracker_period_s * 1000UL);
 }
 
 static void no_fix_times_out_and_keeps_gps_on(void) {
 	reset(never);
-	run(TRACKER_PERIOD_MS);
+	run(cfg.tracker_period_s * 1000UL);
 	CHECK_EQ(nsent, 1);
-	CHECK_EQ(sent[0].at - 1000, TRACKER_FIX_TIMEOUT_MS);
+	CHECK_EQ(sent[0].at - 1000, cfg.tracker_fix_timeout_s * 1000UL);
 	CHECK(!POSITION(0));
 	/* no fix yet since power-up: the GPS stays on for its cold start */
 	CHECK_EQ(sleeps, 0);
@@ -144,9 +145,9 @@ static void no_fix_times_out_and_keeps_gps_on(void) {
 
 static void two_d_only_is_sent_at_timeout(void) {
 	reset(pps_but_2d);
-	run(TRACKER_PERIOD_MS);
+	run(cfg.tracker_period_s * 1000UL);
 	CHECK_EQ(nsent, 1);
-	CHECK_EQ(sent[0].at - 1000, TRACKER_FIX_TIMEOUT_MS);
+	CHECK_EQ(sent[0].at - 1000, cfg.tracker_fix_timeout_s * 1000UL);
 	/* no 3D fix to fall back on; aprs_prepare_buffer sends the 2D fix */
 	CHECK_EQ(sent[0].from_last_fix, 0);
 	CHECK(POSITION(0));
@@ -154,9 +155,9 @@ static void two_d_only_is_sent_at_timeout(void) {
 
 static void flaky_fix_sends_last_3d_fix(void) {
 	reset(flaky);
-	run(TRACKER_PERIOD_MS);
+	run(cfg.tracker_period_s * 1000UL);
 	CHECK_EQ(nsent, 1);
-	CHECK_EQ(sent[0].at - 1000, TRACKER_FIX_TIMEOUT_MS);
+	CHECK_EQ(sent[0].at - 1000, cfg.tracker_fix_timeout_s * 1000UL);
 	CHECK_EQ(sent[0].from_last_fix, 1);
 	CHECK(POSITION(0));
 	CHECK_EQ(sleeps, 1);
@@ -165,10 +166,10 @@ static void flaky_fix_sends_last_3d_fix(void) {
 static void last_fix_does_not_carry_over(void) {
 	/* cycle 1 gets a fix; cycle 2 none: it must not resend cycle 1's fix */
 	reset(fix_after_5s);
-	run(TRACKER_PERIOD_MS - 1000);
+	run(cfg.tracker_period_s * 1000UL - 1000);
 	CHECK_EQ(nsent, 1);
 	script = never;
-	run(TRACKER_PERIOD_MS);
+	run(cfg.tracker_period_s * 1000UL);
 	CHECK_EQ(nsent, 2);
 	CHECK_EQ(sent[1].from_last_fix, 0);
 	CHECK(!POSITION(1));
@@ -179,10 +180,10 @@ static void last_fix_does_not_carry_over(void) {
 static void stale_fix_after_wake_is_ignored(void) {
 	/* the handle still says 3D from before sleep; gpsWake must clear it */
 	reset(fix_after_5s);
-	run(TRACKER_PERIOD_MS - 1000);
+	run(cfg.tracker_period_s * 1000UL - 1000);
 	CHECK_EQ(gnss.fixType, Fix3D);		/* stale while asleep */
 	script = never;
-	run(TRACKER_FIX_TIMEOUT_MS + 2000);
+	run(cfg.tracker_fix_timeout_s * 1000UL + 2000);
 	CHECK_EQ(nsent, 2);
 	CHECK(!POSITION(1));
 }
@@ -190,7 +191,7 @@ static void stale_fix_after_wake_is_ignored(void) {
 static void late_first_fix(void) {
 	/* cold start longer than the timeout: status first, position next cycle */
 	reset(fix_after_150s);
-	run(2 * TRACKER_PERIOD_MS);
+	run(2 * cfg.tracker_period_s * 1000UL);
 	CHECK_EQ(nsent, 2);
 	CHECK(!POSITION(0));
 	CHECK(POSITION(1));
@@ -201,23 +202,28 @@ static void reacquires_after_losing_fix(void) {
 	/* 2026-10-29: after a fix on the drive, 31 cycles of 2 min windows in a
 	 * parked car never got the fix back; the GPS must stay on until it does */
 	reset(fix_after_5s);
-	run(TRACKER_PERIOD_MS - 1000);
+	run(cfg.tracker_period_s * 1000UL - 1000);
 	CHECK_EQ(nsent, 1);
 	CHECK(POSITION(0));
 	CHECK_EQ(sleeps, 1);
 
 	script = fix_after_150s;
-	run(TRACKER_PERIOD_MS);			/* cycle 2: times out */
+	run(cfg.tracker_period_s * 1000UL); /* cycle 2: times out */
 	CHECK_EQ(nsent, 2);
 	CHECK(!POSITION(1));
 	CHECK_EQ(sleeps, 1);			/* stayed on */
-	run(TRACKER_PERIOD_MS);			/* cycle 3: the fix is back */
+	run(cfg.tracker_period_s * 1000UL); /* cycle 3: the fix is back */
 	CHECK_EQ(nsent, 3);
 	CHECK(POSITION(2));
 	/* sent as soon as the fix has settled, not at the timeout */
-	CHECK(sent[2].at - sent[1].at < TRACKER_PERIOD_MS - TRACKER_FIX_TIMEOUT_MS
-			+ TRACKER_SETTLE_MS + 10000);
+	CHECK(sent[2].at - sent[1].at < cfg.tracker_period_s * 1000UL
+					- cfg.tracker_fix_timeout_s * 1000UL + cfg.tracker_settle_s * 1000UL + 10000);
 	CHECK_EQ(sleeps, 2);
+}
+
+/* every test runs on a board set up as NZ0P (fake_settings.h) */
+void test_setup(void) {
+	provision();
 }
 
 TEST_MAIN("tracker",

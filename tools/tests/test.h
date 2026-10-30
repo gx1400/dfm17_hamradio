@@ -60,6 +60,9 @@ static int test_checks;
 
 typedef struct { const char *name; void (*fn)(void); } test_case;
 
+/* optional: a test file can define test_setup(), run before every test */
+void test_setup(void) __attribute__((weak));
+
 #define TEST(fn) { #fn, fn }
 
 static inline int test_run(const char *suite, const test_case *tests, size_t n) {
@@ -68,6 +71,8 @@ static inline int test_run(const char *suite, const test_case *tests, size_t n) 
 	for (size_t i = 0; i < n; i++) {
 		int before = test_failures;
 		printf("---- %s/%s\n", suite, tests[i].name);
+		if (test_setup)
+			test_setup();
 		tests[i].fn();
 		printf("%s %s/%s\n", test_failures == before ? "ok  " : "FAIL",
 				suite, tests[i].name);

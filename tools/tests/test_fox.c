@@ -7,6 +7,7 @@
 #include "fox.h"
 #include "aprs.h"
 #include "tim.h"
+#include "fake_settings.h"
 
 /* ---- fakes ------------------------------------------------------------------ */
 
@@ -57,7 +58,7 @@ static void decode_morse(char *out, size_t max) {
 		"0-----", "1.----", "2..---", "3...--", "4....-", "5.....", "6-....",
 		"7--...", "8---..", "9----.",
 	};
-	const uint32_t dit = 1200 / FOX_CW_WPM;
+	const uint32_t dit = 1200 / cfg.cw_wpm;
 	char code[8];
 	size_t nc = 0, n = 0;
 
@@ -87,12 +88,12 @@ static void morse_id_decodes(void) {
 	reset();
 	fox_transmit(&g);
 	decode_morse(text, sizeof(text));
-	CHECK_STR(text, FOX_CALLSIGN);
+	CHECK_STR(text, "NZ0P");
 }
 
 static void morse_timing(void) {
 	GNSS_StateHandle g = {0};
-	const uint32_t dit = 1200 / FOX_CW_WPM;		/* 80 ms at 15 WPM */
+	const uint32_t dit = 1200 / cfg.cw_wpm; /* 80 ms at 15 WPM */
 	reset();
 	fox_transmit(&g);
 	/* every element is 1 or 3 dits, every gap 1 dit (within a letter), 3
@@ -114,7 +115,7 @@ static void hunt_tone_length(void) {
 	for (int i = 0; i < nruns; i++)
 		if (runs[i].tone && runs[i].ms > longest)
 			longest = runs[i].ms;
-	CHECK_EQ(longest, FOX_TONE_MS);
+	CHECK_EQ(longest, cfg.fox_tone_ms);
 	CHECK_EQ(tone_half_ticks, 0);	/* tone off afterwards */
 	CHECK_EQ(tx_on, 0);
 }
@@ -123,15 +124,15 @@ static void cycle_fits_period(void) {
 	GNSS_StateHandle g = {0};
 	reset();
 	fox_transmit(&g);
-	CHECK(fake_tick < FOX_PERIOD_MS);
+	CHECK(fake_tick < cfg.fox_period_s * 1000UL);
 }
 
 static void aprs_every_nth_cycle(void) {
 	/* the first cycle after boot (this test runs first among those that count),
-	 * then every FOX_APRS_EVERY-th */
+	 * then every fox_aprs_every-th */
 	GNSS_StateHandle g = {0};
 	int total = 0;
-	for (int i = 0; i < 2 * FOX_APRS_EVERY; i++) {
+	for (int i = 0; i < 2 * cfg.fox_aprs_every; i++) {
 		reset();
 		fox_transmit(&g);
 		total += aprs_sent;
@@ -158,6 +159,11 @@ static void test_tone_then_aprs(void) {
 		if (runs[i].tone && runs[i].ms == FOX_TEST_MS)
 			seen = 1;
 	CHECK(seen);
+}
+
+/* every test runs on a board set up as NZ0P (fake_settings.h) */
+void test_setup(void) {
+	provision();
 }
 
 TEST_MAIN("fox",

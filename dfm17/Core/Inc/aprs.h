@@ -51,14 +51,16 @@ void aprs_tx_start(void);
 uint8_t aprs_tx_poll(void);
 void aprs_tx_stop(void);
 void calculate_fcs(void);
+void aprs_set_station(void);
 
 
-/* APRS destination SSID is 0 */
+/* APRS destination SSID is 0. The source callsign and SSID and the path come
+ * from the settings (aprs_set_station) */
 #define DST_SSID	0
-/* APRS source SSID */
-#define SRC_SSID	12
-/* WIDE1-x SSID */
-#define WIDE_SSID	1
+
+/* positions of the symbol table and code in a compressed position packet */
+#define APRS_SYMTAB_POS 8
+#define APRS_SYMBOL_POS 17
 
 /* data from matlab script */
 #define APRS_MARK		0

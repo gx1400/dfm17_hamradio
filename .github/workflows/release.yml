@@ -58,9 +58,10 @@ jobs:
           done
           (cd dist && sha256sum -- * > SHA256SUMS)
           cat > notes.md <<'NOTES'
-          > **Callsign:** until the settings move to the EEPROM (#18), the `tracker` and `fox`
-          > builds transmit as **NZ0P**. Don't flash them on your own board as they are:
-          > build from source with your callsign instead.
+          > **Callsign:** these builds start with the callsign N0CALL and don't transmit
+          > until the board is set up with yours:
+          > `tools/config/dfmcfg.py set callsign=YOURCALL ssid=NN --save --elf dfm17-<tag>-tracker.elf`
+          > (docs/settings.md).
           >
           > Back up the board's EEPROM first (`tools/hw_survey/eeprom_backup.sh`), and see
           > the README, "Releases and flashing".

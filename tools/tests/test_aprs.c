@@ -6,6 +6,7 @@
 #include "fake_hal.h"
 #include "aprs.h"
 #include "analog.h"
+#include "fake_settings.h"
 
 /* ---- fakes for what aprs.c uses ------------------------------------------ */
 
@@ -33,7 +34,7 @@ void ledOffGreen(void) {}
 /* aprs.c internals without a prototype in aprs.h */
 extern char aprs_buf[];
 extern uint8_t aprs_len;
-extern const unsigned char aprs_header[];
+extern unsigned char aprs_header[];
 extern volatile uint16_t fcs;
 extern volatile uint8_t finished;
 void aprs_init(void);
@@ -275,10 +276,36 @@ static void header_addresses(void) {
 	for (int i = 0; i < 6; i++)
 		call[i] = aprs_header[7 + i] >> 1;
 	CHECK_STR(call, "NZ0P  ");
-	CHECK_EQ((aprs_header[13] >> 1) & 0x0F, SRC_SSID);
+	CHECK_EQ((aprs_header[13] >> 1) & 0x0F, 12);
 	/* the last address (WIDE1-1) ends the address field */
 	CHECK_EQ(aprs_header[20] & 1, 1);
 	CHECK_EQ(aprs_header[13] & 1, 0);
+}
+
+/* callsign, SSID, path and symbol all come from the settings */
+static void station_from_settings(void) {
+	GNSS_StateHandle g = fix_3d();
+	char call[7] = {0};
+
+	provision_as(&cfg, "KE0ABC");
+	cfg.ssid = 9;
+	cfg.path = 0x22;
+	cfg.symbol_table = '\\';
+	cfg.symbol_code = '>';
+	settings_seal(&cfg);
+	aprs_set_station();
+	for (int i = 0; i < 6; i++)
+		call[i] = aprs_header[7 + i] >> 1;
+	CHECK_STR(call, "KE0ABC");
+	CHECK_EQ((aprs_header[13] >> 1) & 0x0F, 9);
+	CHECK_EQ(aprs_header[18] >> 1, '2'); /* WIDE2-2 */
+	CHECK_EQ((aprs_header[20] >> 1) & 0x0F, 2);
+	CHECK_EQ(aprs_header[20] & 1, 1); /* still ends the address field */
+
+	ppsLockStatus = 1;
+	aprs_prepare_buffer(&g, 0);
+	CHECK_EQ(aprs_buf[APRS_SYMTAB_POS], '\\');
+	CHECK_EQ(aprs_buf[APRS_SYMBOL_POS], '>');
 }
 
 /* the full line coding: NRZI, flags, bit stuffing, FCS low byte first */
@@ -303,19 +330,15 @@ static void line_bits_decode_to_frame(int position) {
 static void line_bits_position(void) { line_bits_decode_to_frame(1); }
 static void line_bits_status(void) { line_bits_decode_to_frame(0); }
 
-TEST_MAIN("aprs",
-	TEST(crc_reference_vector),
-	TEST(base91_telemetry_values),
-	TEST(position_packet_fields),
-	TEST(usb_channel_zero_on_battery),
-	TEST(telemetry_sequence),
-	TEST(low_altitude_clamped),
-	TEST(no_pps_sends_status),
-	TEST(no_fix_status_shows_gps_state),
-	TEST(status_negative_temperature),
-	TEST(fix_2d_is_a_position),
-	TEST(prepare_fix_trusts_caller),
-	TEST(fcs_matches_frame),
-	TEST(header_addresses),
-	TEST(line_bits_position),
-	TEST(line_bits_status))
+/* every test runs on a board set up as NZ0P (fake_settings.h) */
+void test_setup(void) {
+	provision();
+	aprs_set_station();
+}
+
+TEST_MAIN("aprs", TEST(crc_reference_vector), TEST(base91_telemetry_values),
+		TEST(position_packet_fields), TEST(usb_channel_zero_on_battery), TEST(telemetry_sequence),
+		TEST(low_altitude_clamped), TEST(no_pps_sends_status), TEST(no_fix_status_shows_gps_state),
+		TEST(status_negative_temperature), TEST(fix_2d_is_a_position),
+		TEST(prepare_fix_trusts_caller), TEST(fcs_matches_frame), TEST(header_addresses),
+		TEST(station_from_settings), TEST(line_bits_position), TEST(line_bits_status))

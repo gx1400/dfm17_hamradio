@@ -23,7 +23,7 @@
   *
   ******************************************************************************
   * Each cycle wakes the GPS, waits until a 3D fix has held for
-  * TRACKER_SETTLE_MS (or TRACKER_FIX_TIMEOUT_MS has passed), sends one APRS
+  * tracker_settle_s (or tracker_fix_timeout_s has passed), sends one APRS
   * packet and puts the GPS back into software backup until the next cycle. With
   * a poor sky view (a parked car) the fix can come and go; at the timeout the
   * last 3D fix seen during the cycle is sent, if there was one.
@@ -35,7 +35,7 @@
   * cycle without one it stays on until it has a fix again: getting a fix back
   * means downloading fresh ephemeris, about 30 s of uninterrupted signal per
   * satellite, which a weak signal (a parked car) can't deliver within
-  * TRACKER_FIX_TIMEOUT_MS windows cut short by backup mode. Seen on
+  * tracker_fix_timeout_s windows cut short by backup mode. Seen on
   * 2026-10-29: 31 cycles without a fix in one parking spot, a fix within
   * 5 min of a restart that kept the GPS on, same spot. The same applies to
   * the cold start after power-up.
@@ -47,6 +47,7 @@
 #include "aprs.h"
 #include "diag.h"
 #include "gps.h"
+#include "settings.h"
 #include <stdio.h>
 
 enum tracker_state {TRK_ACQUIRE, TRK_WAIT};
@@ -116,8 +117,8 @@ void tracker_poll(GNSS_StateHandle *GNSS) {
 		} else {
 			fixing = 0;
 		}
-		if ((fixing && now - fix_start >= TRACKER_SETTLE_MS)
-				|| now - cycle_start >= TRACKER_FIX_TIMEOUT_MS) {
+		if ((fixing && now - fix_start >= cfg.tracker_settle_s * 1000UL)
+				|| now - cycle_start >= cfg.tracker_fix_timeout_s * 1000UL) {
 			uint8_t position = send_aprs(GNSS);
 			printf("tracker: sent %s\r\n", position ? "position" : "status, no fix");
 			/* no fix: keep the GPS on so it can finish reacquiring */
@@ -127,7 +128,7 @@ void tracker_poll(GNSS_StateHandle *GNSS) {
 		}
 		break;
 	case TRK_WAIT:
-		if (now - cycle_start >= TRACKER_PERIOD_MS) {
+		if (now - cycle_start >= cfg.tracker_period_s * 1000UL) {
 			gpsWake();
 			cycle_start = now;
 			fixing = 0;

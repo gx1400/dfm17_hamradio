@@ -4,14 +4,19 @@
 
 This repo is a development implementation of code to run on a Graw DFM-17 radiosonde
 
-Current firmware (`TRACKER` in main.c): an APRS tracker on 446.175 MHz. Every
-5 min it wakes the GPS, waits for a 3D fix that has held for 10 s (up to 2 min),
-sends one packet as NZ0P-12 and puts the GPS back into backup. The packet is a
-position with supply voltage, current and temperature telemetry, or a status
-packet (`>no GPS fix 4668mV 54mA 31C`) without a fix. The GPS stays on until
-its first fix. Without `TRACKER` it is a 70 cm fox (Morse ID, hunt tone every
-30 s, APRS every 5 min). Both have button and LED diagnostics. Tested on
-hardware with a HackRF and Dire Wolf.
+Current firmware: an APRS tracker on 446.175 MHz by default. Every 5 min it
+wakes the GPS, waits for a 3D fix that has held for 10 s (up to 2 min), sends
+one packet and puts the GPS back into backup. The packet is a position with
+supply voltage, current and temperature telemetry, or a status packet
+(`>nofix 2D 4sv 4672mV 63mA 30C USB`) without a fix. The GPS stays on until it
+has a fix. In fox mode it is a 70 cm fox (Morse ID, hunt tone every 30 s, APRS
+every 5 min). Both have button and LED diagnostics. Tested on hardware with a
+HackRF and Dire Wolf.
+
+The callsign, frequency, mode and timing are **settings in the board's EEPROM**
+([docs/settings.md](docs/settings.md)). A board that hasn't been set up has
+the callsign N0CALL and **doesn't transmit** until you give it yours:
+`tools/config/dfmcfg.py set callsign=YOURCALL ssid=12 --save`.
 
 ## Back up your EEPROM first
 
@@ -129,15 +134,19 @@ To flash a release build:
    file name. A running board may need `mode=HOTPLUG` and a retry or two.
 4. Confirm it: `tools/hw_survey/read_version.sh`.
 
-**Callsign:** until the settings move to the EEPROM (#18), the `tracker` and
-`fox` builds transmit as NZ0P. Build from source with your own callsign
-instead of flashing those release builds on your board.
+**Callsign:** release builds start with the callsign N0CALL and don't
+transmit until a board is set up: `tools/config/dfmcfg.py set
+callsign=YOURCALL ssid=NN --save --elf dfm17-<tag>-tracker.elf`
+([docs/settings.md](docs/settings.md)).
 
 ## Documentation
 
 - [docs/hardware-investigation.md](docs/hardware-investigation.md): analog inputs
   (supply voltage and current), NFC EEPROM contents and settings proposal,
   low-power measurements and battery-life estimates
+- [docs/settings.md](docs/settings.md): station settings in the EEPROM
+  (callsign, frequency, mode, timing), setting up a board with `dfmcfg.py`,
+  and the protections against bad values
 - [docs/tests/nfc-sector-lock.md](docs/tests/nfc-sector-lock.md): test procedure
   for opening the NFC EEPROM's sector 3 (issue #8), with board 1 results
 - [docs/rf-measurements.md](docs/rf-measurements.md): frequency accuracy across
@@ -157,9 +166,11 @@ instead of flashing those release builds on your board.
   while paused). Yellow: flashes with GPS PPS, solid with a 3D fix. Red: blink
   code, 1 = radio not found, 2 = not running from the radio clock,
   3 = GPS not answering
-- Settings are `#define`s for now: mode (`TRACKER`, or build with `-DFOX`) in `main.c`, tracker
-  timing in `tracker.h`, frequency and power in `si4063.h`, fox timing, callsign, `FOX_SEND_APRS` / `FOX_APRS_EVERY` / `FOX_START_PAUSED` in
-  `fox.h`
+- Settings (callsign, SSID, symbol, path, mode, frequency, power, timing) are
+  in the EEPROM and set with `tools/config/dfmcfg.py`: see
+  [docs/settings.md](docs/settings.md). `-DFOX` only changes the default mode;
+  `FOX_START_PAUSED` in `fox.h` is still a build option, as is the
+  `start_paused` setting.
 
 ## TODO
 

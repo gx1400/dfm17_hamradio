@@ -5,6 +5,7 @@
 #include "fake_hal.h"
 #include "ppsdisc.h"
 #include "si4063.h"
+#include "fake_settings.h"
 
 /* ---- fakes ------------------------------------------------------------------ */
 
@@ -57,9 +58,9 @@ static void corrects_slow_tcxo(void) {
 	CHECK_EQ(pps_disc_applied_ppb, pps_disc_ppb);
 	CHECK_EQ(retunes, 1);
 	/* slow TCXO: program higher, by f * 1.4167e-6 = 632 Hz */
-	CHECK_NEAR((double)tuned_hz - RF_FREQ_HZ_DFM, 632.1, 1);
+	CHECK_NEAR((double)tuned_hz - cfg.freq_hz, 632.1, 1);
 	/* the carrier then lands on the requested frequency */
-	CHECK_NEAR(tuned_hz * (1.0 + pps_disc_ppb * 1e-9), RF_FREQ_HZ_DFM, 1);
+	CHECK_NEAR(tuned_hz * (1.0 + pps_disc_ppb * 1e-9), cfg.freq_hz, 1);
 }
 
 static void corrects_fast_tcxo(void) {
@@ -67,7 +68,7 @@ static void corrects_fast_tcxo(void) {
 	samples(PPS_DISC_WINDOW, PPS_DISC_NOMINAL + 48);	/* +2 ppm */
 	pps_disc_update();
 	CHECK_NEAR(pps_disc_ppb, 2000, 1);
-	CHECK_NEAR((double)tuned_hz - RF_FREQ_HZ_DFM, -892.35, 1);
+	CHECK_NEAR((double)tuned_hz - cfg.freq_hz, -892.35, 1);
 }
 
 static void sub_cycle_resolution(void) {
@@ -144,11 +145,11 @@ static void disable_and_enable(void) {
 	pps_disc_update();
 	pps_disc_enable = 0;
 	pps_disc_update();
-	CHECK_EQ(tuned_hz, RF_FREQ_HZ_DFM);		/* back on the nominal setting */
+	CHECK_EQ(tuned_hz, cfg.freq_hz); /* back on the nominal setting */
 	CHECK_EQ(pps_disc_applied_ppb, 0);
 	pps_disc_enable = 1;
 	pps_disc_update();
-	CHECK_NEAR((double)tuned_hz - RF_FREQ_HZ_DFM, 632.1, 1);
+	CHECK_NEAR((double)tuned_hz - cfg.freq_hz, 632.1, 1);
 }
 
 static void queue_overflow(void) {
@@ -164,7 +165,12 @@ static void queue_overflow(void) {
 
 static void freq_without_correction(void) {
 	reset();
-	CHECK_EQ(pps_disc_freq(RF_FREQ_HZ_DFM), RF_FREQ_HZ_DFM);
+	CHECK_EQ(pps_disc_freq(cfg.freq_hz), cfg.freq_hz);
+}
+
+/* every test runs on a board set up as NZ0P (fake_settings.h) */
+void test_setup(void) {
+	provision();
 }
 
 TEST_MAIN("ppsdisc",
