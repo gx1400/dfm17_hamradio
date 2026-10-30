@@ -94,6 +94,7 @@
 #include "analog.h"
 #include "tracker.h"
 #include "ppsdisc.h"
+#include "nfc_tool.h"
 
 /* USER CODE END Includes */
 
@@ -108,6 +109,8 @@
  * fox then starts paused. results are read over SWD, see
  * docs/hardware-investigation.md */
 //#define HW_SURVEY
+/* build with -DHW_NFC (make variant nfc_tool) for the NFC EEPROM tool
+ * (nfc_tool.c): sector security commands over SWD, fox/tracker paused */
 /* uncomment to replace the fox with a carrier controlled over SWD (rf_test.c),
  * for frequency sweeps with tools/rf_sweep */
 //#define RF_TEST_SWD
@@ -199,7 +202,10 @@ int main(void)
 #ifdef HW_SURVEY
   hw_survey_run();
 #endif
-#if defined(HW_SURVEY) || defined(FOX_START_PAUSED)
+#ifdef HW_NFC
+  nfc_tool_start();
+#endif
+#if defined(HW_SURVEY) || defined(HW_NFC) || defined(FOX_START_PAUSED)
   // a long button press resumes the fox
   foxPaused = 1;
   diag_set_paused(1);
@@ -255,6 +261,9 @@ int main(void)
 		  break;
 	  }
 
+#ifdef HW_NFC
+	  nfc_tool_poll();
+#endif
 #ifdef RF_TEST_SWD
 	  rf_test_poll();
 	  continue;

@@ -30,11 +30,12 @@ SRCS    = $(wildcard $(FW)/Core/Src/*.c) $(wildcard $(FW)/Core/Startup/*.s) \
 	$(wildcard $(FW)/Drivers/STM32F1xx_HAL_Driver/Src/*.c)
 
 # build variants: the selectable modes in main.c
-VARIANTS = tracker fox hw_survey rf_test
+VARIANTS = tracker fox hw_survey rf_test nfc_tool
 DEFS_tracker   =
 DEFS_fox       = -DFOX
 DEFS_hw_survey = -DHW_SURVEY
 DEFS_rf_test   = -DRF_TEST_SWD
+DEFS_nfc_tool  = -DHW_NFC
 
 all: firmware test
 

@@ -197,21 +197,51 @@ memory without Graw's RF password 1, and can never write sectors 1-3 over
 RF. Opening sector 3 needs its SSS rewritten, which only the MCU can do:
 
 1. Present the I2C password: write 9 bytes to the system area (I2C 0x57) at
-   address `0x0900`: password (4 bytes, big-endian), `0x09`, password again.
-   `0x07` instead of `0x09` sets a new password (format from the Linux
-   `drivers/nvmem/m24lr.c` driver). The factory default is `00000000`; Graw
-   may have changed it.
+   address `0x0900`: password (4 bytes, MSB first), `0x09`, password again.
+   `0x07` instead of `0x09` sets a new password (datasheet section 5.16, same
+   as the Linux `drivers/nvmem/m24lr.c` driver).
 2. Write SSS byte 3 (system area address `0x0003`) to `00` (unlocked: RF read
    and write without a password). Writing an SSS byte needs the I2C password
    to have been presented; reading never does.
-3. Read it back. If it still reads `0F`, the I2C password isn't the default.
+3. Read it back.
 
-This only touches sector 3's protection; Graw's data in sectors 0-2 stays
-protected. It can be undone by writing `0F` back. Not tried yet.
+**Done on board 1, 2026-10-29** with the `nfc_tool` test build
+(`make firmware`, then `tools/hw_survey/nfc_tool.sh`, issue #8):
 
-PC13 is the chip's RF WIP/BUSY output, so the firmware can also notice when a
-phone is reading or writing and reload settings afterwards. RF and I2C
-cannot access the memory at the same moment; I2C is refused while RF is busy.
+| Step | Result |
+|---|---|
+| Write SSS[3] without a password | every byte ACKed, no write cycle, value unchanged: **an ACK doesn't mean the write happened, only a read-back tells** |
+| Present `00000000` | accepted (compare took ~3 ms): **the I2C password is still the factory default** |
+| Write SSS[3] = `00` | write cycle ~2 ms, reads back `00`; SSS now `0D 0F 0F 00`, sectors 0-2 unchanged |
+| Present a wrong password (`12345678`), then write `0F` | the write is ignored: a new present command closes the session |
+| Present `00000000` again, write `0F`, then `00` | both stick: **no lockout or attempt counter**, and the change is reversible |
+
+The datasheet confirms there's no side effect to a wrong I2C password: the
+protected sectors simply stay protected, and the chip ignores the bus for one
+write-cycle time while it compares. A correct password stays valid until
+power-off or the next present command.
+
+**Sector 3 of board 1 is left open (`00`)** for the phone test. Without an
+NFC coil on the antenna pads the chip can't be reached over RF at all, so
+this changes nothing in practice yet. For the settings block, a better final
+value is `11`: locked, b2:b1 = 00, password 2. That lets anyone read sector 3,
+but writing needs RF password 2 (factory default `00000000` too, unless Graw
+changed it; to be checked with the phone).
+
+Other system-area values on board 1:
+- I2C_Write_Lock `00 00`: the MCU can write all four sectors over I2C.
+- Configuration byte (0x0910) `FF`: bit 3 = 1, so **PC13 is in RF WIP mode**.
+  It goes low only while an RF write is being programmed, which is exactly
+  the signal for "a phone changed the settings, reload them". The other mode
+  (bit 3 = 0, RF BUSY) pulls it low for every RF command.
+- Control register (0x0920) `00`, `80` after a write (T-Prog).
+
+RF and I2C cannot access the memory at the same moment; I2C is refused
+while RF is busy.
+
+Still to test (needs a coil on the antenna pads and a phone): reading and
+writing sector 3 with ST25 NFC Tap / NXP TagInfo, the range, PC13 pulses on a
+phone write (the tool counts falling edges on PC13), and board 2.
 
 ## Low power
 
@@ -308,5 +338,8 @@ discharge; 2S, 3 x AA lithium, or 2 x CR123A suit it better.
 | `Core/Src/hw_survey.c` | one-shot survey, built with `HW_SURVEY` defined in `main.c`; the fox starts paused after it |
 | `tools/hw_survey/read_survey.sh` | read and decode the survey results over SWD |
 | `tools/hw_survey/read_analog.sh` | live supply voltage/current/VDDA/temperature over SWD |
+| `Core/Src/nfc_tool.c` | NFC EEPROM tool, make variant `nfc_tool` (`-DHW_NFC`): sector security commands over SWD, PC13 watch |
+| `tools/hw_survey/nfc_tool.sh` | drive the NFC tool: `show`, `present [PW]`, `sss3 VALUE` |
+| `Core/Src/i2c_ee.c` | bit-banged I2C and M24LR04E-R access, shared by the survey and the NFC tool |
 | `Core/Src/radio_probe.c` | Si4063 clock-output probe (`RADIO_CLOCK_PROBE` in `init.c`) |
 | `tools/aprs_sim/` | host simulator, now also decodes the telemetry |
