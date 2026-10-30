@@ -326,9 +326,9 @@ void stopAprsTickTimer(void) {
 void processAprsTick(void) {
 	static uint16_t aprs_nco_count = 0;
 	static uint16_t aprs_bit_count = 0;
-	static uint16_t tone_count = 0;
 
 	if (tone_half_ticks) {
+		static uint16_t tone_count = 0;
 		if (++tone_count >= tone_half_ticks) {
 			tone_count = 0;
 			toggleSiGPIO3();

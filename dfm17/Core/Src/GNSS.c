@@ -270,13 +270,13 @@ void GNSS_ParsePVTData(GNSS_StateHandle *GNSS) {
 		GNSS->lonBytes[var]= GNSS->uartWorkingBuffer[var + 30];
 	}
 	GNSS->lon = iLong.iLong;
-	GNSS->fLon=(float)iLong.iLong/10000000.0;
+	GNSS->fLon = (float)iLong.iLong / 10000000.0f;
 	for (int var = 0; var < 4; ++var) {
 		iLong.bytes[var] = GNSS->uartWorkingBuffer[var + 34];
 		GNSS->latBytes[var]=GNSS->uartWorkingBuffer[var + 34];
 	}
 	GNSS->lat = iLong.iLong;
-	GNSS->fLat=(float)iLong.iLong/10000000.0;
+	GNSS->fLat = (float)iLong.iLong / 10000000.0f;
 	for (int var = 0; var < 4; ++var) {
 		iLong.bytes[var] = GNSS->uartWorkingBuffer[var + 38];
 	}
@@ -307,7 +307,9 @@ void GNSS_ParsePVTData(GNSS_StateHandle *GNSS) {
 	for (int var = 0; var < 4; ++var) {
 		iLong.bytes[var] = GNSS->uartWorkingBuffer[var + 70];
 	}
-	GNSS->headMot = iLong.iLong * 1e-5; // todo I'm not sure this good options.
+	/* 1e-5 deg to whole degrees; integer division (truncates toward zero, as
+	 * the old double multiply did) keeps the double routines out of the build */
+	GNSS->headMot = iLong.iLong / 100000;
 }
 
 /*!
@@ -347,13 +349,13 @@ void GNSS_ParsePOSLLHData(GNSS_StateHandle *GNSS) {
 		iLong.bytes[var] = GNSS->uartWorkingBuffer[var + 10];
 	}
 	GNSS->lon = iLong.iLong;
-	GNSS->fLon=(float)iLong.iLong/10000000.0;
+	GNSS->fLon = (float)iLong.iLong / 10000000.0f;
 
 	for (int var = 0; var < 4; ++var) {
 		iLong.bytes[var] = GNSS->uartWorkingBuffer[var + 14];
 	}
 	GNSS->lat = iLong.iLong;
-	GNSS->fLat=(float)iLong.iLong/10000000.0;
+	GNSS->fLat = (float)iLong.iLong / 10000000.0f;
 
 	for (int var = 0; var < 4; ++var) {
 		iLong.bytes[var] = GNSS->uartWorkingBuffer[var + 18];
@@ -418,6 +420,10 @@ void GNSS_LoadConfig(GNSS_StateHandle *GNSS) {
  * @return  Returns checksum.
  */
 uint8_t GNSS_Checksum(uint8_t class, uint8_t messageID, uint8_t dataLength,uint8_t *payload) {
-//todo: Look at 32.4 UBX Checksum
+	// todo: Look at 32.4 UBX Checksum
+	(void)class;
+	(void)messageID;
+	(void)dataLength;
+	(void)payload;
 	return 0;
 }

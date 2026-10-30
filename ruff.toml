@@ -1,0 +1,4 @@
+# ruff (lint + format) for the Python tools under tools/. CI runs
+# `ruff check` and `ruff format --check`; see README.md (Building and testing).
+line-length = 100
+target-version = "py311"

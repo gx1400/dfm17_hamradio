@@ -136,7 +136,7 @@ void SpiDisable(void) {
 	SPI1->CR1 &= ~(1<<6);   // SPE=0, Peripheral Disabled
 }
 
-void SpiWriteData (int size, uint8_t* data) {
+void SpiWriteData (int size, const uint8_t* data) {
 
 	/************** STEPS TO FOLLOW *****************
 	1. Wait for the TXE bit to set in the Status Register
@@ -162,9 +162,8 @@ void SpiWriteData (int size, uint8_t* data) {
 	while (((SPI1->SR)&(1<<7))) {};  // wait for BSY bit to Reset -> This will indicate that SPI is not busy in communication
 
 	//  Clear the Overrun flag by reading DR and SR
-	uint8_t temp = SPI1->DR;
-	temp = SPI1->SR;
-	(void)temp; // silence not used warning
+	(void)SPI1->DR;
+	(void)SPI1->SR;
 
 
 }

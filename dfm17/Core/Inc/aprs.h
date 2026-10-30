@@ -35,7 +35,7 @@
 
 uint8_t aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix);
 uint8_t aprs_prepare_fix(GNSS_StateHandle *GNSS, uint8_t fix_valid, uint8_t backlog_fix);
-void aprs_prepare_status(GNSS_StateHandle *GNSS);
+void aprs_prepare_status(const GNSS_StateHandle *GNSS);
 void aprs_afsk_tick(void);
 
 /* AFSK modulation (see aprs.c): 0 = square wave on GPIO3 (tested on air),

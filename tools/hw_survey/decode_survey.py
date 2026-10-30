@@ -1,5 +1,7 @@
 """Decode the hw_survey struct (hw_survey.c) from hex bytes on stdin."""
-import struct, sys
+import struct
+import sys
+
 b=bytes(int(h,16) for h in sys.stdin.read().split())
 print(f"magic {struct.unpack_from('<I',b,0)[0]:08x} (53555256 = done), step {struct.unpack_from('<I',b,4)[0]}")
 names=["idle (radio READY, GPS on)","TX carrier PA 0x00","TX carrier PA 0x20","TX carrier PA 0x40","TX carrier PA 0x7F","radio SLEEP (MCU on HSI)","radio SHUTDOWN (SDN)","radio re-init, MCU on radio clk","GPS software backup","GPS woken"]
@@ -7,7 +9,7 @@ print("state                              PA0 raw  PB1 raw  Vref  VDDA   PA0 V  
 for i,n in enumerate(names):
     pa0,pb1,vr,tp=struct.unpack_from('<4H',b,8+8*i)
     vdda=1.20*4095/vr if vr else 0
-    v=lambda r: r*vdda/4095
+    v=lambda r, vdda=vdda: r*vdda/4095
     t=(1.41-v(tp))/0.0043+25
     print(f"{n:34s} {pa0:6d} {pb1:8d} {vr:5d}  {vdda:4.2f}  {v(pa0):6.3f}  {v(pb1):6.4f}  {t:5.1f}")
 pr,ps,pd=struct.unpack_from('<3H',b,88)

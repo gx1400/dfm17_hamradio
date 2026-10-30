@@ -7,7 +7,9 @@ the HackRF's own spurs (e.g. at multiples of 10 MHz). Prints target MHz,
 measured MHz, offset Hz, offset ppm and level dB above the noise median, or
 'not found'. Sub-bin accuracy by parabolic interpolation.
 """
-import numpy as np, sys
+import sys
+
+import numpy as np
 
 fs = 2e6
 N = 1 << 19

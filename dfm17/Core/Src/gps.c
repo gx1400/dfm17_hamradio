@@ -70,11 +70,10 @@ void gpsUpdate(void) {
 
 			printf("Number of Sats: %d \r\n", GNSS_Handle.numSV);
 
-			printf("Latitude: %f \r\n", GNSS_Handle.fLat);
-			printf("Longitude: %f \r\n",(float) GNSS_Handle.lon / 10000000.0);
-
-
-
+			/* 1e-7 degrees: printf has no %f with newlib-nano, and the float
+			 * maths would pull in the software double routines */
+			printf("Latitude: %ld e-7 \r\n", (long)GNSS_Handle.lat);
+			printf("Longitude: %ld e-7 \r\n", (long)GNSS_Handle.lon);
 		}
 		printf("Unique ID: %02X %02X %02X %02X %02X \r\n",
 			GNSS_Handle.uniqueID[0], GNSS_Handle.uniqueID[1],
@@ -85,11 +84,13 @@ void gpsUpdate(void) {
 }
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)	{
+	(void)huart;
 	//printf("  TxComplete callback!\r\n");
 	GNSS_Handle.txDone = (uint8_t *)1;	// used as a flag by GNSS.c, not dereferenced
 }
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+	(void)huart;
 	//printf("  RxComplete callback!\r\n");
 	GNSS_ParseBuffer(&GNSS_Handle);
 	GNSS_Handle.rxDone = (uint8_t *)1;	// used as a flag by GNSS.c, not dereferenced
@@ -102,16 +103,16 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
  * @param size - size of packet
  * @return - 1 = valid packet, 0 = not a valid packet
  */
-uint8_t checkUbxCrc(uint8_t *packet, uint8_t size) {
-    uint8_t CK_A = 0;
-    uint8_t CK_B = 0;
+uint8_t checkUbxCrc(const uint8_t *packet, uint8_t size) {
+	uint8_t CK_A = 0;
+	uint8_t CK_B = 0;
 
-    for(int x = 2; x < (size-2) ; x++) {
-        CK_A = CK_A + packet[x];
-        CK_B = CK_B + CK_A;
-    }
+	for (int x = 2; x < (size - 2); x++) {
+		CK_A = CK_A + packet[x];
+		CK_B = CK_B + CK_A;
+	}
 
-    return (packet[size-2] == CK_A) && (packet[size-1] == CK_B);
+	return (packet[size - 2] == CK_A) && (packet[size - 1] == CK_B);
 }
 
 /**
@@ -123,23 +124,23 @@ uint8_t checkUbxCrc(uint8_t *packet, uint8_t size) {
  * @param sizeOfPayload - size of the payload
  * @return - size of generated packet
  */
-uint8_t buildUbxPacket(uint8_t *packet, uint8_t *payload, uint8_t sizeOfPayload) {
-    packet[0] = 0xB5;
-    packet[1] = 0x62;
+uint8_t buildUbxPacket(uint8_t *packet, const uint8_t *payload, uint8_t sizeOfPayload) {
+	packet[0] = 0xB5;
+	packet[1] = 0x62;
 
-    uint8_t CK_A = 0;
-    uint8_t CK_B = 0;
+	uint8_t CK_A = 0;
+	uint8_t CK_B = 0;
 
-    for(int x = 0; x < (sizeOfPayload) ; x++) {
-        packet[2+x] = payload[x];
-        CK_A = CK_A + payload[x];
-        CK_B = CK_B + CK_A;
-    }
+	for (int x = 0; x < (sizeOfPayload); x++) {
+		packet[2 + x] = payload[x];
+		CK_A = CK_A + payload[x];
+		CK_B = CK_B + CK_A;
+	}
 
-    packet[sizeOfPayload+2] = CK_A;
-    packet[sizeOfPayload+3] = CK_B;
+	packet[sizeOfPayload + 2] = CK_A;
+	packet[sizeOfPayload + 3] = CK_B;
 
-    return (sizeOfPayload + 4);
+	return (sizeOfPayload + 4);
 }
 
 /*

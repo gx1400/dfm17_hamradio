@@ -219,7 +219,6 @@ uint16_t si4060_part_info(void) {
  * returns: 0 on CTS, 1 on timeout
  */
 uint8_t si4060_get_cts(uint8_t read_response) {
-	uint8_t temp = 0;
 	uint32_t start = HAL_GetTick();
 	if (!read_response) {
 		while (si4060_read_cmd_buf(1) != 0xff) {
@@ -228,6 +227,7 @@ uint8_t si4060_get_cts(uint8_t read_response) {
 			delay_us(5);
 		}
 	} else {
+		uint8_t temp = 0;
 		while (temp != 0xff) {
 			if (HAL_GetTick() - start > SI_TIMEOUT_MS)
 				return 1;
@@ -649,7 +649,8 @@ void si4060_set_filter(void) {
 	//uint8_t coeff[9] = {0xfa, 0xe5, 0xd8, 0xde, 0xf8, 0x21, 0x4f, 0x71, 0x7f};	// LP only, 2400 Hz
 	//uint8_t coeff[9] = {0xd9, 0xf1, 0x0c, 0x29, 0x44, 0x5d, 0x70, 0x7c, 0x7f}; 	// LP only, 4800 Hz
 	//uint8_t coeff[9] = {0xd5, 0xe9, 0x03, 0x20, 0x3d, 0x58, 0x6d, 0x7a, 0x7f}; 	// LP only, 4400 Hz
-	uint8_t coeff[9] = {0x81, 0x9f, 0xc4, 0xee, 0x18, 0x3e, 0x5c, 0x70, 0x76};	// 6dB@1200Hz, 4400 Hz (bad stopband)
+	// 6dB@1200Hz, 4400 Hz (bad stopband)
+	static const uint8_t coeff[9] = {0x81, 0x9f, 0xc4, 0xee, 0x18, 0x3e, 0x5c, 0x70, 0x76};
 
 	si4060_set_property_8(PROP_MODEM,
 			MODEM_TX_FILTER_COEFF_8,

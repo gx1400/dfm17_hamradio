@@ -42,13 +42,31 @@ backup is in `docs/data/`.
 
 - STM32CubeIDE: open the `dfm17/` project as before.
 - Command line: `make firmware` builds every variant into `build/<variant>/`
-  (`tracker`, `fox`, `hw_survey`, `rf_test`) with warnings as errors, using
+  (`tracker`, `fox`, `hw_survey`, `rf_test`, `nfc_tool`) with warnings as errors, using
   `arm-none-eabi-gcc` from PATH or the one inside STM32CubeIDE.
 - `make test` runs the host unit tests (`tools/tests`) and checks that the
   APRS packets decode with Dire Wolf (`tools/aprs_sim`, Python packages in
   `tools/requirements.txt`).
-- GitHub Actions (`.github/workflows/ci.yml`) does both on every pull request
-  and push to `main`, and keeps the built firmware as an artifact. Dependabot
+- `make firmware` compiles our sources with `-Wextra -Wshadow
+  -Wdouble-promotion` as errors. The last one flags float maths silently
+  promoted to double, which drags several KB of software double routines into
+  the image; the vendor HAL is built with `-Wall` only.
+- Lint and format checks (CI job `lint`; tools pinned in
+  `tools/requirements-lint.txt`, `pip install -r tools/requirements-lint.txt`,
+  plus `cppcheck` from your distribution):
+  - `tools/lint/check_eol.sh`: the STM32CubeMX-generated files stay CRLF,
+    everything else is LF (`.editorconfig` sets editors up to match).
+  - `tools/lint/cppcheck.sh`: static analysis of `dfm17/Core`; justified
+    suppressions in `tools/lint/cppcheck-suppressions.txt`.
+  - `tools/lint/format.sh check` / `fix`: `.clang-format` applied to the C
+    lines you changed (vs `origin/main`), never to generated or vendor files.
+    Stage your changes before `fix`.
+  - `ruff check .` and `ruff format --check .` for the Python tools.
+  - `git ls-files -z '*.sh' | xargs -0 shellcheck -x -P SCRIPTDIR -P .` and
+    `actionlint`.
+- GitHub Actions (`.github/workflows/ci.yml`) runs the build, the tests and
+  the lint checks on every pull request and push to `main`, and keeps the
+  built firmware as an artifact. Dependabot
   (`.github/dependabot.yml`) proposes updates to the pinned actions and Python
   packages weekly.
 

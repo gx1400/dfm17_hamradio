@@ -7,7 +7,10 @@ output of an ideal FM discriminator, optionally applies land-mobile FM de-emphas
 750 us, as a radio's speaker/TNC audio has), and writes a 48 kHz WAV for atest. Prints
 the level of the 1200 and 2200 Hz tones to show the twist.
 """
-import argparse, sys, wave
+import argparse
+import sys
+import wave
+
 import numpy as np
 from scipy import signal
 
