@@ -5,6 +5,7 @@
  * tools/config/dfmcfg.py (Makefile).
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "test.h"
 #include "fake_hal.h"
@@ -411,7 +412,9 @@ static void runtime_check_restores_settings(void) {
 
 /* field offsets for the layout check against tools/config/dfmcfg.py */
 static void write_layout(void) {
-	FILE *f = fopen("build/settings_layout.txt", "w");
+	/* the Makefile names the file: build/ or build-cov/ */
+	const char *path = getenv("SETTINGS_LAYOUT");
+	FILE *f = fopen(path ? path : "build/settings_layout.txt", "w");
 	CHECK(f != NULL);
 	if (!f)
 		return;

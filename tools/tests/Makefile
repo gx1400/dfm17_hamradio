@@ -28,7 +28,8 @@ BINS = $(TESTS:%=$(BUILD)/test_%)
 all: $(BINS)
 	@failed=""; \
 	for t in $(BINS); do \
-		$$t > $$t.log 2>&1 || failed="$$failed $${t##*/}"; \
+		SETTINGS_LAYOUT=$(BUILD)/settings_layout.txt $$t > $$t.log 2>&1 \
+			|| failed="$$failed $${t##*/}"; \
 		grep -E "^(FAIL|  FAIL)|^[a-z0-9]+: [0-9]+ checks" $$t.log; \
 	done; \
 	if [ -n "$$failed" ]; then \
