@@ -15,6 +15,7 @@
 #include <string.h>
 #include <inttypes.h>
 #include "aprs.h"
+#include "settings.h"
 
 #define XO_FREQ		25600000LL
 #define OUTDIV		8
@@ -75,9 +76,20 @@ static void tick(void) {
 	}
 }
 
+/* the station the firmware would use on a board set up as NZ0P-12 */
+static void station(void) {
+	static const char call[6] = {'N', 'Z', '0', 'P', 0, 0};
+	settings_defaults(&cfg);
+	for (int i = 0; i < 6; i++)
+		cfg.callsign[i] = call[i];
+	settings_seal(&cfg);
+	aprs_set_station();
+}
+
 int main(int argc, char **argv) {
 	GNSS_StateHandle gnss = {0};
 
+	station();
 	aprs_afsk_sine = argc > 1 && strcmp(argv[1], "sine") == 0;
 	aprs_prepare_buffer(&gnss, 0);
 	aprs_tx_start();
