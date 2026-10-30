@@ -245,6 +245,11 @@ int main(void)
 		  analog_read(&analog_last);
 	  }
 
+#ifdef HW_NFC
+	  /* the tool build never transmits: it may run on someone else's board,
+	   * and the test carrier/APRS would go out under the compiled-in callsign */
+	  (void)diag_get_button();
+#else
 	  switch (diag_get_button()) {
 	  case DIAG_BUTTON_SHORT:
 		  fox_test_carrier();
@@ -260,6 +265,7 @@ int main(void)
 	  default:
 		  break;
 	  }
+#endif
 
 #ifdef HW_NFC
 	  nfc_tool_poll();

@@ -13,6 +13,31 @@ its first fix. Without `TRACKER` it is a 70 cm fox (Morse ID, hunt tone every
 30 s, APRS every 5 min). Both have button and LED diagnostics. Tested on
 hardware with a HackRF and Dire Wolf.
 
+## Back up your EEPROM first
+
+Every DFM-17 carries Graw factory data in its NFC EEPROM (M24LR04E-R, U12):
+the board serial, configuration bytes and what look like sensor calibration
+coefficients. Future firmware will reuse most of that space for settings, so
+**take a full backup of each board before flashing anything else**, and
+please share it (commit it to `docs/data/` or attach it to an issue). The
+calibration data may turn out to be useful later, and backups from several
+boards help decode it.
+
+```sh
+make firmware
+tools/hw_survey/eeprom_backup.sh docs/data "board 2, PCB label ..."
+```
+
+This needs an ST-Link on the SWD pads. The script:
+- flashes the `nfc_tool` build, which replaces the board's firmware and never
+  transmits;
+- reads the EEPROM twice and checks the two reads match;
+- writes `docs/data/eeprom-M24LR04E-<UID>-<date>.txt` (annotated hex dump of
+  the user memory and system area) and a `.bin` of the 512-byte user memory.
+
+The original Graw firmware in the STM32 is not backed up by this. Board 1's
+backup is in `docs/data/`.
+
 ## Building and testing
 
 - STM32CubeIDE: open the `dfm17/` project as before.

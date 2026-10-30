@@ -1,0 +1,62 @@
+# DFM-17 NFC EEPROM (M24LR04E-R, U12) full backup over I2C (PB6 SCL / PB7 SDA)
+# UID E0025A675B01677B, read 2026-10-29 by tools/hw_survey/eeprom_backup.sh (nfc_tool build)
+# board 1, PCB label 2005 0128 G38662 TU; SSS[3] opened to 00 on 2026-10-29 (issue #8), original 0F
+#
+# board serial (0x0088, uint32 LE): 20050128
+# value at 0x0038 (uint32 LE, possibly the sonde serial): 16616036
+#
+# user memory: I2C address 0x53, 0x0000-0x01FF, 4 sectors x 128 bytes.
+# Graw factory data in 0x0000-0x015F (config bytes, IEEE-754 double
+# calibration coefficients from 0x00B8); keep this file.
+
+0000: 31 02 ff ff 00 ff ff ff 01 ff ff ff 0a ff ff ff  |1...............|
+0010: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+0020: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+0030: 02 ff ff ff 00 ff ff ff 64 8a fd 00 ff ff ff ff  |........d.......|
+0040: b2 00 55 08 2b 04 ff 0b ff ff ff ff ce fe d4 ff  |..U.+...........|
+0050: ff ff ff ff ff ff ff ff ff ff 01 01 ff ff ff ff  |................|
+0060: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+0070: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+0080: ff ff e8 00 ff ff ff ff d0 f0 31 01 ff ff 00 00  |..........1.....|
+0090: a0 a8 a3 e1 e2 e1 e1 e1 e1 e1 e1 e1 00 00 00 00  |................|
+00a0: 45 44 4f 06 07 46 47 48 50 51 fd fe ff ff ff ff  |EDO..FGHPQ......|
+00b0: 75 61 10 00 00 00 00 00 c6 99 8e e5 06 8c 52 c0  |ua............R.|
+00c0: b4 c8 4b 53 68 14 2b c0 1e c7 e9 07 40 1c e7 3f  |..KSh.+.....@..?|
+00d0: 73 57 0c 23 e9 2f 86 bf 13 c6 43 2c 8c 4f 7f 3f  |sW.#./....C,.O.?|
+00e0: c1 fb cf df ef 12 24 3f 00 00 00 00 00 00 f0 3f  |......$?.......?|
+00f0: 48 cd 8c 09 4f 6c 90 c0 07 ee 6a 8a 49 df e0 40  |H...Ol....j.I..@|
+0100: bf 50 23 e6 97 af 15 c1 3b 15 cf 1b 73 c4 34 41  |.P#.....;...s.4A|
+0110: 00 00 00 00 00 00 f0 3f 1b ce 39 2b e0 e5 50 c0  |.......?..9+..P.|
+0120: 78 44 84 74 04 34 2e c0 34 89 fb f6 65 d2 eb 3f  |xD.t.4..4...e..?|
+0130: 2e c9 57 6b 5d 02 88 3f 3d 7f e2 bb 9e 1a 8e 3f  |..Wk]..?=......?|
+0140: b8 ae 61 18 f2 5b 45 3f 9a 99 99 99 c1 b7 94 3f  |..a..[E?.......?|
+0150: 34 33 33 33 a3 03 d5 3f ff ff ff ff ff ff ff ff  |4333...?........|
+0160: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+0170: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+0180: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+0190: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+01a0: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+01b0: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+01c0: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+01d0: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+01e0: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+01f0: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  |................|
+
+# system area: I2C address 0x57
+# 0x0000: sector security status (SSS), sectors 0-3
+0000: 0d 0f 0f 00 00 00 00 00 00 00 00 00 00 00 00 00
+#   SSS[0] = 0d: locked, password 1: read/write with it, no access without
+#   SSS[1] = 0f: locked, password 1: read only with it, no access without
+#   SSS[2] = 0f: locked, password 1: read only with it, no access without
+#   SSS[3] = 00: unlocked: RF read/write
+# 0x0800: I2C_Write_Lock (bits 3:0 = sectors 3-0, 1 = I2C write-protected)
+0800: 00 00 00 00 00 00 00 00 ff ff ff ff ff ff ff ff
+# 0x0900: I2C password (reads FF, but reads back its value while an I2C
+#         password session is open), 0x0904-0x090F RF passwords 1-3 (read FF),
+#         0x0910 configuration byte, 0x0912 AFI, 0x0913 DSFID, 0x0914 UID
+#         (LSB first), 0x091C IC ref, 0x091D mem size, 0x0920 control register
+0900: 00 00 00 00 ff ff ff ff ff ff ff ff ff ff ff ff
+0910: ff ef 00 ff 7b 67 01 5b 67 5a 02 e0 5a 7f 03 ff
+0920: 80 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+#   configuration ff: RF WIP/BUSY pin in RF WIP mode (low while an RF write is programmed)
+#   AFI 00, DSFID ff, IC ref 5a, mem size 7f 03 (128 blocks of 4 bytes), control 80

@@ -27,7 +27,10 @@
   * time, and the results are read back from it (tools/hw_survey/nfc_tool.sh).
   * Issue #8.
   *
-  * The only write allowed is the sector security status byte of sector 3, the
+  * It also takes a full backup of the EEPROM at start-up and on command
+ * (tools/hw_survey/eeprom_backup.sh), and never transmits.
+ *
+ * The only write allowed is the sector security status byte of sector 3, the
   * free sector; Graw's sectors 0-2, the passwords, the I2C_Write_Lock bits and
   * the configuration byte are never written.
   *
@@ -45,6 +48,7 @@ enum {
 	NFC_CMD_READ,		/* read the system area fields below */
 	NFC_CMD_PRESENT,	/* present the I2C password in arg_password */
 	NFC_CMD_WRITE_SSS3,	/* write arg_value to SSS[3], then read it back */
+	NFC_CMD_BACKUP,		/* read everything readable into nfc_backup */
 };
 
 enum {
@@ -75,12 +79,38 @@ struct {
 	uint32_t pc13_last_low_ms;
 } volatile nfc_tool;
 
+/* full EEPROM backup for tools/hw_survey/eeprom_backup.sh. The RF passwords
+ * (0x0904-0x090F) and the I2C password read back as FF; everything else in
+ * the system area is here. */
+struct {
+	uint32_t magic;				/* 0x4B434142 "BACK" once filled */
+	uint32_t count;				/* backups taken since reset */
+	uint8_t ok;					/* every I2C read succeeded */
+	uint8_t pad[3];
+	uint8_t user[512];			/* user memory 0x0000-0x01FF */
+	uint8_t sys_sss[16];		/* system 0x0000: SSS 0-3, then reserved */
+	uint8_t sys_lock[16];		/* system 0x0800: I2C_Write_Lock */
+	uint8_t sys_info[48];		/* system 0x0900-0x092F: passwords, config,
+								   AFI, DSFID, UID, IC ref, mem size, control */
+} volatile nfc_backup;
+
 static uint8_t read_system(void) {
 	return ee_read(EE_SYS_ADDR, EE_SYS_SSS, nfc_tool.sss, 4)
 			&& ee_read(EE_SYS_ADDR, EE_SYS_I2C_LOCK, nfc_tool.i2c_lock, 2)
 			&& ee_read(EE_SYS_ADDR, EE_SYS_CONFIG, &nfc_tool.config, 1)
 			&& ee_read(EE_SYS_ADDR, EE_SYS_UID, nfc_tool.uid, 8)
 			&& ee_read(EE_SYS_ADDR, EE_SYS_CONTROL, &nfc_tool.control, 1);
+}
+
+static uint8_t backup(void) {
+	nfc_backup.magic = 0;
+	nfc_backup.ok = ee_read(EE_USER_ADDR, 0x0000, nfc_backup.user, sizeof(nfc_backup.user))
+			&& ee_read(EE_SYS_ADDR, EE_SYS_SSS, nfc_backup.sys_sss, sizeof(nfc_backup.sys_sss))
+			&& ee_read(EE_SYS_ADDR, EE_SYS_I2C_LOCK, nfc_backup.sys_lock, sizeof(nfc_backup.sys_lock))
+			&& ee_read(EE_SYS_ADDR, EE_SYS_PASSWORD, nfc_backup.sys_info, sizeof(nfc_backup.sys_info));
+	nfc_backup.count++;
+	nfc_backup.magic = 0x4B434142;
+	return nfc_backup.ok;
 }
 
 static uint8_t run(uint8_t cmd) {
@@ -102,6 +132,8 @@ static uint8_t run(uint8_t cmd) {
 			return NFC_NACK;
 		return nfc_tool.poll_ms == 0xFF ? NFC_TIMEOUT : NFC_OK;
 	}
+	case NFC_CMD_BACKUP:
+		return backup() ? NFC_OK : NFC_NACK;
 	default:
 		return NFC_BAD_CMD;
 	}
@@ -110,6 +142,7 @@ static uint8_t run(uint8_t cmd) {
 void nfc_tool_start(void) {
 	i2c_init();
 	nfc_tool.read_ok = read_system();
+	backup();
 }
 
 /*

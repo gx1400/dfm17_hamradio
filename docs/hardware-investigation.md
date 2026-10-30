@@ -118,7 +118,7 @@ Dual-interface EEPROM: I2C to the MCU and ISO 15693 NFC (RF) to a reader.
 | Sector security status | `0D 0F 0F 0F` (sectors 0-3) |
 | I2C write | **works without presenting the I2C password**, sector 3 tested: 4-byte page write ACKed, ready again after ~3 ms, read back correctly, restored to `FF` |
 
-### Contents (backup in `docs/data/eeprom-M24LR04E-E0025A675B01677B.txt`)
+### Contents (backup in `docs/data/eeprom-M24LR04E-E0025A675B01677B.txt`; full backup including the whole system area, made with `tools/hw_survey/eeprom_backup.sh`, in `docs/data/eeprom-M24LR04E-E0025A675B01677B-20261029.txt`/`.bin`)
 
 - `0x000-0x0B7`: Graw configuration bytes (mostly `FF` with a few values;
   `0x038` reads `64 8A FD 00` = 16616036 as a little-endian 32-bit integer,
@@ -342,6 +342,7 @@ discharge; 2S, 3 x AA lithium, or 2 x CR123A suit it better.
 | `tools/hw_survey/read_analog.sh` | live supply voltage/current/VDDA/temperature over SWD |
 | `Core/Src/nfc_tool.c` | NFC EEPROM tool, make variant `nfc_tool` (`-DHW_NFC`): sector security commands over SWD, PC13 watch |
 | `tools/hw_survey/nfc_tool.sh` | drive the NFC tool: `show`, `present [PW]`, `sss3 VALUE` |
+| `tools/hw_survey/eeprom_backup.sh` | full EEPROM backup of a board (flashes `nfc_tool`, reads twice, writes `docs/data/eeprom-M24LR04E-<UID>-<date>.txt` and `.bin`) |
 | `Core/Src/i2c_ee.c` | bit-banged I2C and M24LR04E-R access, shared by the survey and the NFC tool |
 | `Core/Src/radio_probe.c` | Si4063 clock-output probe (`RADIO_CLOCK_PROBE` in `init.c`) |
 | `tools/aprs_sim/` | host simulator, now also decodes the telemetry |
