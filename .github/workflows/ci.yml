@@ -12,12 +12,30 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the size report builds the base commit too
       - name: Install ARM toolchain
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi libnewlib-arm-none-eabi
       - name: Build every variant (tracker, fox, hw_survey, rf_test, nfc_tool)
         run: make firmware
+      - name: Build the base commit for the size comparison
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+        run: |
+          if base=$(git merge-base "${BASE:-HEAD~1}" HEAD 2>/dev/null) \
+              && git worktree add --detach ../base "$base" \
+              && make -C ../base firmware >/dev/null; then
+            echo "SIZE_BASE=../base/build" >> "$GITHUB_ENV"
+            echo "SIZE_BASE_LABEL=$(git log -1 --format='%h %s' "$base")" >> "$GITHUB_ENV"
+          else
+            echo "::notice title=Firmware size::no base build, reporting this build only"
+          fi
+      - name: Firmware size, budget and soft-double check
+        run: |
+          python3 tools/size/size_report.py --head build \
+            ${SIZE_BASE:+--base "$SIZE_BASE" --base-label "$SIZE_BASE_LABEL"}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dfm17-firmware

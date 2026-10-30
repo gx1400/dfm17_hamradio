@@ -51,6 +51,13 @@ backup is in `docs/data/`.
   -Wdouble-promotion` as errors. The last one flags float maths silently
   promoted to double, which drags several KB of software double routines into
   the image; the vendor HAL is built with `-Wall` only.
+- `make size` reports flash and RAM per variant (`tools/size/size_report.py`)
+  and fails if a variant is over budget or links the software double-precision
+  routines. The budgets, set at the top of the script: flash 56 KB of 64 KB
+  (room for the EEPROM settings), RAM 7 KB of 8 KB including the linker's
+  1.5 KB heap and stack reserve. `make size SIZE_BASE=<dir>` compares with
+  another build. In CI the firmware job compares each PR with its base and
+  shows the table, plus the symbols that changed most, in the job summary.
 - Lint and format checks (CI job `lint`; tools pinned in
   `tools/requirements-lint.txt`, `pip install -r tools/requirements-lint.txt`,
   plus `cppcheck` from your distribution):

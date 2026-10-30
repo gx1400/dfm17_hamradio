@@ -3,6 +3,9 @@
 #   make firmware   build every firmware variant into build/<variant>/
 #   make test       host unit tests (tools/tests) and APRS decode checks
 #                   (tools/aprs_sim, needs python3 numpy/scipy and direwolf)
+#   make size       flash/RAM per variant, the size budget and the soft-double
+#                   check (tools/size/size_report.py); SIZE_BASE=<build dir>
+#                   compares with another build, e.g. of main
 #   make            both
 #
 # The ARM toolchain is arm-none-eabi-gcc on PATH, or else the one bundled with
@@ -59,6 +62,10 @@ $(BUILD)/%/dfm17.elf: $(SRCS) $(HAL_OBJS) $(wildcard $(FW)/Core/Inc/*.h)
 	$(OBJCOPY) -O binary $@ $(@D)/dfm17.bin
 	@$(SIZE) $@
 
+size: firmware
+	python3 tools/size/size_report.py --head $(BUILD) --prefix "$(ARM)" \
+		$(if $(SIZE_BASE),--base $(SIZE_BASE))
+
 test:
 	$(MAKE) -C tools/tests
 	$(MAKE) -C tools/aprs_sim check
@@ -68,4 +75,4 @@ clean:
 	$(MAKE) -C tools/tests clean
 	$(MAKE) -C tools/aprs_sim clean
 
-.PHONY: all firmware test clean
+.PHONY: all firmware size test clean
