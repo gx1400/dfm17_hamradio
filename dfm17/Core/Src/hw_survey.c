@@ -40,6 +40,7 @@
 #include "si4063.h"
 #include "fox.h"
 #include "diag.h"
+#include "i2c_ee.h"
 
 extern volatile GNSS_StateHandle GNSS_Handle;
 
@@ -48,8 +49,6 @@ extern volatile GNSS_StateHandle GNSS_Handle;
 #define ADC_CH_TEMP		16
 #define ADC_CH_VREFINT	17
 
-#define EE_USER_ADDR	0x53	/* M24LR04E-R user memory, 7-bit address (E2 = 0) */
-#define EE_SYS_ADDR		0x57	/* M24LR04E-R system area (E2 = 1) */
 
 enum {
 	S_IDLE,			/* radio READY, GPS on */
@@ -215,135 +214,6 @@ static void ubx_send(uint8_t cls, uint8_t id, const uint8_t *payload, uint16_t l
 	HAL_UART_Transmit(&huart2, msg, 8 + len, 100);
 }
 
-/* ---- I2C, bit-banged on PB6 (SCL) / PB7 (SDA) ---------------------------- */
-
-#define SCL_H()	(GPIOB->BSRR = GPIO_PIN_6)
-#define SCL_L()	(GPIOB->BRR = GPIO_PIN_6)
-#define SDA_H()	(GPIOB->BSRR = GPIO_PIN_7)
-#define SDA_L()	(GPIOB->BRR = GPIO_PIN_7)
-#define SDA_IN()	((GPIOB->IDR >> 7) & 1)
-#define SCL_IN()	((GPIOB->IDR >> 6) & 1)
-
-static void i2c_wait(void) {
-	delay_us(5);
-}
-
-static void i2c_init(void) {
-	SET_BIT(RCC->APB2ENR, RCC_APB2ENR_IOPBEN);
-	SCL_H();
-	SDA_H();
-	/* PB6, PB7: open-drain output, 2 MHz (CNF 01, MODE 10) */
-	MODIFY_REG(GPIOB->CRL, 0xFFUL << 24, 0x66UL << 24);
-	i2c_wait();
-}
-
-static void scl_release(void) {
-	SCL_H();
-	/* allow clock stretching, up to ~1 ms */
-	for (int i = 0; i < 200 && !SCL_IN(); i++)
-		i2c_wait();
-	i2c_wait();
-}
-
-static void i2c_start(void) {
-	SDA_H();
-	scl_release();
-	SDA_L();
-	i2c_wait();
-	SCL_L();
-	i2c_wait();
-}
-
-static void i2c_stop(void) {
-	SDA_L();
-	i2c_wait();
-	scl_release();
-	SDA_H();
-	i2c_wait();
-}
-
-/* returns 1 if the byte was ACKed */
-static uint8_t i2c_write(uint8_t b) {
-	for (int i = 7; i >= 0; i--) {
-		if (b & (1 << i))
-			SDA_H();
-		else
-			SDA_L();
-		i2c_wait();
-		scl_release();
-		SCL_L();
-	}
-	SDA_H();
-	i2c_wait();
-	scl_release();
-	uint8_t ack = !SDA_IN();
-	SCL_L();
-	i2c_wait();
-	return ack;
-}
-
-static uint8_t i2c_read(uint8_t ack) {
-	uint8_t b = 0;
-	SDA_H();
-	for (int i = 7; i >= 0; i--) {
-		i2c_wait();
-		scl_release();
-		b |= SDA_IN() << i;
-		SCL_L();
-	}
-	if (ack)
-		SDA_L();
-	i2c_wait();
-	scl_release();
-	SCL_L();
-	SDA_H();
-	i2c_wait();
-	return b;
-}
-
-/* random read with a 16-bit memory address; returns 1 on success */
-static uint8_t ee_read(uint8_t dev, uint16_t addr, volatile uint8_t *buf, uint16_t len) {
-	i2c_start();
-	if (!i2c_write(dev << 1) || !i2c_write(addr >> 8) || !i2c_write(addr & 0xFF)) {
-		i2c_stop();
-		return 0;
-	}
-	i2c_start();
-	if (!i2c_write((dev << 1) | 1)) {
-		i2c_stop();
-		return 0;
-	}
-	for (uint16_t i = 0; i < len; i++)
-		buf[i] = i2c_read(i + 1 < len);
-	i2c_stop();
-	return 1;
-}
-
-/* page write (up to 4 bytes, same 4-byte row) with a 16-bit memory address.
- * returns 1 if every byte was ACKed */
-static uint8_t ee_write(uint8_t dev, uint16_t addr, const uint8_t *buf, uint8_t len) {
-	uint8_t ok;
-	i2c_start();
-	ok = i2c_write(dev << 1) && i2c_write(addr >> 8) && i2c_write(addr & 0xFF);
-	for (uint8_t i = 0; ok && i < len; i++)
-		ok = i2c_write(buf[i]);
-	i2c_stop();
-	return ok;
-}
-
-/* ACK polling: ms until the device answers again after a write, 0xFF if never */
-static uint8_t ee_poll(uint8_t dev) {
-	for (uint8_t ms = 0; ms < 50; ms++) {
-		i2c_start();
-		uint8_t ack = i2c_write(dev << 1);
-		i2c_stop();
-		if (ack)
-			return ms;
-		HAL_Delay(1);
-	}
-	return 0xFF;
-}
-
 /* ---- survey ------------------------------------------------------------- */
 
 void hw_survey_run(void) {
@@ -409,7 +279,7 @@ void hw_survey_run(void) {
 	hw_survey.step = 8;
 	hw_survey.pc13 = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_SET;
 	i2c_init();
-	hw_survey.i2c_idle = SCL_IN() | (SDA_IN() << 1);
+	hw_survey.i2c_idle = i2c_bus_idle();
 	for (uint8_t a = 0x08; a < 0x78; a++) {
 		i2c_start();
 		if (i2c_write(a << 1))
