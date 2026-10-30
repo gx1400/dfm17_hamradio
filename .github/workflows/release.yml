@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# one release run per tag, never cancelled halfway through publishing
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
     name: Build and publish the release

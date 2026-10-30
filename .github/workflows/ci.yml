@@ -6,6 +6,15 @@ on:
   pull_request:
   workflow_dispatch:
 
+# read-only token everywhere; no job pushes, comments or publishes
+permissions:
+  contents: read
+
+# a newer push to the same PR cancels the older run; runs on main always finish
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   firmware:
     name: Firmware build (all variants)
@@ -14,6 +23,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # the size report builds the base commit too
+          persist-credentials: false
       - name: Install ARM toolchain
         run: |
           sudo apt-get update
@@ -50,6 +60,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.13"
@@ -78,6 +90,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # the format check compares with the base commit
+          persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.13"
@@ -104,3 +117,7 @@ jobs:
         run: git ls-files -z '*.sh' | xargs -0 shellcheck -x -P SCRIPTDIR -P .
       - name: actionlint
         run: actionlint
+      - name: zizmor (workflow and Dependabot security)
+        env:
+          GH_TOKEN: ${{ github.token }} # read-only; enables the online audits
+        run: zizmor --format github .github/

@@ -71,6 +71,20 @@ backup is in `docs/data/`.
   - `ruff check .` and `ruff format --check .` for the Python tools.
   - `git ls-files -z '*.sh' | xargs -0 shellcheck -x -P SCRIPTDIR -P .` and
     `actionlint`.
+  - `zizmor .github/`: security audit of the workflows and Dependabot config
+    (token permissions, template injection, credential persistence, pinning,
+    known-vulnerable actions; set `GH_TOKEN` for the online checks).
+- CI security rules (the repo is public and takes PRs from forks):
+  - every workflow has a read-only token by default; a job that needs more
+    (only `release.yml`) asks for it explicitly;
+  - actions are pinned to commit SHAs, and Dependabot waits 7 days after a
+    release before proposing it;
+  - never use `pull_request_target` with a checkout of the PR's code: that
+    runs fork code with write access and secrets;
+  - any future hardware-in-the-loop runner (a self-hosted machine with the
+    ST-Link and HackRF) must only run on trusted, manually started workflows,
+    never on PRs from forks: it could flash the board and key the
+    transmitter.
 - Pull requests get a checklist (`.github/pull_request_template.md`): size,
   tests, what ran on hardware, RF and station-ID changes, CubeMX, EEPROM
   backups. Hardware test results go in a "Hardware test report" issue
