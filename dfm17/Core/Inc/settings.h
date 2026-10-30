@@ -40,6 +40,15 @@
 
 enum settings_mode { MODE_TRACKER = 0, MODE_FOX = 1 };
 
+/* GPS power (gps_power). 0xFF, the erased value, is the default so blocks
+ * saved before the field existed stay valid; it duty-cycles like before
+ * (issue #36 may make it switch on USB power). */
+enum settings_gps_power {
+	GPS_POWER_DUTY_CYCLE = 0, /* backup mode between tracker fixes */
+	GPS_POWER_ALWAYS_ON = 1,  /* never sleep the GPS: continuous 1PPS, ~20-25 mA more */
+	GPS_POWER_DEFAULT = 0xFF, /* duty cycle */
+};
+
 /* flags */
 #define SETTINGS_FLAG_START_PAUSED 0x01 /* fox/tracker start paused */
 
@@ -64,7 +73,8 @@ typedef struct __attribute__((packed)) {
 	uint16_t fox_period_s;					  /* time between fox transmissions, >= 10 */
 	uint16_t fox_tone_ms;					  /* hunt tone length, <= 60000 */
 	uint8_t fox_aprs_every;					  /* APRS after every Nth fox cycle, 0 = never */
-	uint8_t reserved[SETTINGS_SIZE - 35 - 2]; /* 0xFF */
+	uint8_t gps_power;						  /* enum settings_gps_power */
+	uint8_t reserved[SETTINGS_SIZE - 36 - 2]; /* 0xFF */
 	uint16_t crc;							  /* CRC-16/CCITT-FALSE of the bytes before it */
 } settings_t;
 
@@ -74,6 +84,7 @@ _Static_assert(offsetof(settings_t, callsign) == 4, "settings_t layout");
 _Static_assert(offsetof(settings_t, freq_hz) == 16, "settings_t layout");
 _Static_assert(offsetof(settings_t, dev_hz) == 22, "settings_t layout");
 _Static_assert(offsetof(settings_t, fox_aprs_every) == 34, "settings_t layout");
+_Static_assert(offsetof(settings_t, gps_power) == 35, "settings_t layout");
 _Static_assert(offsetof(settings_t, crc) == SETTINGS_SIZE - 2, "settings_t layout");
 
 /* why a settings block was rejected (settings_check) */
@@ -94,6 +105,7 @@ enum settings_error {
 	SETTINGS_ERR_TRACKER_TIMING,
 	SETTINGS_ERR_FOX_TIMING,
 	SETTINGS_ERR_EEPROM, /* the EEPROM didn't answer */
+	SETTINGS_ERR_GPS_POWER,
 };
 
 /* where the live settings came from */
@@ -117,6 +129,7 @@ enum settings_error settings_check(const settings_t *s);
 uint8_t settings_callsign_set(const settings_t *s);
 const char *settings_callsign(void);
 uint8_t settings_tx_allowed(void);
+uint8_t settings_gps_always_on(void);
 
 /* settings_store.c: EEPROM, the SWD mailbox, applying to the radio */
 void settings_init(void);

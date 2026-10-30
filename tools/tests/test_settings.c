@@ -148,6 +148,8 @@ static void check_rejects_bad_fields(void) {
 			{1, SETTINGS_ERR_FOX_TIMING},
 			{1, SETTINGS_ERR_FOX_TIMING},
 			{1, SETTINGS_ERR_FOX_TIMING},
+			{1, SETTINGS_ERR_GPS_POWER},
+			{1, SETTINGS_ERR_GPS_POWER},
 	};
 	for (unsigned i = 0; i < sizeof(want) / sizeof(want[0]); i++) {
 		settings_t ss, *s = &ss;
@@ -249,6 +251,12 @@ static void check_rejects_bad_fields(void) {
 		case 31:
 			s->fox_tone_ms = 23000;
 			break;
+		case 32:
+			s->gps_power = 2;
+			break;
+		case 33:
+			s->gps_power = 0xFE;
+			break;
 		}
 		if (want[i].seal)
 			settings_seal(s);
@@ -268,6 +276,26 @@ static void check_rejects_bad_fields(void) {
 	settings_seal(&s);
 	CHECK_EQ(settings_check(&s), SETTINGS_OK);
 	CHECK_EQ(settings_callsign_set(&s), 1);
+
+	/* gps_power: both values, and 0xFF (blocks saved before the field) */
+	CHECK_EQ(s.gps_power, GPS_POWER_DEFAULT);
+	s.gps_power = GPS_POWER_ALWAYS_ON;
+	settings_seal(&s);
+	CHECK_EQ(settings_check(&s), SETTINGS_OK);
+	s.gps_power = GPS_POWER_DUTY_CYCLE;
+	settings_seal(&s);
+	CHECK_EQ(settings_check(&s), SETTINGS_OK);
+}
+
+/* the always-on switch reads the live settings */
+static void gps_always_on_follows_cfg(void) {
+	CHECK_EQ(settings_gps_always_on(), 0); /* default */
+	cfg.gps_power = GPS_POWER_ALWAYS_ON;
+	settings_seal(&cfg);
+	CHECK_EQ(settings_gps_always_on(), 1);
+	cfg.gps_power = GPS_POWER_DUTY_CYCLE;
+	settings_seal(&cfg);
+	CHECK_EQ(settings_gps_always_on(), 0);
 }
 
 /* ---- settings_store.c: boot ------------------------------------------------ */
@@ -440,6 +468,7 @@ static void write_layout(void) {
 	FIELD(fox_period_s);
 	FIELD(fox_tone_ms);
 	FIELD(fox_aprs_every);
+	FIELD(gps_power);
 	FIELD(reserved);
 	FIELD(crc);
 #undef FIELD
@@ -447,7 +476,8 @@ static void write_layout(void) {
 }
 
 TEST_MAIN("settings", TEST(defaults_are_valid_but_dont_transmit), TEST(crc_matches_python),
-		TEST(check_rejects_bad_fields), TEST(boot_with_erased_eeprom_uses_defaults),
-		TEST(boot_loads_valid_block), TEST(boot_ignores_corrupt_block),
-		TEST(swd_edit_apply_save_reload), TEST(swd_apply_refuses_bad_values),
-		TEST(save_failure_reported), TEST(runtime_check_restores_settings), TEST(write_layout), )
+		TEST(check_rejects_bad_fields), TEST(gps_always_on_follows_cfg),
+		TEST(boot_with_erased_eeprom_uses_defaults), TEST(boot_loads_valid_block),
+		TEST(boot_ignores_corrupt_block), TEST(swd_edit_apply_save_reload),
+		TEST(swd_apply_refuses_bad_values), TEST(save_failure_reported),
+		TEST(runtime_check_restores_settings), TEST(write_layout), )

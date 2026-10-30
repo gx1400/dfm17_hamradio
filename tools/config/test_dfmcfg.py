@@ -31,7 +31,8 @@ def defaults():
         fox_period_s=30,
         fox_tone_ms=10000,
         fox_aprs_every=10,
-        reserved=b"\xff" * 27,
+        gps_power=0xFF,
+        reserved=b"\xff" * 26,
     )
     return d.seal(s)
 
@@ -71,11 +72,23 @@ class Checks(unittest.TestCase):
             "cw_wpm=50",
             "deviation=500",
             "start_paused=maybe",
+            "gps_power=on",
+            "gps_power=2",
             "colour=red",
             "freq",
         ):
             with self.assertRaises(d.SettingsError, msg=bad):
                 d.apply_assignment(defaults(), bad)
+
+    def test_gps_power(self):
+        s = defaults()
+        self.assertIn("default (duty_cycle)", d.describe(s))
+        for name, value in (("always_on", 1), ("DUTY_CYCLE", 0), ("default", 0xFF)):
+            d.apply_assignment(s, f"gps_power={name}")
+            self.assertEqual(s["gps_power"], value)
+            self.assertEqual(d.check(d.seal(s)), "OK")
+        d.apply_assignment(s, "gps_power=always_on")
+        self.assertIn("gps_power     always_on", d.describe(s))
 
     def test_lowercase_callsign_uppercased(self):
         s = defaults()
@@ -90,6 +103,7 @@ class Checks(unittest.TestCase):
             ({"symbol_table": b"a"}, "SYMBOL"),
             ({"path": 0x12}, "PATH"),
             ({"freq_hz": 450000001}, "FREQ"),
+            ({"gps_power": 2}, "GPS_POWER"),
         ]
         for change, want in cases:
             self.assertEqual(d.check(d.seal(dict(defaults(), **change))), want, change)

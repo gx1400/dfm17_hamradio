@@ -59,7 +59,8 @@ LAYOUT = [
     ("fox_period_s", 30, "<H"),
     ("fox_tone_ms", 32, "<H"),
     ("fox_aprs_every", 34, "B"),
-    ("reserved", 35, "27s"),
+    ("gps_power", 35, "B"),
+    ("reserved", 36, "26s"),
     ("crc", 62, "<H"),
 ]
 
@@ -81,6 +82,7 @@ ERRORS = [
     "TRACKER_TIMING",
     "FOX_TIMING",
     "EEPROM",
+    "GPS_POWER",
 ]
 SOURCES = ["built-in defaults", "EEPROM", "SWD (not saved)"]
 RESULTS = ["none", "OK", "INVALID", "EEPROM", "BAD_CMD"]
@@ -88,6 +90,8 @@ CMD = {"edit": 1, "apply": 2, "save": 3, "reload": 4, "defaults": 5}
 FLAG_START_PAUSED = 0x01
 MODES = {"tracker": 0, "fox": 1}
 PATHS = {"WIDE1-1": 0x11, "WIDE2-1": 0x21, "WIDE2-2": 0x22}
+# 0xFF (erased, blocks saved before the field) is the default: duty cycle
+GPS_POWER = {"duty_cycle": 0, "always_on": 1, "default": 0xFF}
 
 
 class SettingsError(Exception):
@@ -176,6 +180,8 @@ def check(s):
         or s["fox_tone_ms"] + 8000 > s["fox_period_s"] * 1000
     ):
         return "FOX_TIMING"
+    if s["gps_power"] not in GPS_POWER.values():
+        return "GPS_POWER"
     return "OK"
 
 
@@ -192,6 +198,7 @@ WHY = {
     "TRACKER_TIMING": "tracker timing: period >= 30 s, 10 s <= fix timeout < period, "
     "settle < fix timeout",
     "FOX_TIMING": "fox timing: period >= 10 s, tone <= 60 s, and tone + 8 s must fit in the period",
+    "GPS_POWER": "gps_power: default, duty_cycle or always_on",
 }
 
 
@@ -268,6 +275,10 @@ def apply_assignment(s, item):
         s[name] = parse_int(name, v, 0, 60000)
     elif name == "fox_aprs_every":
         s[name] = parse_int(name, v, 0, 255)
+    elif name == "gps_power":
+        if v.lower() not in GPS_POWER:
+            raise SettingsError(f"gps_power: '{v}' isn't {', '.join(GPS_POWER)}")
+        s[name] = GPS_POWER[v.lower()]
     else:
         raise SettingsError(f"'{name}' isn't a setting (see 'dfmcfg.py fields')")
 
@@ -276,6 +287,9 @@ def describe(s):
     path = next((k for k, v in PATHS.items() if v == s["path"]), f"0x{s['path']:02x}?")
     mode = next((k for k, v in MODES.items() if v == s["mode"]), f"{s['mode']}?")
     sym = (s["symbol_table"] + s["symbol_code"]).decode("ascii", "replace")
+    gps = next((k for k, v in GPS_POWER.items() if v == s["gps_power"]), f"{s['gps_power']}?")
+    if gps == "default":
+        gps = "default (duty_cycle)"
     return "\n".join(
         [
             f"  callsign      {callsign_str(s)}-{s['ssid']}",
@@ -295,6 +309,7 @@ def describe(s):
                 f"  fox           period {s['fox_period_s']} s, tone {s['fox_tone_ms']} ms, "
                 f"APRS every {s['fox_aprs_every'] or 'never'}"
             ),
+            f"  gps_power     {gps}",
         ]
     )
 
@@ -315,7 +330,9 @@ FIELDS_HELP = """settings (name=value):
   tracker_settle_s=10    < fix timeout
   fox_period_s=30        >= 10
   fox_tone_ms=10000      <= 60000, and tone + 8 s must fit in the period
-  fox_aprs_every=10      APRS after every Nth fox cycle, 0 = never"""
+  fox_aprs_every=10      APRS after every Nth fox cycle, 0 = never
+  gps_power=default      default (duty_cycle), duty_cycle: GPS in backup between
+                         tracker fixes; always_on: never (1PPS kept, ~20-25 mA more)"""
 
 
 # ---- SWD -----------------------------------------------------------------------
@@ -486,7 +503,8 @@ def main():
                 fox_period_s=30,
                 fox_tone_ms=10000,
                 fox_aprs_every=10,
-                reserved=b"\xff" * 27,
+                gps_power=0xFF,
+                reserved=b"\xff" * 26,
             )
             for item in a.values:
                 apply_assignment(s, item)

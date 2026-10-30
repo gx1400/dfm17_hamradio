@@ -75,6 +75,7 @@ void settings_defaults(settings_t *s) {
 	s->fox_period_s = 30;
 	s->fox_tone_ms = 10000;
 	s->fox_aprs_every = 10;
+	s->gps_power = GPS_POWER_DEFAULT;
 	for (unsigned i = 0; i < sizeof(s->reserved); i++)
 		s->reserved[i] = 0xFF;
 	s->crc = settings_crc(s);
@@ -174,6 +175,9 @@ enum settings_error settings_check(const settings_t *s) {
 	if (s->fox_period_s < 10 || s->fox_tone_ms > 60000
 			|| s->fox_tone_ms + 8000UL > s->fox_period_s * 1000UL)
 		return SETTINGS_ERR_FOX_TIMING;
+	if (s->gps_power != GPS_POWER_DUTY_CYCLE && s->gps_power != GPS_POWER_ALWAYS_ON
+			&& s->gps_power != GPS_POWER_DEFAULT)
+		return SETTINGS_ERR_GPS_POWER;
 	return SETTINGS_OK;
 }
 
@@ -203,4 +207,9 @@ const char *settings_callsign(void) {
  */
 uint8_t settings_tx_allowed(void) {
 	return settings_check(&cfg) == SETTINGS_OK && settings_callsign_set(&cfg);
+}
+
+/* keep the GPS on between tracker fixes */
+uint8_t settings_gps_always_on(void) {
+	return cfg.gps_power == GPS_POWER_ALWAYS_ON;
 }
