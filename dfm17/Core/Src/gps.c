@@ -35,6 +35,26 @@ volatile uint8_t ppsLockStatus;
 volatile uint8_t gpsUpdateDue = 0;
 /* set by gpsSleep(): no polling, any UART traffic would wake the GPS */
 static uint8_t gpsAsleep = 0;
+volatile uint8_t gpsTimeOk = 0;
+static volatile uint32_t gpsTimeOkTick;
+
+/* the NAV-PVT says GPS time is locked: a fix (2D, 3D, with dead reckoning or
+ * time only), time valid and fully resolved, and accurate enough */
+static uint8_t timeGood(const GNSS_StateHandle *g) {
+	uint8_t want = GNSS_VALID_TIME | GNSS_FULLY_RESOLVED;
+	return g->fixType >= Fix2D && g->fixType <= TimeOnlyFix && (g->valid & want) == want
+			&& g->tAcc <= GPS_TIME_TACC_MAX_NS;
+}
+
+/*
+ * gpsTimeLocked
+ *
+ * the PPS is GPS time: the last NAV-PVT said so and isn't stale. safe to call
+ * from the PPS interrupt.
+ */
+uint8_t gpsTimeLocked(void) {
+	return gpsTimeOk && HAL_GetTick() - gpsTimeOkTick <= GPS_TIME_MAX_AGE_MS;
+}
 
 
 void gpsUpdate(void) {
@@ -56,7 +76,9 @@ void gpsUpdate(void) {
 		}
 
 		GNSS_GetPVTData(&GNSS_Handle);
-
+		/* a failed poll leaves the old reply: its tick ages it out */
+		gpsTimeOkTick = GNSS_Handle.pvtTick;
+		gpsTimeOk = timeGood(&GNSS_Handle);
 
 		if(GNSS_Handle.selectedMode == ModeNotSet){
 			GNSS_SetMode(&GNSS_Handle,ModeAutomotive);
@@ -158,6 +180,7 @@ void gpsSleep(void) {
 	buildUbxPacket(packet, payload, sizeof(payload));
 	HAL_UART_Transmit(GNSS_Handle.huart, packet, sizeof(packet), 100);
 	gpsAsleep = 1;
+	gpsTimeOk = 0;
 }
 
 /*
@@ -173,6 +196,7 @@ void gpsWake(void) {
 	HAL_UART_Transmit(GNSS_Handle.huart, wake, sizeof(wake), 100);
 	GNSS_Handle.fixType = 0;
 	GNSS_Handle.numSV = 0;
+	gpsTimeOk = 0;
 	gpsAsleep = 0;
 }
 

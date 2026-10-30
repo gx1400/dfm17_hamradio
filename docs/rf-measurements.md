@@ -83,6 +83,18 @@ The carrier and the CPU clock come from the same TCXO, so the CPU cycles
 between GPS PPS pulses measure the carrier's error too. The firmware programs
 `f * (1 - error)` so the carrier lands on `f`.
 
+- **Only real GPS time (#35):** after its first lock, the u-blox keeps the
+  PPS running from its own crystal when the satellites are gone (UBX-CFG-TP5
+  defaults; on the 10-29 overnight run, pulses came all night with `0sv`).
+  `diag_pps()` therefore passes a pulse on only while `gpsTimeLocked()`:
+  - the last NAV-PVT had a fix (2D, 3D, with dead reckoning, or time only);
+  - its time was valid and fully resolved;
+  - its time accuracy was 500 ns or better;
+  - it is at most 20 s old.
+
+  Other pulses are counted in `pps_unlocked`, and the estimate is kept. The
+  CFG-TP5 `syncMode` option, which would stop the pulse, only applies to
+  u-blox's FTS timing variant, not the MAX-M8C.
 - **Samples:** `diag_pps()` (the PPS interrupt) passes the DWT cycle count and
   the HAL tick interval to `pps_disc_sample()`. A sample is rejected unless:
   - the interval is 1 s +-50 ms by the tick (this drops the first pulse after
@@ -107,6 +119,7 @@ between GPS PPS pulses measure the carrier's error too. The firmware programs
   | `pps_disc_ppb` | TCXO error, + = fast |
   | `pps_disc_applied_ppb` | correction in the synthesizer |
   | `pps_disc_samples`, `pps_disc_rejected` | sample counts |
+  | `gpsTimeOk`, `pps_unlocked` | the last NAV-PVT said GPS time is locked; pulses kept out without it |
 
 - **Expected result:** board 1 should measure about -1400 ppb, a +630 Hz
   correction at 446.175 MHz. That would put the carrier within about 0.1 ppm

@@ -61,6 +61,7 @@ static volatile uint32_t last_pps = 0;
  * SYSCLK is exactly 24 MHz, so (pps_cycles - 24e6) / 24 = clock error in ppm.
  * with SYSCLK from the Si4063 TCXO this measures the TCXO against GPS */
 volatile uint32_t pps_cycles = 0;
+volatile uint32_t pps_unlocked = 0;
 static uint32_t pps_cyccnt = 0;
 static volatile uint32_t ack_until = 0;
 static volatile diag_button button_event = DIAG_BUTTON_NONE;
@@ -190,7 +191,9 @@ void diag_tick(void) {
 
 /* call from the GPS PPS interrupt. The interval goes to the 1PPS
  * discipline from the TIM4 capture (exact) or the DWT count read here (late
- * by this interrupt's latency), per pps_source; both are logged */
+ * by this interrupt's latency), per pps_source; both are logged. Only while
+ * the GPS reports locked time: otherwise the pulse may come from the u-blox
+ * crystal, and the discipline keeps its last estimate */
 void diag_pps(void) {
 	uint32_t now = DWT->CYCCNT;
 	uint32_t tick = HAL_GetTick();
@@ -200,7 +203,9 @@ void diag_pps(void) {
 	pps_cycles = now - pps_cyccnt;
 	pps_cyccnt = now;
 	pps_log_add(pps_cycles, have_capture ? captured : 0);
-	if (pps_source == PPS_SOURCE_DWT)
+	if (!gpsTimeLocked())
+		pps_unlocked++;
+	else if (pps_source == PPS_SOURCE_DWT)
 		pps_disc_sample(pps_cycles, tick - last_pps);
 	else
 		/* no usable capture: 0 cycles, which pps_disc_sample() rejects */
