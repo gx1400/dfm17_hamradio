@@ -95,6 +95,7 @@
 #include "tracker.h"
 #include "ppsdisc.h"
 #include "settings.h"
+#include "ppscap.h"
 #include "nfc_tool.h"
 
 /* USER CODE END Includes */
@@ -284,6 +285,14 @@ int main(void)
 		  }
 	  } else {
 		  tracker_poll(gnss);
+	  }
+
+	  // test only (#12): sleep until the next interrupt, as a duty-cycled
+	  // low-power mode would. DWT stops counting while the core sleeps; the
+	  // debug clocks are switched off so an attached ST-Link can't hide that
+	  if (pps_sleep_test) {
+		  CLEAR_BIT(DBGMCU->CR, DBGMCU_CR_DBG_SLEEP | DBGMCU_CR_DBG_STOP | DBGMCU_CR_DBG_STANDBY);
+		  __WFI();
 	  }
 
   }

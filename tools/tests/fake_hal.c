@@ -12,6 +12,7 @@ SPI_TypeDef fake_spi1 = { .SR = SPI_SR_TXE | SPI_SR_RXNE };
 ADC_TypeDef fake_adc1;
 RCC_TypeDef fake_rcc;
 DWT_Type fake_dwt;
+TIM_TypeDef fake_tim4;
 CoreDebug_Type fake_coredebug;
 
 uint32_t fake_tick;

@@ -5,6 +5,7 @@
 #include "test.h"
 #include "fake_hal.h"
 #include "diag.h"
+#include "ppscap.h"
 
 /* ---- fakes ------------------------------------------------------------------ */
 
@@ -164,6 +165,7 @@ static void yellow_fix_and_pps(void) {
 }
 
 static void pps_cycle_count(void) {
+	pps_source = PPS_SOURCE_DWT;
 	DWT->CYCCNT = 0xFFFFF000u;		/* about to wrap */
 	diag_pps();
 	DWT->CYCCNT = 0xFFFFF000u + 23999970u;
@@ -184,15 +186,36 @@ static void leds_off_stops_patterns(void) {
 	diag_selftest();
 }
 
-TEST_MAIN("diag",
-	TEST(held_at_boot_is_ignored),
-	TEST(short_medium_long),
-	TEST(event_read_once),
-	TEST(glitch_ignored),
-	TEST(contact_bounce_is_one_press),
-	TEST(hold_feedback_leds),
-	TEST(heartbeat),
-	TEST(blink_codes),
-	TEST(yellow_fix_and_pps),
-	TEST(pps_cycle_count),
-	TEST(leds_off_stops_patterns))
+/* with the TIM4 capture, the discipline gets the exact interval even when
+ * the PPS interrupt runs late; the DWT count, read in the interrupt, doesn't */
+static void pps_capture_feeds_discipline(void) {
+	pps_source = PPS_SOURCE_CAPTURE;
+	fake_tim4.SR = TIM_SR_CC3IF;
+	fake_tim4.CCR3 = 0xFF00;
+	DWT->CYCCNT = 1000;
+	diag_pps(); /* first capture: no interval yet */
+
+	fake_tim4.SR = TIM_SR_CC3IF;
+	fake_tim4.CCR3 = (uint16_t)(0xFF00 + 23999970u);
+	DWT->CYCCNT = 1000 + 23999970u + 300; /* interrupt 300 cycles (12.5 us) late */
+	ms(1000);
+	diag_pps();
+	CHECK_EQ(sample_cycles, 23999970u);
+	CHECK_EQ(sample_ms, 1000);
+	CHECK_EQ(pps_cycles, 23999970u + 300);
+	uint32_t i = (pps_log_head - 1) % PPS_LOG;
+	CHECK_EQ(pps_log[i].capture, 23999970u);
+	CHECK_EQ(pps_log[i].dwt, 23999970u + 300);
+
+	/* no capture at the next interrupt: the discipline gets 0 (rejected) */
+	fake_tim4.SR = 0;
+	ms(1000);
+	diag_pps();
+	CHECK_EQ(sample_cycles, 0);
+	CHECK_EQ(pps_log[(pps_log_head - 1) % PPS_LOG].capture, 0);
+}
+
+TEST_MAIN("diag", TEST(held_at_boot_is_ignored), TEST(short_medium_long), TEST(event_read_once),
+		TEST(glitch_ignored), TEST(contact_bounce_is_one_press), TEST(hold_feedback_leds),
+		TEST(heartbeat), TEST(blink_codes), TEST(yellow_fix_and_pps), TEST(pps_cycle_count),
+		TEST(pps_capture_feeds_discipline), TEST(leds_off_stops_patterns))
