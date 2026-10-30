@@ -34,6 +34,8 @@ LDFLAGS = --specs=nano.specs -T$(FW)/STM32F100R8TX_FLASH.ld -Wl,--gc-sections \
 # software double routines (several KB of flash on this FPU-less part)
 WARN    = -Wextra -Wshadow -Wdouble-promotion
 SRCS    = $(wildcard $(FW)/Core/Src/*.c) $(wildcard $(FW)/Core/Startup/*.s)
+# firmware version (version.c): git describe, e.g. v0.1.0-3-gabc1234-dirty
+FW_VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo unknown)
 HAL     = $(FW)/Drivers/STM32F1xx_HAL_Driver/Src
 HAL_OBJS = $(patsubst $(HAL)/%.c,$(BUILD)/hal/%.o,$(wildcard $(HAL)/*.c))
 
@@ -55,9 +57,16 @@ $(BUILD)/hal/%.o: $(HAL)/%.c $(FW)/Core/Inc/stm32f1xx_hal_conf.h
 	@mkdir -p $(@D)
 	@$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD)/%/dfm17.elf: $(SRCS) $(HAL_OBJS) $(wildcard $(FW)/Core/Inc/*.h)
+# rewritten only when the version changes, so a new commit (or uncommitted
+# changes) rebuilds the firmware even if no source file changed
+$(BUILD)/fw_version.txt: FORCE
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(WARN) $(DEFS_$*) $(SRCS) $(HAL_OBJS) $(LDFLAGS) -Wl,-Map=$(@D)/dfm17.map -o $@
+	@echo '$(FW_VERSION)' | cmp -s - $@ || echo '$(FW_VERSION)' > $@
+
+$(BUILD)/%/dfm17.elf: $(SRCS) $(HAL_OBJS) $(wildcard $(FW)/Core/Inc/*.h) $(BUILD)/fw_version.txt
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) $(WARN) $(DEFS_$*) '-DFW_VERSION="$(FW_VERSION)"' '-DFW_VARIANT="$*"' \
+		$(SRCS) $(HAL_OBJS) $(LDFLAGS) -Wl,-Map=$(@D)/dfm17.map -o $@
 	$(OBJCOPY) -O ihex $@ $(@D)/dfm17.hex
 	$(OBJCOPY) -O binary $@ $(@D)/dfm17.bin
 	@$(SIZE) $@
@@ -75,4 +84,5 @@ clean:
 	$(MAKE) -C tools/tests clean
 	$(MAKE) -C tools/aprs_sim clean
 
-.PHONY: all firmware size test clean
+.PHONY: all firmware size test clean FORCE
+FORCE:
