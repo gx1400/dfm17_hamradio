@@ -41,7 +41,26 @@ $(BUILD)/test_%: test_%.c fake_hal.c test.h fake_hal.h fakehal/stm32f1xx_hal.h \
 	@mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) -o $@ test_$*.c fake_hal.c $(addprefix $(CORE)/Src/,$(SRC_$*)) -lm
 
-clean:
-	rm -rf $(BUILD)
+# coverage: the same tests built with --coverage into build-cov/ (no
+# sanitizer: its checks add branches of their own), run, and reported with
+# gcovr (tools/requirements.txt) for dfm17/Core/Src. Writes coverage.md (also
+# shown in the CI job summary) and html/index.html.
+COV       = build-cov
+TESTED    = $(sort $(foreach t,$(TESTS),$(SRC_$(t))))
+UNTESTED  = $(filter-out $(TESTED),$(notdir $(wildcard $(CORE)/Src/*.c)))
+GCOVR     = gcovr --root ../.. --filter '../../dfm17/Core/Src/' $(COV)
 
-.PHONY: all clean
+coverage:
+	rm -rf $(COV)
+	$(MAKE) BUILD=$(COV) SANITIZE="--coverage -O0" all
+	$(GCOVR) --txt-summary --txt $(COV)/coverage.txt
+	@mkdir -p $(COV)/html
+	$(GCOVR) --html-details $(COV)/html/index.html --markdown $(COV)/coverage.md \
+		--markdown-title "Host test coverage of dfm17/Core/Src"
+	@{ echo; echo "Not built into any host test: $(UNTESTED)"; } >> $(COV)/coverage.md
+	@echo "report: $(COV)/coverage.md, $(COV)/html/index.html"
+
+clean:
+	rm -rf $(BUILD) $(COV)
+
+.PHONY: all clean coverage

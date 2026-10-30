@@ -46,7 +46,9 @@ backup is in `docs/data/`.
   `arm-none-eabi-gcc` from PATH or the one inside STM32CubeIDE.
 - `make test` runs the host unit tests (`tools/tests`) and checks that the
   APRS packets decode with Dire Wolf (`tools/aprs_sim`, Python packages in
-  `tools/requirements.txt`).
+  `tools/requirements.txt`). `make -C tools/tests coverage` reports which
+  firmware lines and branches the tests reach (gcovr). CI shows the table in
+  the host-test job summary.
 - `make firmware` compiles our sources with `-Wextra -Wshadow
   -Wdouble-promotion` as errors. The last one flags float maths silently
   promoted to double, which drags several KB of software double routines into

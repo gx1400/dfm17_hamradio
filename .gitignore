@@ -79,3 +79,4 @@ ctrlp.root
 # command-line builds (make firmware, make test)
 /build/
 tools/tests/build/
+tools/tests/build-cov/
