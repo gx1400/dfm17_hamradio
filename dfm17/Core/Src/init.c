@@ -36,6 +36,7 @@
 #include "diag.h"
 #include "analog.h"
 #include "gps.h"
+#include "version.h"
 
 
 extern UART_HandleTypeDef huart2;
@@ -62,6 +63,8 @@ void initHw(void) {
 	analog_init();
 	MX_DMA_Init();
 	MX_USART1_UART_Init();
+	// which build this is, on the UART (PA9, 115200) before anything else
+	printf("\r\n%s\r\n", fw_version);
 	MX_USART2_UART_Init();
 	MX_SPI1_Init();
 	MX_TIM6_Init();
