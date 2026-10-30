@@ -49,6 +49,8 @@ typedef enum {
 #define DIAG_BUTTON_LONG_MS		3000
 
 extern volatile uint32_t pps_cycles;
+/* pulses kept from the discipline: GPS time not locked (#35) */
+extern volatile uint32_t pps_unlocked;
 
 void diag_selftest(void);
 void diag_leds_off(void);

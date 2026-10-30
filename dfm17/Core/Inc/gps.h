@@ -39,6 +39,16 @@ uint8_t gpsConfigure(void);
 #define GPS_CONFIG_TRIES	5
 
 extern volatile uint8_t ppsLockStatus;
+
+/* the PPS is GPS time only while the last NAV-PVT had a fix, valid and fully
+ * resolved time, and a time accuracy within GPS_TIME_TACC_MAX_NS. after its
+ * first lock the u-blox keeps pulsing from its own crystal with no satellites
+ * (issue #35), so a pulse alone doesn't mean lock. */
+#define GPS_TIME_TACC_MAX_NS 500
+/* that NAV-PVT may be this old: polls are 5 s apart, none while transmitting */
+#define GPS_TIME_MAX_AGE_MS	 20000
+extern volatile uint8_t gpsTimeOk; /* the last NAV-PVT said GPS time is locked */
+uint8_t gpsTimeLocked(void);
 /* set every 5 s by the TIM6 ISR; the main loop runs gpsUpdate() */
 extern volatile uint8_t gpsUpdateDue;
 void assertGpsLock(void);

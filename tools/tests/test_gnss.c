@@ -42,10 +42,16 @@ static void put32(uint8_t *p, uint32_t v) {
 	p[0] = v; p[1] = v >> 8; p[2] = v >> 16; p[3] = v >> 24;
 }
 
+/* NAV-PVT valid flags and time accuracy for make_pvt() */
+static uint8_t pvt_valid = 0x07;
+static uint32_t pvt_tacc = 25;
+
 /* a 100-byte UBX-NAV-PVT reply */
 static void make_pvt(uint8_t fix, uint8_t sv, int32_t lat, int32_t lon, int32_t hmsl) {
 	uint8_t *p = reply + 6;
 	memset(reply, 0, sizeof(reply));
+	p[11] = pvt_valid;
+	put32(p + 12, pvt_tacc);
 	reply[0] = 0xB5; reply[1] = 0x62; reply[2] = 0x01; reply[3] = 0x07;
 	reply[4] = 92; reply[5] = 0;
 	p[4] = 2026 & 0xFF; p[5] = 2026 >> 8;
@@ -96,6 +102,31 @@ static void pvt_parsed(void) {
 	CHECK_EQ(GNSS_Handle.day, 29);
 	CHECK_EQ(GNSS_Handle.hour, 12);
 	CHECK_EQ(GNSS_Handle.min, 52);
+	CHECK_EQ(GNSS_Handle.valid, 0x07);
+	CHECK_EQ(GNSS_Handle.tAcc, 25);
+}
+
+/* valid flags and tAcc (#35), and the tick of the reply */
+static void pvt_time_validity(void) {
+	reset();
+	fake_tick = 5000;
+	pvt_valid = 0x03;
+	pvt_tacc = 0x12345678;
+	make_pvt(NoFix, 0, 0, 0, 0);
+	GNSS_GetPVTData(&GNSS_Handle);
+	CHECK_EQ(GNSS_Handle.valid, 0x03);
+	CHECK_EQ(GNSS_Handle.tAcc, 0x12345678);
+	CHECK_EQ(GNSS_Handle.pvtTick, 5000);
+
+	/* a corrupt reply changes nothing, the tick included */
+	fake_tick = 9000;
+	make_pvt(Fix3D, 9, 1, 1, 1);
+	reply[40] ^= 0x55;
+	GNSS_GetPVTData(&GNSS_Handle);
+	CHECK_EQ(GNSS_Handle.pvtTick, 5000);
+	CHECK_EQ(GNSS_Handle.valid, 0x03);
+	pvt_valid = 0x07;
+	pvt_tacc = 25;
 }
 
 static void pvt_negative_altitude(void) {
@@ -138,9 +169,5 @@ static void parse_buffer_stays_in_bounds(void) {
 	CHECK_EQ(GNSS_Handle.uartWorkingBuffer[100], 0);	/* cleared after parsing */
 }
 
-TEST_MAIN("gnss",
-	TEST(pvt_parsed),
-	TEST(pvt_negative_altitude),
-	TEST(corrupt_pvt_ignored),
-	TEST(silent_gps_times_out),
-	TEST(parse_buffer_stays_in_bounds))
+TEST_MAIN("gnss", TEST(pvt_parsed), TEST(pvt_time_validity), TEST(pvt_negative_altitude),
+		TEST(corrupt_pvt_ignored), TEST(silent_gps_times_out), TEST(parse_buffer_stays_in_bounds))
