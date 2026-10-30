@@ -31,3 +31,27 @@ How it works:
 
 The APRS audio path (tones, de-emphasis, decoding with Dire Wolf) is checked
 by `make -C tools/aprs_sim check`.
+
+## Coverage
+
+`make coverage` (here, or `make -C tools/tests coverage` from the top)
+rebuilds the same tests into `build-cov/` with `--coverage` and without the
+sanitizer flags (their checks add branches of their own), runs them, and
+reports line, function and branch coverage of `dfm17/Core/Src` with gcovr
+(`pip install -r tools/requirements.txt`):
+
+- `build-cov/coverage.txt`: uncovered lines per file;
+- `build-cov/coverage.md`: the per-file table, plus the firmware files no test
+  builds at all;
+- `build-cov/html/index.html`: annotated source.
+
+CI shows the table in the host-test job's summary and keeps the HTML report
+as the `coverage-html` artifact. There's no minimum percentage: the report is
+for finding gaps. Code with safety rules, such as the station ID, the band
+limits and refusing to transmit without a callsign (#18), should reach full
+branch coverage.
+
+At the start (2026-10-29): 62.6% of lines, 65.5% of branches.
+- Fully covered: `diag.c`, `tracker.c`, `ppsdisc.c` (93.5% of branches).
+- Lowest: `string.c` (29%), `analog.c` (37%; `analog_read()` needs the ADC,
+  which the fake HAL doesn't model), `si4063.c` (41%), `GNSS.c` (47%).

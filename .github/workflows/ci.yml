@@ -76,6 +76,15 @@ jobs:
         run: make -C tools/tests
       - name: APRS packets decode with Dire Wolf
         run: make -C tools/aprs_sim check
+      - name: Coverage of the firmware sources by the host tests
+        run: |
+          make -C tools/tests coverage
+          cat tools/tests/build-cov/coverage.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Coverage report (HTML)
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-html
+          path: tools/tests/build-cov/html/
       - name: Test logs
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
