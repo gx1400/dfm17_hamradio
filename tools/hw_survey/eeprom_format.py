@@ -9,6 +9,7 @@ M24LR04E-R EEPROM:
 
 Prints the .txt path. Used by eeprom_backup.sh.
 """
+
 import datetime
 import os
 import struct
@@ -25,7 +26,7 @@ def parse(raw):
         sys.exit(f"short read: {len(b)} of {need} bytes")
     out, i = {}, 0
     for name, n in LAYOUT:
-        out[name] = b[i:i + n]
+        out[name] = b[i : i + n]
         i += n
     magic, _count = struct.unpack_from("<II", out["hdr"])
     if magic != MAGIC:
@@ -38,7 +39,7 @@ def parse(raw):
 def hexdump(data, base, ascii_col=True):
     lines = []
     for o in range(0, len(data), 16):
-        row = data[o:o + 16]
+        row = data[o : o + 16]
         h = " ".join(f"{x:02x}" for x in row)
         a = "".join(chr(x) if 32 <= x < 127 else "." for x in row)
         lines.append(f"{base + o:04x}: {h}" + (f"  |{a}|" if ascii_col else ""))
@@ -107,8 +108,11 @@ def main():
     cfg = info[0x10]
     t += [
         f"#   configuration {cfg:02x}: RF WIP/BUSY pin in "
-        + ("RF WIP mode (low while an RF write is programmed)" if cfg & 8
-           else "RF BUSY mode (low during any RF command)"),
+        + (
+            "RF WIP mode (low while an RF write is programmed)"
+            if cfg & 8
+            else "RF BUSY mode (low during any RF command)"
+        ),
         (
             f"#   AFI {info[0x12]:02x}, DSFID {info[0x13]:02x}, IC ref {info[0x1C]:02x}, "
             f"mem size {info[0x1D]:02x} {info[0x1E]:02x} "
