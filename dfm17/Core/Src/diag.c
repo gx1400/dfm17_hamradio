@@ -39,6 +39,7 @@
 #include "gps.h"
 #include "led.h"
 #include "ppsdisc.h"
+#include "ppscap.h"
 
 #define DEBOUNCE_MS			20
 #define HEARTBEAT_MS		2000
@@ -187,13 +188,23 @@ void diag_tick(void) {
 	set_red(red_pattern(now));
 }
 
-/* call from the GPS PPS interrupt */
+/* call from the GPS PPS interrupt. The interval goes to the 1PPS
+ * discipline from the TIM4 capture (exact) or the DWT count read here (late
+ * by this interrupt's latency), per pps_source; both are logged */
 void diag_pps(void) {
 	uint32_t now = DWT->CYCCNT;
 	uint32_t tick = HAL_GetTick();
+	uint32_t captured = 0;
+	uint8_t have_capture = pps_capture_read(&captured);
+
 	pps_cycles = now - pps_cyccnt;
 	pps_cyccnt = now;
-	pps_disc_sample(pps_cycles, tick - last_pps);
+	pps_log_add(pps_cycles, have_capture ? captured : 0);
+	if (pps_source == PPS_SOURCE_DWT)
+		pps_disc_sample(pps_cycles, tick - last_pps);
+	else
+		/* no usable capture: 0 cycles, which pps_disc_sample() rejects */
+		pps_disc_sample(have_capture ? captured : 0, tick - last_pps);
 	last_pps = tick;
 }
 

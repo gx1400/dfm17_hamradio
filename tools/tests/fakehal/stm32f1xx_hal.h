@@ -37,7 +37,13 @@ typedef struct {
 	volatile uint32_t SR, CR1, CR2, SMPR1, SMPR2, JOFR[4], HTR, LTR;
 	volatile uint32_t SQR1, SQR2, SQR3, JSQR, JDR[4], DR;
 } ADC_TypeDef;
-typedef struct { volatile uint32_t CR, CFGR, CIR, APB2RSTR, APB1RSTR, AHBENR, APB2ENR; } RCC_TypeDef;
+typedef struct {
+	volatile uint32_t CR, CFGR, CIR, APB2RSTR, APB1RSTR, AHBENR, APB2ENR, APB1ENR;
+} RCC_TypeDef;
+typedef struct {
+	volatile uint32_t CR1, CR2, SMCR, DIER, SR, EGR, CCMR1, CCMR2, CCER, CNT, PSC, ARR, RCR, CCR1,
+			CCR2, CCR3, CCR4;
+} TIM_TypeDef;
 typedef struct { volatile uint32_t CTRL, CYCCNT; } DWT_Type;
 typedef struct { volatile uint32_t DEMCR; } CoreDebug_Type;
 
@@ -46,6 +52,7 @@ extern SPI_TypeDef fake_spi1;
 extern ADC_TypeDef fake_adc1;
 extern RCC_TypeDef fake_rcc;
 extern DWT_Type fake_dwt;
+extern TIM_TypeDef fake_tim4;
 extern CoreDebug_Type fake_coredebug;
 
 #define GPIOA		(&fake_gpioa)
@@ -54,6 +61,7 @@ extern CoreDebug_Type fake_coredebug;
 #define SPI1		(&fake_spi1)
 #define ADC1		(&fake_adc1)
 #define RCC			(&fake_rcc)
+#define TIM4		(&fake_tim4)
 #define DWT			(&fake_dwt)
 #define CoreDebug	(&fake_coredebug)
 
@@ -80,6 +88,16 @@ extern CoreDebug_Type fake_coredebug;
 #define ADC_CR2_EXTTRIG				0x00100000U
 #define ADC_CR2_SWSTART				0x00400000U
 #define ADC_CR2_TSVREFE				0x00800000U
+#define RCC_APB1ENR_TIM4EN			0x00000004U
+#define TIM_CR1_CEN					0x0001U
+#define TIM_EGR_UG					0x0001U
+#define TIM_SR_CC3IF				0x0008U
+#define TIM_SR_CC3OF				0x0800U
+#define TIM_CCMR2_CC3S_0			0x0001U
+#define TIM_CCMR2_IC3F_0			0x0010U
+#define TIM_CCMR2_IC3F_1			0x0020U
+#define TIM_CCER_CC3E				0x0100U
+#define TIM_CCER_CC3P				0x0200U
 #define RCC_CFGR_SWS				0x0000000CU
 #define RCC_CFGR_SWS_HSI			0x00000000U
 #define RCC_CFGR_SWS_PLL			0x00000008U

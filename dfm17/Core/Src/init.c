@@ -38,6 +38,7 @@
 #include "gps.h"
 #include "version.h"
 #include "settings.h"
+#include "ppscap.h"
 
 
 extern UART_HandleTypeDef huart2;
@@ -87,6 +88,9 @@ void initHw(void) {
 		printf("ERROR: no Si4063 clock on OSC_IN, staying on HSI\r\n");
 		diag_set_error(DIAG_ERR_RADIO_CLOCK);
 	}
+
+	// timestamp the GPS PPS with TIM4 input capture (1PPS discipline, #12)
+	pps_capture_init();
 
 	// initialize GPS chip
 	printf("Starting ublox...\r\n");
