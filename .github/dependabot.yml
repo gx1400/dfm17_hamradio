@@ -6,6 +6,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # wait a week after a release before proposing it: a compromised version
+    # is usually caught and pulled within days
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns: ["*"]
@@ -16,6 +20,8 @@ updates:
     directory: /tools
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       python:
         patterns: ["*"]
