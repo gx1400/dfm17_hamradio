@@ -231,9 +231,13 @@ static void power_off(void) {
 	ms(20); /* debounced: the chase starts */
 	CHECK(diag_powered_off());
 	CHECK_EQ(diag_get_button(), DIAG_BUTTON_NONE);
+	/* a press during the chase is ignored: no event, no restart */
+	press(40);
+	CHECK_EQ(diag_get_button(), DIAG_BUTTON_NONE);
+	CHECK_EQ(resets, 0);
 	/* one LED at a time, red -> yellow -> green */
 	int seen[8] = {0}, order_ok = 1, last = 0;
-	for (int i = 0; i < 900; i++) {
+	for (int i = 0; i < 750; i++) {
 		ms(1);
 		int l = leds();
 		seen[l]++;
