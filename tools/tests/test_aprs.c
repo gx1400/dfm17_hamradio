@@ -16,20 +16,61 @@ static analog_reading fake_analog = { .vin_mv = 4672, .iin_ma = 63, .temp_c = 30
 		.usb_mv = 5020, .on_usb = 1 };
 
 void analog_read(analog_reading *r) { *r = fake_analog; }
+/* the radio and timer calls of a transmission, in order, one letter each:
+ * S start_tx, P stop_tx, T/t tick timer on/off, D/d deviation 0/restored,
+ * F/f fast SPI on/off, O offset 0, G/g green LED on/off */
+static char calls[32];
+static int ncalls, toggles, fast_offsets, fast_fail;
+static int16_t offset_min, offset_max;
+static uint32_t deviation;
+static void call(char c) {
+	if (ncalls < (int)sizeof(calls) - 1)
+		calls[ncalls++] = c;
+}
 void si4060_setup(uint8_t mod_type) { (void)mod_type; }
-void si4060_start_tx(uint8_t channel) { (void)channel; }
-void si4060_stop_tx(void) {}
-void si4060_set_deviation(uint32_t dev_hz) { (void)dev_hz; }
-void si4060_set_offset(uint16_t offset) { (void)offset; }
+void si4060_start_tx(uint8_t channel) {
+	(void)channel;
+	call('S');
+}
+void si4060_stop_tx(void) {
+	call('P');
+}
+void si4060_set_deviation(uint32_t dev_hz) {
+	deviation = dev_hz;
+	call(dev_hz ? 'd' : 'D');
+}
+void si4060_set_offset(uint16_t offset) {
+	CHECK_EQ(offset, 0);
+	call('O');
+}
 int32_t si4060_offset_units(int32_t hz) { return hz; }
-void si4060_spi_fast(uint8_t on) { (void)on; }
-uint8_t si4060_set_offset_fast(int16_t offset) { (void)offset; return 1; }
-void startAprsTickTimer(void) {}
-void stopAprsTickTimer(void) {}
-void toggleSiGPIO3(void) {}
+void si4060_spi_fast(uint8_t on) {
+	call(on ? 'F' : 'f');
+}
+uint8_t si4060_set_offset_fast(int16_t offset) {
+	fast_offsets++;
+	if (offset < offset_min)
+		offset_min = offset;
+	if (offset > offset_max)
+		offset_max = offset;
+	return !fast_fail;
+}
+void startAprsTickTimer(void) {
+	call('T');
+}
+void stopAprsTickTimer(void) {
+	call('t');
+}
+void toggleSiGPIO3(void) {
+	toggles++;
+}
 void deassertSiGPIO3(void) {}
-void ledOnGreen(void) {}
-void ledOffGreen(void) {}
+void ledOnGreen(void) {
+	call('G');
+}
+void ledOffGreen(void) {
+	call('g');
+}
 
 /* aprs.c internals without a prototype in aprs.h */
 extern char aprs_buf[];
@@ -37,6 +78,8 @@ extern uint8_t aprs_len;
 extern unsigned char aprs_header[];
 extern volatile uint16_t fcs;
 extern volatile uint8_t finished;
+extern volatile uint8_t aprs_afsk_sine;
+extern volatile uint32_t aprs_afsk_skipped;
 void aprs_init(void);
 uint8_t get_next_bit(void);
 void base91_encode_tlm(char *buf, uint16_t value);
@@ -330,6 +373,81 @@ static void line_bits_decode_to_frame(int position) {
 static void line_bits_position(void) { line_bits_decode_to_frame(1); }
 static void line_bits_status(void) { line_bits_decode_to_frame(0); }
 
+/* ---- transmitting: aprs_tx_start / poll / stop, as tx_aprs() runs them ---- */
+
+/* sends the prepared packet, standing in for the TIM15 ISR: a sample tick
+ * per poll, a baud tick every APRS_MARK_TICKS (the exact rate doesn't matter
+ * here), and aprs_afsk_tick() for the sine samples. returns the ticks. */
+static int transmit(void) {
+	int ticks = 0;
+	ncalls = toggles = fast_offsets = 0;
+	offset_min = offset_max = 0;
+	aprs_tx_start();
+	do {
+		aprs_tick = 1;
+		aprs_baud_tick = ticks % APRS_MARK_TICKS == 0;
+		aprs_afsk_tick();
+		ticks++;
+	} while (aprs_tx_poll() && ticks < 200000);
+	aprs_tx_stop();
+	calls[ncalls] = 0;
+	return ticks;
+}
+
+/* square wave: GPIO3 toggles at every sample tick, the radio is keyed once
+ * and released, and the deviation and SPI are left alone */
+static void tx_square_sequence(void) {
+	GNSS_StateHandle g = fix_3d();
+	aprs_afsk_sine = 0;
+	aprs_prepare_buffer(&g, 0);
+	int ticks = transmit();
+	CHECK(ticks < 200000); /* finished */
+	CHECK_STR(calls, "GTSPtg");
+	CHECK_EQ(toggles, ticks);
+	CHECK_EQ(fast_offsets, 0);
+}
+
+/* sine AFSK: deviation 0 while the TIM15 tick writes the tone as frequency
+ * offsets over fast SPI, then everything is put back */
+static void tx_sine_sequence(void) {
+	GNSS_StateHandle g = fix_3d();
+	aprs_afsk_sine = 1;
+	fast_fail = 0;
+	aprs_prepare_buffer(&g, 0);
+	int ticks = transmit();
+	CHECK(ticks < 200000);
+	CHECK_STR(calls, "DGTSFfOPtdg");
+	CHECK_EQ(deviation, cfg.dev_hz);
+	CHECK_EQ(toggles, 0);
+	/* one sample every APRS_AFSK_TICKS_PER_SAMPLE ticks, within the space
+	 * tone's amplitude (offset units are Hz in this fake) */
+	CHECK(fast_offsets >= ticks / APRS_AFSK_TICKS_PER_SAMPLE - 1);
+	CHECK(fast_offsets <= ticks / APRS_AFSK_TICKS_PER_SAMPLE + 1);
+	CHECK(offset_max > APRS_MARK_DEV_HZ * 9 / 10 && offset_max <= APRS_SPACE_DEV_HZ);
+	CHECK(offset_min < -APRS_MARK_DEV_HZ * 9 / 10 && offset_min >= -APRS_SPACE_DEV_HZ);
+	CHECK_EQ(aprs_afsk_skipped, 0);
+
+	/* no sine samples outside a transmission */
+	int before = fast_offsets;
+	for (int i = 0; i < 10; i++)
+		aprs_afsk_tick();
+	CHECK_EQ(fast_offsets, before);
+	aprs_afsk_sine = 0;
+}
+
+/* a sample the SPI couldn't take (radio busy) is counted, not retried */
+static void tx_sine_counts_skipped_samples(void) {
+	GNSS_StateHandle g = fix_3d();
+	aprs_afsk_sine = 1;
+	fast_fail = 1;
+	aprs_prepare_buffer(&g, 0);
+	transmit();
+	CHECK(aprs_afsk_skipped > 0);
+	CHECK_EQ(aprs_afsk_skipped, (uint32_t)fast_offsets);
+	fast_fail = 0;
+	aprs_afsk_sine = 0;
+}
+
 /* every test runs on a board set up as NZ0P (fake_settings.h) */
 void test_setup(void) {
 	provision();
@@ -341,4 +459,5 @@ TEST_MAIN("aprs", TEST(crc_reference_vector), TEST(base91_telemetry_values),
 		TEST(low_altitude_clamped), TEST(no_pps_sends_status), TEST(no_fix_status_shows_gps_state),
 		TEST(status_negative_temperature), TEST(fix_2d_is_a_position),
 		TEST(prepare_fix_trusts_caller), TEST(fcs_matches_frame), TEST(header_addresses),
-		TEST(station_from_settings), TEST(line_bits_position), TEST(line_bits_status))
+		TEST(station_from_settings), TEST(line_bits_position), TEST(line_bits_status),
+		TEST(tx_square_sequence), TEST(tx_sine_sequence), TEST(tx_sine_counts_skipped_samples))
