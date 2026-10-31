@@ -95,16 +95,20 @@ between GPS PPS pulses measure the carrier's error too. The firmware programs
   Other pulses are counted in `pps_unlocked`, and the estimate is kept. The
   CFG-TP5 `syncMode` option, which would stop the pulse, only applies to
   u-blox's FTS timing variant, not the MAX-M8C.
-- **Samples:** `diag_pps()` (the PPS interrupt) passes the DWT cycle count and
-  the HAL tick interval to `pps_disc_sample()`. A sample is rejected unless:
+- **Samples:** TIM4 latches its 24 MHz count on the PPS edge (input capture
+  on PB8, `ppscap.c`, #12), so the interval is exact however late the PPS
+  interrupt runs: during transmissions it can be held back by up to about
+  11 µs, which made the earlier DWT count read in the interrupt wrong by up
+  to 1.3 ppm under heavy TX. `diag_pps()` passes the captured interval (or
+  the DWT count, `pps_source = 0` over SWD) and the HAL tick interval to
+  `pps_disc_sample()`. A sample is rejected unless:
   - the interval is 1 s +-50 ms by the tick (this drops the first pulse after
     a GPS wake-up and missed pulses);
   - it is within +-10 ppm of 24 000 000;
   - SYSCLK runs from the TCXO (not on the HSI fallback).
 - **Estimate:** a trimmed mean of the last 16 good samples, dropping the 4
-  highest and 4 lowest. That removes pulses whose interrupt was held back by
-  TIM15 (APRS) or SysTick, and resolves better than one cycle (41.7 ppb).
-  It is kept while the GPS sleeps.
+  highest and 4 lowest, which resolves better than one cycle (41.7 ppb). It
+  is kept while the GPS sleeps.
 - **Applying it:** `pps_disc_update()` in the main loop, which only runs
   between transmissions (the PLL can't be retuned while transmitting),
   retunes when the estimate has moved by 10 ppb or more. 10 ppb is 4.5 Hz;
@@ -121,11 +125,31 @@ between GPS PPS pulses measure the carrier's error too. The firmware programs
   | `pps_disc_samples`, `pps_disc_rejected` | sample counts |
   | `gpsTimeOk`, `pps_unlocked` | the last NAV-PVT said GPS time is locked; pulses kept out without it |
 
-- **Expected result:** board 1 should measure about -1400 ppb, a +630 Hz
-  correction at 446.175 MHz. That would put the carrier within about 0.1 ppm
-  instead of -1.47 ppm. The TCXO warm-up drift during a long transmission
-  (-0.15 ppm over 100 s) isn't corrected until the next pause.
-- **Hardware test:** issue #9.
+- **Not corrected during a transmission:** the TCXO's warm-up drift on a
+  long carrier (-0.15 ppm over 100 s) waits for the next pause. Sustained
+  transmitting heats it more: -0.92 to -1.60 ppm over 7 min of back-to-back
+  packets, back to -1.21 ppm 2 min after (#12). That matters for high-duty fox
+  modes.
+- **Hardware test:** issue #9; results below.
+
+### Results, board 1 (#9, #12)
+
+The correction moves the carrier by what the board estimates. Two different
+receivers agree on that, each within its own reference error:
+
+| Date, receiver | Correction off | Correction on | Shift | Board's estimate |
+|---|---|---|---|---|
+| 2026-10-29, HackRF (CW carrier, `pps_disc_enable` 0/1) | -561 Hz (-1.26 ppm) | -108 Hz (-0.24 ppm) | +453 Hz (1.02 ppm) | -1073 ppb (1.07 ppm) |
+| 2026-10-31, RSPdx (APRS bursts; "off" = just after a reflash, before the first estimate) | -251 Hz (sd 33, 4 bursts) | +146 Hz (sd 3, 18 bursts) | +397 Hz (0.89 ppm) | -917 ppb (0.92 ppm) |
+
+- **Shift vs estimate:** agree within 50 ppb (HackRF) and 30 ppb (RSPdx).
+- **What's left over is each receiver's own clock:** the corrected carrier reads -0.24 ppm on the HackRF and +0.33 ppm on the RSPdx. Opposite signs, so the corrected carrier lies between the two. Checking the ±0.1 ppm target absolutely needs a GPS-locked reference.
+- **Overnight soak** (2026-10-31, 8 h, tracker sending every 5 min, GPS always on, TIM4 capture):
+  - 28,871 pulses: 28,867 accepted, **0 rejected**, 0 missing captures, 4 kept out without GPS time lock;
+  - estimate valid in every read, -917 to -1083 ppb, moving slowly with the room (hourly means -1034 … -1072, then -919 once the board had cooled by 1 °C);
+  - all 96 packets on time.
+- **APRS still decodes with the correction:** 16/16 telemetry checks matched the board's own values, Dire Wolf decoded 17/17 square-wave packets, and the D72A decoded them too on 10-29 (#10).
+- **Not done yet:** board 2; the HSI-fallback check (no samples on the internal oscillator).
 
 ## Receiving
 
