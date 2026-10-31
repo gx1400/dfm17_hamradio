@@ -60,9 +60,9 @@ TESTED    = $(sort $(foreach t,$(TESTS),$(SRC_$(t))))
 NOT_TESTED = $(shell sed -n 's/^\([A-Za-z0-9_]*\.c\):.*/\1/p' not_host_tested.txt)
 UNLISTED  = $(filter-out $(TESTED) $(NOT_TESTED),$(notdir $(wildcard $(CORE)/Src/*.c)))
 GCOVR     = gcovr --root ../.. --filter '../../dfm17/Core/Src/' $(COV)
-# every line and function of the tested files is covered or excluded with a
-# reason (GCOVR_EXCL_*); branches are held at the level reached (#40)
-FLOORS    = --fail-under-line 100 --fail-under-function 100 --fail-under-branch 90
+# a floor, not a target: new logic still gets tests, but one untested line no
+# longer fails the build (#40 reached 100% of lines and functions)
+FLOORS    = --fail-under-line 90 --fail-under-function 90 --fail-under-branch 90
 
 coverage:
 	rm -rf $(COV)

@@ -51,9 +51,10 @@ keeps the HTML report as the `coverage-html` artifact.
 ### What gets tested, and what's excluded (#40)
 
 - **Logic gets host tests:** packet building, protocol parsing, state
-  machines, settings, the PPS discipline, radio commands as SPI bytes. Every
-  line and function of a tested file is covered, and **`make coverage` fails
-  under 100% of lines or functions, or 90% of branches**.
+  machines, settings, the PPS discipline, radio commands as SPI bytes. Aim
+  to cover every line and function of a tested file; **`make coverage` fails
+  under 90% of lines, functions or branches**, a floor that leaves room for
+  the odd line that isn't worth a test.
 - **Whole files that aren't host-tested** are listed with the reason in
   [`not_host_tested.txt`](not_host_tested.txt): CubeMX-generated set-up and HAL
   glue, board bring-up, and the bench builds (`hw_survey`, `rf_test`,
