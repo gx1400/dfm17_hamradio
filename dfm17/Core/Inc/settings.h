@@ -136,7 +136,7 @@ uint8_t settings_gps_always_on(void);
  * fields only, and bump SWD_INFO_VERSION when the layout changes; the tools
  * check the layout against the ELF in CI (dfmcfg.py --check-elf) */
 #define SWD_INFO_MAGIC	 "DFM-SWD"
-#define SWD_INFO_VERSION 1
+#define SWD_INFO_VERSION 2
 
 typedef struct {
 	char magic[8];			  /* SWD_INFO_MAGIC */
@@ -154,6 +154,9 @@ typedef struct {
 	volatile uint32_t *settings_done;
 	volatile uint32_t *settings_repairs;
 	volatile uint32_t *tx_refused;
+	/* version 2: the send-now trigger (#51) */
+	volatile uint8_t *aprs_send_now;
+	volatile uint32_t *aprs_packets_sent;
 } swd_info_t;
 
 extern const swd_info_t swd_info;

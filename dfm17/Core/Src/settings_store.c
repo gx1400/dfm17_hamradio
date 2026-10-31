@@ -87,6 +87,8 @@ const swd_info_t swd_info = {
 		.settings_done = &settings_done,
 		.settings_repairs = &settings_repairs,
 		.tx_refused = &si4060_tx_refused,
+		.aprs_send_now = &aprs_send_now,
+		.aprs_packets_sent = &aprs_packets_sent,
 };
 
 /* the last settings that passed settings_check(), for the runtime check */

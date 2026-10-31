@@ -82,6 +82,10 @@ volatile uint16_t aprs_mark_dev_hz = APRS_MARK_DEV_HZ;
 volatile uint16_t aprs_space_dev_hz = APRS_SPACE_DEV_HZ;
 /* samples skipped in the last packet because the radio wasn't ready */
 volatile uint32_t aprs_afsk_skipped;
+volatile uint8_t aprs_send_now;
+volatile uint32_t aprs_packets_sent;
+/* si4060_tx_refused when the packet started: unchanged at the end = keyed */
+static uint32_t refused_at_start;
 static volatile uint8_t afsk_run;
 static uint32_t afsk_phase, afsk_inc_mark, afsk_inc_space;
 static int32_t afsk_amp_mark, afsk_amp_space;
@@ -504,6 +508,7 @@ static uint8_t tx_sine;
  */
 void aprs_tx_start(void) {
 	tx_sine = aprs_afsk_sine;
+	refused_at_start = si4060_tx_refused;
 
 	if (tx_sine) {
 		afsk_amp_mark = si4060_offset_units(aprs_mark_dev_hz);
@@ -581,6 +586,29 @@ void aprs_tx_stop(void) {
 	if (tx_sine)
 		si4060_set_deviation(cfg.dev_hz);
 	ledOffGreen();
+	if (si4060_tx_refused == refused_at_start)
+		aprs_packets_sent++;
+}
+
+/*
+ * aprs_send_now_due
+ *
+ * the send-now trigger (aprs_send_now, over SWD): returns 1 if a packet is due
+ * now and counts the request down; with several requested, they go
+ * APRS_SEND_NOW_GAP_MS apart. now: HAL_GetTick()
+ */
+uint8_t aprs_send_now_due(uint32_t now) {
+	static uint32_t last;
+	static uint8_t sent_before;
+
+	if (!aprs_send_now)
+		return 0;
+	if (sent_before && now - last < APRS_SEND_NOW_GAP_MS)
+		return 0;
+	aprs_send_now--;
+	last = now;
+	sent_before = 1;
+	return 1;
 }
 
 /*

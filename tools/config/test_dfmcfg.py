@@ -157,8 +157,16 @@ class Versions(unittest.TestCase):
 
 class Descriptor(unittest.TestCase):
     def test_size_matches_c(self):
-        # 8 + 4 bytes, then 10 pointers: swd_info_t on the Cortex-M3
-        self.assertEqual(d.SWD_INFO_SIZE, 12 + 10 * 4)
+        # 8 + 4 bytes, then 12 pointers (10 in version 1): swd_info_t on the Cortex-M3
+        self.assertEqual(d.SWD_INFO_SIZE, 12 + 12 * 4)
+        self.assertEqual(d.SWD_INFO_V1_SIZE, 12 + 10 * 4)
+
+    def test_version_1_still_works_without_send(self):
+        b = d.Board(FakeLink(info={"version": 1, "size": d.SWD_INFO_V1_SIZE}))
+        self.assertEqual(b.sym["settings_done"], (0x20000184, 4))
+        self.assertNotIn("aprs_send_now", b.sym)
+        with self.assertRaisesRegex(d.SettingsError, "no send-now trigger"):
+            b.send()
 
     def test_found_anywhere_aligned(self):
         for at in (0x08000000, 0x08001FF0, 0x08003FFC, 0x0800FFC0):
@@ -244,6 +252,24 @@ class BoardCommands(unittest.TestCase):
         self.assertEqual(d.callsign_str(self.board.settings()), "N0CALL")
         self.board.run("defaults")
         self.assertEqual(self.board.status()["source"], "built-in defaults")
+
+    def test_send_now(self):
+        s = self.board.settings()
+        d.apply_assignment(s, "callsign=NZ0P")
+        self.board.apply(s)
+        self.assertEqual(self.board.send(), (1, 0))
+        self.assertEqual(self.board.send(5), (5, 0))
+        self.assertEqual(self.board.u32("aprs_packets_sent"), 6)
+        self.assertEqual(self.board.u8("aprs_send_now"), 0)
+
+    def test_send_now_refused_without_callsign(self):
+        self.assertEqual(self.board.send(2), (0, 2))  # defaults: N0CALL
+        self.assertEqual(self.board.u32("si4060_tx_refused"), 2)
+
+    def test_send_count_checked(self):
+        for n in (0, 256):
+            with self.assertRaisesRegex(d.SettingsError, "1 to 255"):
+                self.board.send(n)
 
 
 if __name__ == "__main__":

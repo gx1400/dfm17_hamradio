@@ -40,5 +40,6 @@
 
 void tracker_start(void);
 void tracker_poll(GNSS_StateHandle *GNSS);
+void tracker_send_now(GNSS_StateHandle *GNSS);
 
 #endif /* INC_TRACKER_H_ */

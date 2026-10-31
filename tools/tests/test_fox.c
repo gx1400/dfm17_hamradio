@@ -161,16 +161,22 @@ static void test_tone_then_aprs(void) {
 	CHECK(seen);
 }
 
+/* #51: send-now is just the packet, no test tone or delays */
+static void send_now_no_tone(void) {
+	GNSS_StateHandle g = {0};
+	reset();
+	int before = aprs_sent;
+	fox_send_now(&g);
+	CHECK_EQ(aprs_sent, before + 1);
+	CHECK_EQ(nruns, 0);
+	CHECK(!tx_on);
+}
+
 /* every test runs on a board set up as NZ0P (fake_settings.h) */
 void test_setup(void) {
 	provision();
 }
 
-TEST_MAIN("fox",
-	TEST(aprs_every_nth_cycle),
-	TEST(morse_id_decodes),
-	TEST(morse_timing),
-	TEST(hunt_tone_length),
-	TEST(cycle_fits_period),
-	TEST(test_carrier),
-	TEST(test_tone_then_aprs))
+TEST_MAIN("fox", TEST(aprs_every_nth_cycle), TEST(morse_id_decodes), TEST(morse_timing),
+		TEST(hunt_tone_length), TEST(cycle_fits_period), TEST(test_carrier),
+		TEST(test_tone_then_aprs), TEST(send_now_no_tone))

@@ -38,6 +38,15 @@ uint8_t aprs_prepare_fix(GNSS_StateHandle *GNSS, uint8_t fix_valid, uint8_t back
 void aprs_prepare_status(const GNSS_StateHandle *GNSS);
 void aprs_afsk_tick(void);
 
+/* send-now trigger (#51): write N over SWD to send N APRS packets right
+ * away, no test tone, APRS_SEND_NOW_GAP_MS apart. the main loop counts it
+ * down as it sends */
+#define APRS_SEND_NOW_GAP_MS 1000
+extern volatile uint8_t aprs_send_now;
+/* APRS packets keyed, all of them (refused by the transmit gate: not counted) */
+extern volatile uint32_t aprs_packets_sent;
+uint8_t aprs_send_now_due(uint32_t now);
+
 /* AFSK modulation (see aprs.c): 0 = square wave on GPIO3 (tested on air),
  * 1 = sine AFSK with pre-emphasis. aprs_afsk_sine can be changed over SWD */
 #define APRS_AFSK_SINE			0

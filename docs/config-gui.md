@@ -51,15 +51,18 @@ descriptor in flash, `swd_info` (settings.h, settings_store.c):
 | `settings_cmd`, `settings_result`, `settings_done` | the mailbox |
 | `settings_source`, `settings_error` | where the live settings came from, last check |
 | `settings_repairs`, `tx_refused` | counters |
+| `aprs_send_now`, `aprs_packets_sent` | version 2: the send-now trigger and the packets-sent counter (#51) |
 
-52 B of flash; `init.c` prints the version string through it, which keeps it
-in the image. The tools scan flash for the magic, 8 KB per read, so
-no linker script change was needed.
+60 B of flash (52 B in version 1); `init.c` prints the version string through
+it, which keeps it in the image. The tools scan flash for the magic, 8 KB per
+read, so no linker script change was needed.
 
 Rules for changing it (`SWD_INFO` in dfmcfg.py mirrors it):
 
 - Fields are only ever appended, and `SWD_INFO_VERSION` goes up. Tools accept
-  a newer descriptor (they read the fields they know), never an older one.
+  a newer descriptor (they read the fields they know). They also accept an
+  older one, using only the fields its `size` covers: a version 1 board works
+  for settings, and `send` reports that its firmware has no trigger.
 - `make -C tools/tests` checks the pointers against the variables;
   `dfmcfg.py --check-elf` checks every built ELF's descriptor against its
   symbol table and sizes (CI, firmware job, and the release).

@@ -28,9 +28,14 @@ static void call(char c) {
 		calls[ncalls++] = c;
 }
 void si4060_setup(uint8_t mod_type) { (void)mod_type; }
+/* the transmit gate (si4063.c): refuse = 1 stands for a refused key-up */
+volatile uint32_t si4060_tx_refused;
+static int refuse;
 void si4060_start_tx(uint8_t channel) {
 	(void)channel;
 	call('S');
+	if (refuse)
+		si4060_tx_refused++;
 }
 void si4060_stop_tx(void) {
 	call('P');
@@ -448,6 +453,41 @@ static void tx_sine_counts_skipped_samples(void) {
 	aprs_afsk_sine = 0;
 }
 
+/* aprs_packets_sent counts packets that were keyed, not ones the gate refused */
+static void packets_sent_counted(void) {
+	GNSS_StateHandle g = fix_3d();
+	uint32_t sent = aprs_packets_sent;
+	aprs_prepare_buffer(&g, 0);
+	transmit();
+	CHECK_EQ(aprs_packets_sent, sent + 1);
+	refuse = 1;
+	transmit();
+	refuse = 0;
+	CHECK_EQ(aprs_packets_sent, sent + 1);
+	transmit();
+	CHECK_EQ(aprs_packets_sent, sent + 2);
+}
+
+/* #51: one request, one packet; several go APRS_SEND_NOW_GAP_MS apart */
+static void send_now_paced(void) {
+	uint32_t t = 100000;
+	aprs_send_now = 0;
+	CHECK_EQ(aprs_send_now_due(t), 0);
+	aprs_send_now = 1;
+	CHECK_EQ(aprs_send_now_due(t), 1);
+	CHECK_EQ(aprs_send_now, 0);
+	CHECK_EQ(aprs_send_now_due(t + 5000), 0);
+
+	aprs_send_now = 3;
+	t += 10000;
+	CHECK_EQ(aprs_send_now_due(t), 1);
+	CHECK_EQ(aprs_send_now_due(t + APRS_SEND_NOW_GAP_MS - 1), 0);
+	CHECK_EQ(aprs_send_now_due(t + APRS_SEND_NOW_GAP_MS), 1);
+	CHECK_EQ(aprs_send_now_due(t + 2 * APRS_SEND_NOW_GAP_MS), 1);
+	CHECK_EQ(aprs_send_now, 0);
+	CHECK_EQ(aprs_send_now_due(t + 10 * APRS_SEND_NOW_GAP_MS), 0);
+}
+
 /* every test runs on a board set up as NZ0P (fake_settings.h) */
 void test_setup(void) {
 	provision();
@@ -460,4 +500,5 @@ TEST_MAIN("aprs", TEST(crc_reference_vector), TEST(base91_telemetry_values),
 		TEST(status_negative_temperature), TEST(fix_2d_is_a_position),
 		TEST(prepare_fix_trusts_caller), TEST(fcs_matches_frame), TEST(header_addresses),
 		TEST(station_from_settings), TEST(line_bits_position), TEST(line_bits_status),
-		TEST(tx_square_sequence), TEST(tx_sine_sequence), TEST(tx_sine_counts_skipped_samples))
+		TEST(tx_square_sequence), TEST(tx_sine_sequence), TEST(tx_sine_counts_skipped_samples),
+		TEST(packets_sent_counted), TEST(send_now_paced))

@@ -20,6 +20,8 @@ RAM_AT = {
     "settings_done": 0x20000184,
     "settings_repairs": 0x20000188,
     "si4060_tx_refused": 0x2000018C,
+    "aprs_send_now": 0x20000190,
+    "aprs_packets_sent": 0x20000194,
 }
 FW_AT = 0x08005000
 
@@ -79,9 +81,26 @@ class FakeLink:
         self._put(addr, raw)
         if addr == RAM_AT["settings_cmd"]:
             self._command(raw[0])
+        elif addr == RAM_AT["aprs_send_now"]:
+            self._send_now(raw[0])
 
     def close(self):
         self.closed = True
+
+    # ---- the send-now trigger (#51) --------------------------------------------
+
+    def _send_now(self, n):
+        """the main loop sends n packets; the transmit gate refuses them all
+        without a callsign set up, as si4060_start_tx() does"""
+        s = d.unpack(self._get("cfg"))
+        name = (
+            "aprs_packets_sent"
+            if d.check(s) == "OK" and d.callsign_str(s) != "N0CALL"
+            else "si4060_tx_refused"
+        )
+        count = struct.unpack("<I", self._get(name))[0] + n
+        self._put(RAM_AT[name], struct.pack("<I", count))
+        self._put(RAM_AT["aprs_send_now"], b"\0")
 
     # ---- the firmware's mailbox ----------------------------------------------
 
