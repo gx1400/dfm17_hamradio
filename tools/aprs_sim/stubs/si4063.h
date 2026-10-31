@@ -5,6 +5,8 @@
 #define MOD_TYPE_2FSK 0x02
 void si4060_setup(uint8_t mod_type);
 void si4060_start_tx(uint8_t channel);
+/* transmit gate refusals (si4063.c); aprs.c counts only keyed packets */
+extern volatile uint32_t si4060_tx_refused;
 void si4060_stop_tx(void);
 #define RF_DEV_HZ_DFM 2600UL
 void si4060_set_deviation(uint32_t dev_hz);

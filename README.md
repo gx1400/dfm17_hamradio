@@ -174,6 +174,9 @@ of the tag ([docs/settings.md](docs/settings.md)).
   red-yellow-green chase, then the board switches off). On USB power the
   board can't switch itself off: it goes dark and stops transmitting until
   the next press restarts it
+- Send an APRS packet now, without the button test's 5 s tone (for decoder
+  tests): `tools/config/dfmcfg.py send [N]` over the ST-Link. It writes N to
+  `aprs_send_now`; `aprs_packets_sent` counts every packet sent
 - Green: on while transmitting, short heartbeat flash when idle (double flash
   while paused). Yellow: flashes with GPS PPS, solid with a 3D fix. Red: blink
   code, 1 = radio not found, 2 = not running from the radio clock,

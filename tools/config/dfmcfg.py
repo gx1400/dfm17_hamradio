@@ -457,7 +457,8 @@ IDCODE_REG = 0xE0042000  # DBGMCU_IDCODE: device and revision
 # are named after the symbol they point at (the C tx_refused field points at
 # si4060_tx_refused); --check-elf compares them with the ELF's symbol table.
 SWD_INFO_MAGIC = b"DFM-SWD\0"
-SWD_INFO_VERSION = 1
+# the newest layout these tools know; version 1 (no send-now) still works
+SWD_INFO_VERSION = 2
 SWD_INFO = [
     ("magic", "8s"),
     ("version", "B"),
@@ -474,24 +475,38 @@ SWD_INFO = [
     ("settings_done", "I"),
     ("settings_repairs", "I"),
     ("si4060_tx_refused", "I"),
+    # version 2: the send-now trigger (#51)
+    ("aprs_send_now", "I"),
+    ("aprs_packets_sent", "I"),
 ]
 SWD_INFO_FMT = "<" + "".join(f for _, f in SWD_INFO)
 SWD_INFO_SIZE = struct.calcsize(SWD_INFO_FMT)
+# version 1 ends after si4060_tx_refused; later fields are optional
+SWD_INFO_V1_FIELDS = 15
+SWD_INFO_V1_SIZE = struct.calcsize("<" + "".join(f for _, f in SWD_INFO[:SWD_INFO_V1_FIELDS]))
 # bytes at each pointer (fw_version is a string, read up to its NUL)
 TARGET_SIZES = {"cfg": SIZE, "settings_edit": SIZE, "settings_done": 4, "settings_repairs": 4}
 TARGET_SIZES["si4060_tx_refused"] = 4
 for _n in ("settings_cmd", "settings_result", "settings_source", "settings_error"):
     TARGET_SIZES[_n] = 1
+TARGET_SIZES["aprs_send_now"] = 1
+TARGET_SIZES["aprs_packets_sent"] = 4
 
 
 def parse_swd_info(raw):
-    """the descriptor's fields, checked: SettingsError if these tools can't use it"""
+    """the descriptor's fields, checked: SettingsError if these tools can't use it.
+    Fields past the board's own size (an older firmware) are left out."""
     info = dict(zip((n for n, _ in SWD_INFO), struct.unpack_from(SWD_INFO_FMT, raw)))
     if info["magic"] != SWD_INFO_MAGIC:
         raise SettingsError("not an SWD descriptor")
     # fields are only appended: a newer layout still starts with these
-    if info["version"] < SWD_INFO_VERSION or info["size"] < SWD_INFO_SIZE:
+    if info["version"] < 1 or info["size"] < SWD_INFO_V1_SIZE:
         raise SettingsError(f"SWD descriptor version {info['version']} is older than these tools")
+    off = 0
+    for name, fmt in SWD_INFO:
+        off += struct.calcsize(fmt)
+        if off > info["size"]:
+            del info[name]
     if info["settings_version"] != VERSION or info["settings_size"] != SIZE:
         raise SettingsError(
             f"the board's settings layout is version {info['settings_version']} "
@@ -499,7 +514,7 @@ def parse_swd_info(raw):
             "use the tools released with the board's firmware"
         )
     for name, size in TARGET_SIZES.items():
-        if not RAM[0] <= info[name] <= RAM[1] - size:
+        if name in info and not RAM[0] <= info[name] <= RAM[1] - size:
             raise SettingsError(f"SWD descriptor: {name} at 0x{info[name]:08X} isn't in RAM")
     if not FLASH <= info["fw_version"] < FLASH + 0x20000:
         raise SettingsError("SWD descriptor: fw_version isn't in flash")
@@ -709,7 +724,7 @@ class Board:
             fw_addr = self.sym["fw_version"][0] if "fw_version" in self.sym else None
         else:
             info = find_swd_info(link, self.flash_kb)
-            self.sym = {n: (info[n], s) for n, s in TARGET_SIZES.items()}
+            self.sym = {n: (info[n], s) for n, s in TARGET_SIZES.items() if n in info}
             fw_addr = info["fw_version"]
         self.fw_version = self.read_string(fw_addr) if fw_addr else "unknown"
 
@@ -772,6 +787,26 @@ class Board:
             raise SettingsError(f"the firmware refused it ({why}): {WHY.get(why, why)}")
         if save and self.command("save") != "OK":
             raise SettingsError("applied, but saving to the EEPROM failed")
+
+    def send(self, n=1):
+        """send-now trigger (#51): n APRS packets, no test tone. Waits until n
+        have been keyed or refused by the transmit gate; returns (sent, refused).
+        A scheduled packet in the meantime counts as sent too."""
+        if "aprs_send_now" not in self.sym or "aprs_packets_sent" not in self.sym:
+            raise SettingsError("this firmware has no send-now trigger: flash a newer build")
+        if not 1 <= n <= 255:
+            raise SettingsError("send 1 to 255 packets")
+        sent0, refused0 = self.u32("aprs_packets_sent"), self.u32("si4060_tx_refused")
+        self.link.write(self.sym["aprs_send_now"][0], bytes([n]))
+        # each packet takes ~1.5 s with the gap; a fox tone may be running first
+        deadline = time.monotonic() + 70 + 3 * n
+        while time.monotonic() < deadline:
+            sent = self.u32("aprs_packets_sent") - sent0
+            refused = self.u32("si4060_tx_refused") - refused0
+            if sent + refused >= n:
+                return sent, refused
+            time.sleep(0.1)
+        raise SettingsError(f"only {sent} of {n} sent ({refused} refused) before the timeout")
 
     def run(self, name):
         """save, reload or defaults"""
@@ -840,7 +875,7 @@ def connect(a):
         ok, why = version_match(board.fw_version)
         if not ok:
             msg = f"{why}. Use the tools released with the board's firmware, or flash this build"
-            if a.command not in ("show",) and not a.allow_mismatch:
+            if a.command not in ("show", "send") and not a.allow_mismatch:
                 link.close()
                 raise SettingsError(msg + " (--allow-mismatch to go ahead anyway)")
             print(f"warning: {msg}", file=sys.stderr)
@@ -872,9 +907,9 @@ def main():
     ap.add_argument(
         "command",
         nargs="?",
-        choices=["show", "set", "save", "reload", "defaults", "check", "fields"],
+        choices=["show", "set", "save", "reload", "defaults", "check", "fields", "send"],
     )
-    ap.add_argument("values", nargs="*", help="name=value, for set and check")
+    ap.add_argument("values", nargs="*", help="name=value, for set and check; N for send")
     a = ap.parse_args()
 
     if a.layout:
@@ -905,8 +940,18 @@ def main():
 
         if a.command == "set" and not a.values:
             raise SettingsError("set what? e.g. set callsign=NZ0P ssid=12")
+        if a.command == "send":
+            if len(a.values) > 1 or (a.values and not a.values[0].isdigit()):
+                raise SettingsError("send [N]: the number of packets, e.g. send 5")
+            count = int(a.values[0]) if a.values else 1
         board = connect(a)
         try:
+            if a.command == "send":
+                sent, refused = board.send(count)
+                print(f"sent {sent} APRS packet(s)" + (f", {refused} refused" if refused else ""))
+                if refused:
+                    print("refused by the transmit gate: no callsign set up, or invalid settings")
+                return 0
             if a.command == "set":
                 s = board.settings()
                 for item in a.values:

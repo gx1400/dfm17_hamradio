@@ -255,9 +255,37 @@ void test_setup(void) {
 	provision();
 }
 
+/* #51: send-now sends one packet, the current fix while there is one and the
+ * last fix while the GPS sleeps, without waking the GPS or moving the
+ * schedule */
+static void send_now_uses_last_fix_and_keeps_schedule(void) {
+	reset(fix_after_5s);
+	run(8000); /* 3D fix seen, still settling */
+	tracker_send_now(&gnss);
+	CHECK_EQ(nsent, 1);
+	CHECK(POSITION(0));
+	CHECK_EQ(sent[0].from_last_fix, 0);
+	run(52000); /* the scheduled position is still sent; GPS asleep */
+	CHECK_EQ(nsent, 2);
+	nsent = 1; /* forget the send-now packet: the checks below count from here */
+	sent[0] = sent[1];
+	CHECK_EQ(nsent, 1);
+	CHECK(asleep);
+	tracker_send_now(&gnss);
+	CHECK_EQ(nsent, 2);
+	CHECK(POSITION(1));
+	CHECK_EQ(sent[1].from_last_fix, 1);
+	CHECK(asleep);
+	CHECK_EQ(wakes, 0);
+	/* the next scheduled packet still comes one period after the first */
+	run(cfg.tracker_period_s * 1000UL);
+	CHECK_EQ(nsent, 3);
+	CHECK_EQ(sent[2].at - sent[0].at, cfg.tracker_period_s * 1000UL);
+}
+
 TEST_MAIN("tracker", TEST(quick_fix_sends_position_and_sleeps), TEST(cycle_repeats_every_period),
 		TEST(no_fix_times_out_and_keeps_gps_on), TEST(two_d_only_is_sent_at_timeout),
 		TEST(flaky_fix_sends_last_3d_fix), TEST(last_fix_does_not_carry_over),
 		TEST(stale_fix_after_wake_is_ignored), TEST(late_first_fix),
 		TEST(reacquires_after_losing_fix), TEST(always_on_never_sleeps),
-		TEST(always_on_wakes_a_sleeping_gps))
+		TEST(always_on_wakes_a_sleeping_gps), TEST(send_now_uses_last_fix_and_keeps_schedule))

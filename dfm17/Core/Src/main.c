@@ -287,6 +287,17 @@ int main(void)
 	  // between transmissions: retune for the TCXO error measured from GPS PPS
 	  pps_disc_update();
 
+#ifndef HW_NFC
+	  // send-now trigger over SWD (#51): one APRS packet, no test tone; works
+	  // while paused, and the transmit gate still applies
+	  if (aprs_send_now_due(HAL_GetTick())) {
+		  if (cfg.mode == MODE_FOX)
+			  fox_send_now(gnss);
+		  else
+			  tracker_send_now(gnss);
+	  }
+#endif
+
 	  if (foxPaused) {
 		  // nothing to do
 	  } else if (cfg.mode == MODE_FOX) {

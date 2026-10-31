@@ -33,6 +33,7 @@ tools/config/dfmcfg.py show
 | `defaults` | use the built-in defaults (N0CALL, no transmitting) until a reset or `reload` |
 | `check name=value ...` | check values offline, without a board |
 | `fields` | the list below |
+| `send [N]` | send N APRS packets now (default 1), no test tone, 1 s apart; works while paused. Prints how many went out and how many the transmit gate refused (no callsign set up). For testing decoders and AFSK changes (#51) |
 
 The script finds the settings through the descriptor the firmware keeps in
 flash (`swd_info`, [config-gui.md](config-gui.md)) and compares the board's

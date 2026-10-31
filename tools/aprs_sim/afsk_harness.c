@@ -39,6 +39,7 @@ void deassertSiGPIO3(void) { gpio3 = 0; }
 void ledOnGreen(void) {}
 void ledOffGreen(void) {}
 void si4060_setup(uint8_t mod_type) { (void)mod_type; }
+volatile uint32_t si4060_tx_refused;
 void si4060_start_tx(uint8_t channel) { (void)channel; }
 void si4060_stop_tx(void) {}
 void si4060_set_deviation(uint32_t dev_hz) { (void)dev_hz; }

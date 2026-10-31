@@ -190,3 +190,12 @@ void fox_test_tone_aprs(GNSS_StateHandle *GNSS) {
 	HAL_Delay(500);
 	send_aprs(GNSS);
 }
+
+/*
+ * fox_send_now
+ *
+ * send-now trigger (#51): one APRS packet, no test tone
+ */
+void fox_send_now(GNSS_StateHandle *GNSS) {
+	send_aprs(GNSS);
+}

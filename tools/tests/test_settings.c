@@ -56,6 +56,8 @@ void si4060_set_tx_power(uint8_t p) {
 	radio_pa = p;
 }
 volatile uint32_t si4060_tx_refused;
+volatile uint8_t aprs_send_now;
+volatile uint32_t aprs_packets_sent;
 const char fw_version[] = "DFMFW test tracker";
 
 extern settings_t settings_edit;
@@ -499,6 +501,8 @@ static void swd_info_points_at_mailbox(void) {
 	CHECK(swd_info.settings_done == &settings_done);
 	CHECK(swd_info.settings_repairs == &settings_repairs);
 	CHECK(swd_info.tx_refused == &si4060_tx_refused);
+	CHECK(swd_info.aprs_send_now == &aprs_send_now);
+	CHECK(swd_info.aprs_packets_sent == &aprs_packets_sent);
 }
 
 TEST_MAIN("settings", TEST(defaults_are_valid_but_dont_transmit), TEST(crc_matches_python),

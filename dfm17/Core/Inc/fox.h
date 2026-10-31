@@ -50,5 +50,6 @@
 void fox_transmit(GNSS_StateHandle *GNSS);
 void fox_test_carrier(void);
 void fox_test_tone_aprs(GNSS_StateHandle *GNSS);
+void fox_send_now(GNSS_StateHandle *GNSS);
 
 #endif /* INC_FOX_H_ */
