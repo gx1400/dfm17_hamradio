@@ -157,9 +157,18 @@ class Versions(unittest.TestCase):
 
 class Descriptor(unittest.TestCase):
     def test_size_matches_c(self):
-        # 8 + 4 bytes, then 12 pointers (10 in version 1): swd_info_t on the Cortex-M3
-        self.assertEqual(d.SWD_INFO_SIZE, 12 + 12 * 4)
+        # 8 + 4 bytes, then 17 pointers (10 in version 1, 12 in version 2):
+        # swd_info_t on the Cortex-M3
+        self.assertEqual(d.SWD_INFO_SIZE, 12 + 17 * 4)
         self.assertEqual(d.SWD_INFO_V1_SIZE, 12 + 10 * 4)
+
+    def test_version_2_works_without_calibration(self):
+        b = d.Board(FakeLink(info={"version": 2, "size": 12 + 12 * 4}))
+        self.assertIn("aprs_send_now", b.sym)
+        self.assertNotIn("cal", b.sym)
+        self.assertIsNone(b.analog())
+        with self.assertRaisesRegex(d.SettingsError, "no calibration block"):
+            b.cal()
 
     def test_version_1_still_works_without_send(self):
         b = d.Board(FakeLink(info={"version": 1, "size": d.SWD_INFO_V1_SIZE}))
@@ -169,7 +178,7 @@ class Descriptor(unittest.TestCase):
             b.send()
 
     def test_found_anywhere_aligned(self):
-        for at in (0x08000000, 0x08001FF0, 0x08003FFC, 0x0800FFC0):
+        for at in (0x08000000, 0x08001FF0, 0x08003FFC, 0x08010000 - d.SWD_INFO_SIZE):
             b = d.Board(FakeLink(swd_at=at))
             self.assertEqual(b.sym["cfg"], (0x20000100, 64), hex(at))
 
@@ -270,6 +279,113 @@ class BoardCommands(unittest.TestCase):
         for n in (0, 256):
             with self.assertRaisesRegex(d.SettingsError, "1 to 255"):
                 self.board.send(n)
+
+
+class Calibration(unittest.TestCase):
+    def test_crc_matches_firmware(self):
+        # the same known answer as test_cal.c (crc_matches_python)
+        self.assertEqual(d.cal_defaults()["crc"], 0x2535)
+
+    def test_defaults_ok(self):
+        c = d.cal_defaults()
+        self.assertEqual(d.cal_check(c), "OK")
+        self.assertEqual((c["vin_a"], c["vin_b"]), (131072, 208))
+        self.assertEqual(len(d.cal_pack(c)), d.CAL_SIZE)
+        self.assertEqual(d.cal_unpack(bytes(d.cal_pack(c))), c)
+
+    def test_assignments(self):
+        c = d.cal_defaults()
+        for item in ("vin_a=1.9992", "vin_b=208", "iin_a=1.001", "iin_b=3.7", "date=2026-10-30"):
+            d.cal_assignment(c, item)
+        self.assertEqual(c["vin_a"], 131020)
+        self.assertEqual(c["iin_a"], 65602)
+        self.assertEqual(c["iin_b"], 4)
+        self.assertEqual(c["measured"], 0b011)
+        self.assertEqual(c["date"], 20261030)
+        self.assertEqual(d.cal_check(d.cal_seal(c)), "OK")
+        self.assertIn("1.9992 x +208 mV  (measured)", d.describe_cal(c))
+        self.assertIn("date 2026-10-30", d.describe_cal(c))
+        d.cal_assignment(c, "vin=default")
+        self.assertEqual((c["vin_a"], c["vin_b"], c["measured"]), (131072, 208, 0b010))
+
+    def test_assignments_rejected(self):
+        for bad in (
+            "vin_a=1.4",  # more than 25% off 2.0
+            "usb_a=2.6",
+            "iin_b=501",
+            "vin_a=two",
+            "vin_c=1",
+            "temp_a=1",
+            "date=30/10/2026",
+            "vin",
+        ):
+            with self.assertRaises(d.SettingsError, msg=bad):
+                d.cal_assignment(d.cal_defaults(), bad)
+
+    def test_check_mirrors_firmware(self):
+        c = d.cal_defaults()
+        c["vin_a"] = 131072 + 131072 // 4  # the limit: in
+        c["iin_b"] = -500
+        self.assertEqual(d.cal_check(d.cal_seal(c)), "OK")
+        c["vin_a"] += 1
+        self.assertEqual(d.cal_bad_channels(c), ["vin"])
+        self.assertEqual(d.cal_check(d.cal_seal(c)), "RANGE")
+        c["vin_b"] += 1  # not resealed
+        self.assertEqual(d.cal_check(c), "CRC")
+        self.assertEqual(d.cal_check(d.cal_unpack(b"\xff" * 32)), "MAGIC")
+
+    def test_analog_pins(self):
+        r = d.Board(FakeLink()).analog()
+        self.assertEqual(r["vin_pin_mv"], 2956 * 3306 // 4095)
+        self.assertEqual((r["vin_mv"], r["on_usb"]), (4980, 1))
+
+
+class CalibrationCommands(unittest.TestCase):
+    def setUp(self):
+        self.link = FakeLink()
+        self.board = d.Board(self.link)
+
+    def test_status_of_erased_block(self):
+        st = self.board.cal_status()
+        self.assertEqual(st["source"], "built-in defaults")
+        self.assertEqual(st["error"], "MAGIC")
+        self.assertEqual(st["cal"], d.cal_defaults())
+
+    def test_apply_save_reload(self):
+        c = self.board.cal()
+        d.cal_assignment(c, "vin_a=1.9992")
+        self.board.cal_apply(c)
+        self.assertEqual(self.board.cal_status()["source"], "SWD (not saved)")
+        self.assertEqual(self.board.cal()["vin_a"], 131020)
+        self.assertEqual(self.link.cal_eeprom, b"\xff" * 32)
+        self.board.cal_run("save")
+        self.assertEqual(d.cal_unpack(self.link.cal_eeprom)["vin_a"], 131020)
+        self.board.cal_run("defaults")
+        self.assertEqual(self.board.cal()["vin_a"], 131072)
+        self.board.cal_run("reload")
+        self.assertEqual(self.board.cal_status()["source"], "EEPROM")
+        self.assertEqual(self.board.cal()["vin_a"], 131020)
+
+    def test_reload_of_erased_block_refused(self):
+        with self.assertRaisesRegex(d.SettingsError, "INVALID.*MAGIC"):
+            self.board.cal_run("reload")
+
+    def test_out_of_range_never_sent(self):
+        c = self.board.cal()
+        c["usb_a"] = 0
+        done = self.board.u32("settings_done")
+        with self.assertRaisesRegex(d.SettingsError, "RANGE"):
+            self.board.cal_apply(c)
+        self.assertEqual(self.board.u32("settings_done"), done)
+
+    def test_settings_and_calibration_separate(self):
+        c = self.board.cal()
+        d.cal_assignment(c, "iin_b=3")
+        self.board.cal_apply(c, save=True)
+        self.board.run("defaults")
+        self.board.run("save")
+        self.assertEqual(self.board.cal()["iin_b"], 3)
+        self.assertEqual(d.cal_unpack(self.link.cal_eeprom)["iin_b"], 3)
 
 
 if __name__ == "__main__":

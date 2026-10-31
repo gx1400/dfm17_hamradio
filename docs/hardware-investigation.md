@@ -84,20 +84,40 @@ Recommended follow-ups:
   `:NZ0P-12  :EQNS.0,1,-512,0,1,0,0,1,0`.
 - Read the supply while transmitting too (minimum voltage under load is the
   better battery indicator), not only before the packet.
-- Move the calibration constants into the EEPROM settings (per board).
+- ~~Move the calibration constants into the EEPROM settings (per board).~~
+  Done in #43: a calibration block of its own at EEPROM 0x160
+  ([settings.md](settings.md#analog-calibration)).
 
-### Calibration procedure (planned, bench supply)
+### Calibration factors by board
 
-1. Flash any build with `analog.c` and run
-   `tools/hw_survey/read_analog.sh path/to/dfm17.elf`. It prints raw ADC values,
-   VDDA, Vin and Iin once a second over SWD without disturbing the board.
+Each board's stored factors, by EEPROM UID, so a lost block can be restored
+with `dfmcfg.py cal set ... --save`. `x` is the pin voltage in mV.
+
+| Board | EEPROM UID | Supply voltage (PA0) | Supply current (PB1) | USB VBUS (PC2) | Measured | Stored |
+|---|---|---|---|---|---|---|
+| 1 | `E0025A675B01677B` | 1.9992 x + 208 mV | 1.001 x + 4 mA (fit +3.7) | 2.020 x + 0 | 2026-10-30 (#14, #43) | 2026-10-31 |
+
+```
+dfmcfg.py cal set vin_a=1.9992 vin_b=208 iin_a=1.001 iin_b=3.7 usb_a=2.020 usb_b=0 date=2026-10-30 --save
+```
+
+Board 2: not yet calibrated (it uses the defaults, which are board 1's fits).
+
+### Calibration procedure (bench supply)
+
+1. Flash any current build and run `tools/config/dfmcfg.py cal`. Besides the
+   factors in use it prints the latest readings with each pin voltage `x`,
+   raw count and VDDA, read over SWD without disturbing the board.
+   (`tools/hw_survey/read_analog.sh path/to/dfm17.elf` does the same for
+   older builds.)
 2. Unplug USB, feed the battery terminals from the bench supply with a meter
    on the input and an ammeter in series.
 3. Step the supply (e.g. 6.5, 6.0, 5.0, 4.0, 3.6, 3.3, 3.0 V) and record
    `vin_raw`, `iin_raw`, `vref_raw` and the meter readings. Average a few lines:
    current moves with GPS and LED activity.
 4. Fit `Vin = a * vin_raw * VDDA / 4095 + b` and the same for current, per
-   board. Compare the two boards.
+   board, and store them with `dfmcfg.py cal set ... --save`; add them to the
+   table above. Compare the two boards.
 5. Watch the `VDDA_mV` column: when it starts falling below ~3.3 V the 3.3 V
    regulator is in dropout. That is the real minimum battery voltage.
 6. Use a button test (1-3 s press: tone + APRS) to get readings with the
@@ -132,7 +152,8 @@ Dual-interface EEPROM: I2C to the MCU and ISO 15693 NFC (RF) to a reader.
   `-1051.08, 34554.3, -355302, 1.36e6`. These look like polynomial calibration
   coefficients, most likely for the temperature/humidity sensor boom.
 - `0x160-0x1FF`: erased (`FF`), 160 bytes; **sector 3 (0x180-0x1FF) is entirely
-  free**.
+  free**. Now used: the analog calibration at 0x160-0x17F (#43) and the
+  settings at 0x180-0x1BF (#18).
 
 Leave the Graw region alone (it may be needed to make sense of the sensor boom
 later) and use sector 3.

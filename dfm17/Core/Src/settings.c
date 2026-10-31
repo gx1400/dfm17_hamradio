@@ -82,20 +82,25 @@ void settings_defaults(settings_t *s) {
 }
 
 /*
- * settings_crc
+ * crc16_ccitt
  *
- * CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF) of everything before the crc
- * field; Python: binascii.crc_hqx(data, 0xFFFF)
+ * CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF) of n bytes; Python:
+ * binascii.crc_hqx(data, 0xFFFF). Also the calibration block's (cal.c)
  */
-uint16_t settings_crc(const settings_t *s) {
-	const uint8_t *p = (const uint8_t *)s;
+uint16_t crc16_ccitt(const void *data, size_t n) {
+	const uint8_t *p = data;
 	uint16_t crc = 0xFFFF;
-	for (unsigned i = 0; i < offsetof(settings_t, crc); i++) {
+	for (size_t i = 0; i < n; i++) {
 		crc ^= (uint16_t)p[i] << 8;
 		for (int b = 0; b < 8; b++)
 			crc = crc & 0x8000 ? (uint16_t)(crc << 1) ^ 0x1021 : (uint16_t)(crc << 1);
 	}
 	return crc;
+}
+
+/* the CRC of everything before the crc field */
+uint16_t settings_crc(const settings_t *s) {
+	return crc16_ccitt(s, offsetof(settings_t, crc));
 }
 
 /* fill in magic, version, length and crc after editing the fields */

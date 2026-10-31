@@ -5,6 +5,13 @@
 #include "test.h"
 #include "fake_hal.h"
 #include "analog.h"
+#include "cal.h"
+
+/* every test starts on the default calibration (cal.c): Vin = 2.0 x + 208,
+ * Iin = 1.0 x + 4, VBUS = 2.02 x */
+void test_setup(void) {
+	cal_defaults(&cal);
+}
 
 /* raw 12-bit count of a pin voltage at a given VDDA */
 static uint32_t counts(double mv, double vdda_mv) {
@@ -24,10 +31,24 @@ static void supply_voltage_and_current(void) {
 	analog_reading r;
 	/* survey values on USB: 2.33 V on PA0, 54 mV on PB1 (54 mA) */
 	analog_convert(&r, counts(1200, 3300), counts(2330, 3300), counts(54, 3300), counts(1410, 3300), 0);
-	CHECK_NEAR(r.vin_mv, 2330 * ANALOG_VIN_DIVIDER, 6);
-	CHECK_NEAR(r.iin_ma, 54 * ANALOG_I_MA_PER_V / 1000, 2);
+	CHECK_NEAR(r.vin_mv, 2 * 2330 + 208, 6);
+	CHECK_NEAR(r.iin_ma, 54 + 4, 2);
 	CHECK_EQ(r.vin_raw, counts(2330, 3300));
 	CHECK_EQ(r.iin_raw, counts(54, 3300));
+}
+
+/* a board's own factors replace the defaults */
+static void calibrated_factors_used(void) {
+	analog_reading r;
+	cal.ch[CAL_VIN].a_q16 = 131020; /* board 1: 1.9992 x + 208 */
+	cal.ch[CAL_IIN].a_q16 = 65602;	/* 1.001 x + 3.7 (stored as 4) */
+	cal.ch[CAL_USB].a_q16 = 131072; /* 2.0 x + 40 */
+	cal.ch[CAL_USB].b = 40;
+	analog_convert(&r, counts(1200, 3300), counts(2330, 3300), counts(100, 3300),
+			counts(1410, 3300), counts(2480, 3300));
+	CHECK_NEAR(r.vin_mv, 1.9992 * 2330 + 208, 6);
+	CHECK_NEAR(r.iin_ma, 1.001 * 100 + 4, 2);
+	CHECK_NEAR(r.usb_mv, 2 * 2480 + 40, 6);
 }
 
 static void readings_independent_of_vdda(void) {
@@ -58,15 +79,18 @@ static void vrefint_zero_does_not_divide_by_zero(void) {
 
 static void usb_presence_and_voltage(void) {
 	analog_reading r;
-	/* 5.0 V VBUS through the (placeholder) divider */
-	uint32_t pin = (uint32_t)(5000 / ANALOG_USB_DIVIDER);
+	/* 5.0 V VBUS through the default divider, 2.02 */
+	uint32_t pin = (uint32_t)(5000 / 2.02);
 	analog_convert(&r, counts(1200, 3300), 0, 0, counts(1410, 3300), counts(pin, 3300));
 	CHECK_EQ(r.on_usb, 1);
 	CHECK_NEAR(r.usb_mv, 5000, 8);
 	CHECK_EQ(r.usb_raw, counts(pin, 3300));
-	/* on battery the pin floats near 0 through the divider */
+	/* on battery the pin floats near 0 through the divider; reported as 0,
+	 * even with a calibration offset */
+	cal.ch[CAL_USB].b = 40;
 	analog_convert(&r, counts(1200, 3300), 0, 0, counts(1410, 3300), counts(30, 3300));
 	CHECK_EQ(r.on_usb, 0);
+	CHECK_EQ(r.usb_mv, 0);
 	/* the threshold is on the pin voltage, independent of the divider */
 	analog_convert(&r, counts(1200, 3300), 0, 0, counts(1410, 3300),
 			counts(ANALOG_USB_PRESENT_MV + 20, 3300));
@@ -95,5 +119,6 @@ static void read_averages_each_channel(void) {
 }
 
 TEST_MAIN("analog", TEST(vdda_from_vrefint), TEST(read_averages_each_channel),
-		TEST(supply_voltage_and_current), TEST(readings_independent_of_vdda), TEST(temperature),
+		TEST(supply_voltage_and_current), TEST(calibrated_factors_used),
+		TEST(readings_independent_of_vdda), TEST(temperature),
 		TEST(vrefint_zero_does_not_divide_by_zero), TEST(usb_presence_and_voltage))

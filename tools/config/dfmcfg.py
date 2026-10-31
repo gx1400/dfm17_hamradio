@@ -6,6 +6,9 @@
     dfmcfg.py save | reload | defaults
     dfmcfg.py check callsign=NZ0P freq=446175000 ...   (offline, no board)
     dfmcfg.py fields                                   (what can be set)
+    dfmcfg.py cal [show]                               (analog calibration, #43)
+    dfmcfg.py cal set vin_a=1.9992 vin_b=208 [--save]
+    dfmcfg.py cal save | reload | defaults
 
 Settings live in the NFC EEPROM (docs/settings.md); the firmware loads them at
 boot. A board with no settings uses the defaults: callsign N0CALL, and it
@@ -88,6 +91,7 @@ ERRORS = [
 SOURCES = ["built-in defaults", "EEPROM", "SWD (not saved)"]
 RESULTS = ["none", "OK", "INVALID", "EEPROM", "BAD_CMD"]
 CMD = {"edit": 1, "apply": 2, "save": 3, "reload": 4, "defaults": 5}
+CMD.update(cal_edit=6, cal_apply=7, cal_save=8, cal_reload=9, cal_defaults=10)
 FLAG_START_PAUSED = 0x01
 MODES = {"tracker": 0, "fox": 1}
 PATHS = {"WIDE1-1": 0x11, "WIDE2-1": 0x21, "WIDE2-2": 0x22}
@@ -336,6 +340,182 @@ FIELDS_HELP = """settings (name=value):
                          tracker fixes; always_on: never (1PPS kept, ~20-25 mA more)"""
 
 
+# ---- the analog calibration block (#43) ------------------------------------------
+# cal_t in dfm17/Core/Inc/cal.h, at EEPROM 0x160, separate from the settings.
+# Each channel is value = a * x + b, x the pin voltage in mV after VDDA
+# compensation; a is Q16 fixed point, b in mV or mA.
+
+CAL_SIZE = 32
+CAL_VERSION = 1
+CAL_LAYOUT = [
+    ("magic", 0, "2s"),
+    ("version", 2, "B"),
+    ("length", 3, "B"),
+    ("vin_a", 4, "<i"),
+    ("vin_b", 8, "<h"),
+    ("iin_a", 10, "<i"),
+    ("iin_b", 14, "<h"),
+    ("usb_a", 16, "<i"),
+    ("usb_b", 20, "<h"),
+    ("measured", 22, "B"),
+    ("reserved1", 23, "B"),
+    ("date", 24, "<I"),
+    ("reserved", 28, "2s"),
+    ("crc", 30, "<H"),
+]
+# name, what it is, unit of b; in enum cal_channel order (bit n of measured)
+CAL_CHANNELS = [
+    ("vin", "supply voltage (PA0)", "mV"),
+    ("iin", "supply current (PB1)", "mA"),
+    ("usb", "USB VBUS (PC2)", "mV"),
+]
+# cal.c's defaults: board 1's fits (#14, #43)
+CAL_DEFAULT = {"vin": (131072, 208), "iin": (65536, 4), "usb": (132383, 0)}
+CAL_GAIN_TOLERANCE = 4  # gain within 1/4 (25%) of the default
+CAL_MAX_OFFSET = 500
+CAL_NO_DATE = 0xFFFFFFFF
+CAL_ERRORS = ["OK", "MAGIC", "VERSION", "CRC", "RANGE", "EEPROM"]
+CAL_SOURCES = ["built-in defaults", "EEPROM", "SWD (not saved)"]
+
+
+def cal_unpack(raw):
+    c = {}
+    for name, off, fmt in CAL_LAYOUT:
+        (c[name],) = struct.unpack_from(fmt, raw, off)
+    return c
+
+
+def cal_pack(c):
+    raw = bytearray(CAL_SIZE)
+    for name, off, fmt in CAL_LAYOUT:
+        struct.pack_into(fmt, raw, off, c[name])
+    return raw
+
+
+def cal_seal(c):
+    """magic, version, length and CRC, as cal_seal() does"""
+    c.update(magic=b"CA", version=CAL_VERSION, length=CAL_SIZE, crc=0)
+    c["crc"] = binascii.crc_hqx(bytes(cal_pack(c)[: CAL_SIZE - 2]), 0xFFFF)
+    return c
+
+
+def cal_defaults():
+    """cal_defaults() in cal.c: the defaults, none measured"""
+    c = {"measured": 0, "reserved1": 0xFF, "date": CAL_NO_DATE, "reserved": b"\xff\xff"}
+    for ch, (a, b) in CAL_DEFAULT.items():
+        c[f"{ch}_a"], c[f"{ch}_b"] = a, b
+    return cal_seal(c)
+
+
+def cal_bad_channels(c):
+    """the channels outside the limits, as cal_bad_channels()"""
+    bad = []
+    for ch, (a0, _) in CAL_DEFAULT.items():
+        if abs(c[f"{ch}_a"] - a0) > a0 // CAL_GAIN_TOLERANCE or abs(c[f"{ch}_b"]) > CAL_MAX_OFFSET:
+            bad.append(ch)
+    return bad
+
+
+def cal_check(c):
+    """the firmware's cal_check(): the error name, or 'OK'"""
+    if c["magic"] != b"CA":
+        return "MAGIC"
+    if c["version"] != CAL_VERSION or c["length"] != CAL_SIZE:
+        return "VERSION"
+    if c["crc"] != binascii.crc_hqx(bytes(cal_pack(c)[: CAL_SIZE - 2]), 0xFFFF):
+        return "CRC"
+    return "RANGE" if cal_bad_channels(c) else "OK"
+
+
+def cal_limits(ch):
+    a0, _ = CAL_DEFAULT[ch]
+    d = a0 // CAL_GAIN_TOLERANCE
+    return (a0 - d) / 65536, (a0 + d) / 65536
+
+
+def cal_assignment(c, item):
+    """one name=value for `cal set`: vin_a=1.9992, iin_b=3.7, usb=default,
+    date=2026-10-30. Setting a channel marks it measured."""
+    if "=" not in item:
+        raise SettingsError(f"'{item}': expected name=value, e.g. vin_a=1.9992 vin_b=208")
+    name, v = (x.strip().lower() for x in item.split("=", 1))
+    chans = [n for n, _, _ in CAL_CHANNELS]
+    if name == "date":
+        m = re.fullmatch(r"(\d{4})-?(\d{2})-?(\d{2})", v)
+        if not m:
+            raise SettingsError(f"date: '{v}' isn't a date, e.g. 2026-10-30")
+        c["date"] = int("".join(m.groups()))
+        return
+    if name in chans and v == "default":
+        c[f"{name}_a"], c[f"{name}_b"] = CAL_DEFAULT[name]
+        c["measured"] &= ~(1 << chans.index(name))
+        return
+    m = re.fullmatch(r"(vin|iin|usb)_(a|b)", name)
+    if not m:
+        raise SettingsError(
+            f"'{name}' isn't a calibration value: vin_a, vin_b, iin_a, iin_b, usb_a, usb_b, "
+            "date, or <channel>=default"
+        )
+    ch, which = m.groups()
+    try:
+        x = float(v)
+    except ValueError:
+        raise SettingsError(f"{name}: '{v}' isn't a number") from None
+    if which == "a":
+        lo, hi = cal_limits(ch)
+        if not lo <= x <= hi:
+            raise SettingsError(f"{name}: {x} is outside {lo:.4f}-{hi:.4f} (25% of the default)")
+        c[name] = round(x * 65536)
+    else:
+        if abs(x) > CAL_MAX_OFFSET:
+            raise SettingsError(f"{name}: {x} is outside +-{CAL_MAX_OFFSET}")
+        c[name] = round(x)
+    c["measured"] |= 1 << chans.index(ch)
+
+
+def cal_date_str(c):
+    d = c["date"]
+    if d == CAL_NO_DATE:
+        return "none"
+    return f"{d // 10000:04d}-{d // 100 % 100:02d}-{d % 100:02d}"
+
+
+def describe_cal(c):
+    lines = []
+    for i, (ch, what, unit) in enumerate(CAL_CHANNELS):
+        tag = "measured" if c["measured"] & (1 << i) else "default"
+        lines.append(
+            f"  {ch}  {what:22s} {c[f'{ch}_a'] / 65536:.4f} x {c[f'{ch}_b']:+d} {unit}  ({tag})"
+        )
+    lines.append(f"  date {cal_date_str(c)}")
+    return "\n".join(lines)
+
+
+# analog_reading in dfm17/Core/Inc/analog.h (19 bytes, padded to 20)
+ANALOG = [
+    ("vin_raw", "H"),
+    ("iin_raw", "H"),
+    ("vref_raw", "H"),
+    ("vdda_mv", "H"),
+    ("vin_mv", "H"),
+    ("iin_ma", "H"),
+    ("temp_c", "h"),
+    ("usb_raw", "H"),
+    ("usb_mv", "H"),
+    ("on_usb", "B"),
+]
+ANALOG_FMT = "<" + "".join(f for _, f in ANALOG)
+ANALOG_SIZE = 20
+
+
+def analog_unpack(raw):
+    r = dict(zip((n for n, _ in ANALOG), struct.unpack_from(ANALOG_FMT, raw)))
+    # the pin voltages calibration is fitted against, as analog_convert()
+    for ch in ("vin", "iin", "usb"):
+        r[f"{ch}_pin_mv"] = r[f"{ch}_raw"] * r["vdda_mv"] // 4095
+    return r
+
+
 # ---- fields, as the GUI shows them ------------------------------------------------
 # (name, group, choices): name is what apply_assignment() takes, choices a
 # list for a drop-down or None for free text. The help comes from FIELDS_HELP.
@@ -457,8 +637,9 @@ IDCODE_REG = 0xE0042000  # DBGMCU_IDCODE: device and revision
 # are named after the symbol they point at (the C tx_refused field points at
 # si4060_tx_refused); --check-elf compares them with the ELF's symbol table.
 SWD_INFO_MAGIC = b"DFM-SWD\0"
-# the newest layout these tools know; version 1 (no send-now) still works
-SWD_INFO_VERSION = 2
+# the newest layout these tools know; version 1 (no send-now) and 2 (no
+# calibration) still work for what they have
+SWD_INFO_VERSION = 3
 SWD_INFO = [
     ("magic", "8s"),
     ("version", "B"),
@@ -478,6 +659,12 @@ SWD_INFO = [
     # version 2: the send-now trigger (#51)
     ("aprs_send_now", "I"),
     ("aprs_packets_sent", "I"),
+    # version 3: the analog calibration (#43) and the latest readings
+    ("cal", "I"),
+    ("cal_edit", "I"),
+    ("cal_source", "I"),
+    ("cal_error", "I"),
+    ("analog_last", "I"),
 ]
 SWD_INFO_FMT = "<" + "".join(f for _, f in SWD_INFO)
 SWD_INFO_SIZE = struct.calcsize(SWD_INFO_FMT)
@@ -491,6 +678,8 @@ for _n in ("settings_cmd", "settings_result", "settings_source", "settings_error
     TARGET_SIZES[_n] = 1
 TARGET_SIZES["aprs_send_now"] = 1
 TARGET_SIZES["aprs_packets_sent"] = 4
+TARGET_SIZES.update(cal=CAL_SIZE, cal_edit=CAL_SIZE, cal_source=1, cal_error=1)
+TARGET_SIZES["analog_last"] = ANALOG_SIZE
 
 
 def parse_swd_info(raw):
@@ -815,6 +1004,51 @@ class Board:
             why = ERRORS[self.u8("settings_error")]
             raise SettingsError(f"{name} failed: {result} ({why})")
 
+    # ---- the analog calibration (#43) ----------------------------------------
+
+    def _need_cal(self):
+        if "cal" not in self.sym:
+            raise SettingsError("this firmware has no calibration block (#43): flash a newer build")
+
+    def cal(self):
+        self._need_cal()
+        return cal_unpack(self.read_sym("cal"))
+
+    def analog(self):
+        """the latest readings (refreshed every second), or None on older firmware"""
+        if "analog_last" not in self.sym:
+            return None
+        return analog_unpack(self.read_sym("analog_last"))
+
+    def cal_apply(self, c, save=False):
+        """check c, send it and apply it; then save if asked"""
+        self._need_cal()
+        err = cal_check(cal_seal(c))
+        if err != "OK":
+            raise SettingsError(f"not applied: {err} ({', '.join(cal_bad_channels(c))})")
+        if self.command("cal_edit") != "OK":
+            raise SettingsError("couldn't read the live calibration")
+        self.link.write(self.sym["cal_edit"][0], bytes(cal_pack(c)))
+        if self.command("cal_apply") != "OK":
+            raise SettingsError(f"the firmware refused it ({CAL_ERRORS[self.u8('cal_error')]})")
+        if save and self.command("cal_save") != "OK":
+            raise SettingsError("applied, but saving to the EEPROM failed")
+
+    def cal_run(self, name):
+        """save, reload or defaults, for the calibration"""
+        self._need_cal()
+        result = self.command(f"cal_{name}")
+        if result != "OK":
+            raise SettingsError(f"cal {name} failed: {result} ({CAL_ERRORS[self.u8('cal_error')]})")
+
+    def cal_status(self):
+        return {
+            "cal": self.cal(),
+            "source": CAL_SOURCES[self.u8("cal_source")],
+            "error": CAL_ERRORS[self.u8("cal_error")],
+            "analog": self.analog(),
+        }
+
     def status(self):
         s = self.settings()
         return {
@@ -867,6 +1101,53 @@ def print_status(board):
         print(f"  key-ups refused {st['tx_refused']}, live settings restored {st['repairs']} times")
 
 
+def print_cal_status(board):
+    st = board.cal_status()
+    print(f"calibration from {st['source']}; last load/apply check: {st['error']}")
+    print(describe_cal(st["cal"]))
+    r = st["analog"]
+    if r and not r["vdda_mv"]:
+        print("readings  none yet (the board has just started; it reads them every second)")
+    elif r:
+        print(
+            f"readings  vin {r['vin_mv']} mV (pin {r['vin_pin_mv']} mV, raw {r['vin_raw']}), "
+            f"iin {r['iin_ma']} mA (pin {r['iin_pin_mv']} mV, raw {r['iin_raw']}), "
+            f"usb {r['usb_mv']} mV (pin {r['usb_pin_mv']} mV, raw {r['usb_raw']}), "
+            f"VDDA {r['vdda_mv']} mV, {r['temp_c']} C, {'USB' if r['on_usb'] else 'BAT'}"
+        )
+
+
+def run_cal(board, a):
+    """the cal subcommands"""
+    sub = a.values[0] if a.values else "show"
+    if sub == "set":
+        if len(a.values) < 2:
+            raise SettingsError("cal set what? e.g. cal set vin_a=1.9992 vin_b=208")
+        c = board.cal()
+        c["date"] = int(time.strftime("%Y%m%d"))
+        for item in a.values[1:]:
+            cal_assignment(c, item)
+        board.cal_apply(c, save=a.save)
+        print("applied" + (", saved to the EEPROM" if a.save else ""))
+        if not a.save:
+            print("not saved: lost at the next reset unless you run 'dfmcfg.py cal save'")
+    elif sub in ("save", "reload", "defaults"):
+        if len(a.values) > 1:
+            raise SettingsError(f"cal {sub} takes no values")
+        board.cal_run(sub)
+        print(f"cal {sub}: OK")
+    elif sub != "show":
+        raise SettingsError(f"cal {sub}? show, set, save, reload or defaults")
+    print_cal_status(board)
+
+
+def read_only(a):
+    """commands that change nothing on the board"""
+    return a.command in ("show", "send") or (
+        a.command == "cal" and (not a.values or a.values[0] == "show")
+    )
+
+
 def connect(a):
     """the board, with the version check: SettingsError if writes aren't allowed"""
     link = LINKS[a.link]()
@@ -875,7 +1156,7 @@ def connect(a):
         ok, why = version_match(board.fw_version)
         if not ok:
             msg = f"{why}. Use the tools released with the board's firmware, or flash this build"
-            if a.command not in ("show", "send") and not a.allow_mismatch:
+            if not read_only(a) and not a.allow_mismatch:
                 link.close()
                 raise SettingsError(msg + " (--allow-mismatch to go ahead anyway)")
             print(f"warning: {msg}", file=sys.stderr)
@@ -896,7 +1177,9 @@ def main():
         action="store_true",
         help="change settings although the board's firmware version differs from these tools",
     )
-    ap.add_argument("--save", action="store_true", help="with set: also save to the EEPROM")
+    ap.add_argument(
+        "--save", action="store_true", help="with set or cal set: also save to the EEPROM"
+    )
     ap.add_argument("--layout", action="store_true", help="print the field offsets and exit")
     ap.add_argument(
         "--check-elf",
@@ -907,14 +1190,20 @@ def main():
     ap.add_argument(
         "command",
         nargs="?",
-        choices=["show", "set", "save", "reload", "defaults", "check", "fields", "send"],
+        choices=["show", "set", "save", "reload", "defaults", "check", "fields", "send", "cal"],
     )
-    ap.add_argument("values", nargs="*", help="name=value, for set and check; N for send")
+    ap.add_argument(
+        "values",
+        nargs="*",
+        help="name=value, for set and check; N for send; show/set/save/reload/defaults for cal",
+    )
     a = ap.parse_args()
 
     if a.layout:
         for name, off, fmt in LAYOUT:
             print(name, off, struct.calcsize(fmt))
+        for name, off, fmt in CAL_LAYOUT:
+            print(f"cal.{name}", off, struct.calcsize(fmt))
         return 0
     if a.version:
         print(tool_version())
@@ -946,6 +1235,9 @@ def main():
             count = int(a.values[0]) if a.values else 1
         board = connect(a)
         try:
+            if a.command == "cal":
+                run_cal(board, a)
+                return 0
             if a.command == "send":
                 sent, refused = board.send(count)
                 print(f"sent {sent} APRS packet(s)" + (f", {refused} refused" if refused else ""))

@@ -34,6 +34,7 @@
   */
 
 #include "analog.h"
+#include "cal.h"
 #include "main.h"
 
 #define CH_VIN			0
@@ -107,8 +108,8 @@ void analog_read(analog_reading *r) {
 /*
  * analog_convert
  *
- * converts raw 12-bit averages to the values in r, scaling by VDDA measured
- * from VREFINT
+ * converts raw 12-bit averages to the values in r: pin voltages scaled by
+ * VDDA measured from VREFINT, then by the board's calibration (cal.c)
  */
 void analog_convert(analog_reading *r, uint32_t vref, uint32_t vin_raw,
 		uint32_t iin_raw, uint32_t temp_raw, uint32_t usb_raw) {
@@ -123,12 +124,13 @@ void analog_convert(analog_reading *r, uint32_t vref, uint32_t vin_raw,
 	int32_t temp_pin = temp_raw * vdda / 4095;
 
 	r->vdda_mv = vdda;
-	r->vin_mv = (uint16_t)(vin_pin * ANALOG_VIN_DIVIDER);
-	r->iin_ma = (uint16_t)(iin_pin * ANALOG_I_MA_PER_V / 1000.0f);
+	r->vin_mv = cal_scale(CAL_VIN, vin_pin);
+	r->iin_ma = cal_scale(CAL_IIN, iin_pin);
 	r->temp_c = (int16_t)(25 + (TEMP_V25_MV - temp_pin) * 1000 / TEMP_SLOPE_UV);
 
 	uint32_t usb_pin = usb_raw * vdda / 4095;
 	r->usb_raw = usb_raw;
-	r->usb_mv = (uint16_t)(usb_pin * ANALOG_USB_DIVIDER);
 	r->on_usb = usb_pin > ANALOG_USB_PRESENT_MV;
+	/* 0 on battery, whatever the calibration's offset */
+	r->usb_mv = r->on_usb ? cal_scale(CAL_USB, usb_pin) : 0;
 }

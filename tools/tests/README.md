@@ -19,7 +19,8 @@ and a summary, and the run fails if any check does.
 | `test_fox` | fox.c | the Morse ID decoded back from the tone timeline, element and gap timing, hunt tone length, APRS every 10th cycle, the button test transmissions |
 | `test_diag` | diag.c | button debounce, contact bounce, short/medium/long presses, a press held at power-on ignored, LED feedback while held, heartbeat, red blink codes, PPS flash, the PPS cycle count across the counter wrap |
 | `test_ppsdisc` | ppsdisc.c | the TCXO correction: estimate from a full window, slow and fast TCXOs, the corrected carrier, sub-cycle resolution, one-sided outliers trimmed, missed pulses / wake-up / HSI samples rejected, estimate kept without GPS, retune threshold, disable, queue overflow |
-| `test_analog` | analog.c | VDDA from VREFINT, supply voltage and current, independence from VDDA, temperature, the averaged reads through a fake ADC |
+| `test_analog` | analog.c | VDDA from VREFINT, supply voltage and current with the default and a board's calibration, independence from VDDA, temperature, USB VBUS (0 on battery), the averaged reads through a fake ADC |
+| `test_cal` | cal.c | the calibration block's defaults and CRC (same as Python), magic/version/CRC/range checks at the limits, per-channel fallback on load, fixed-point scaling, rounding and clamping |
 
 How it works:
 
