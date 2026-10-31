@@ -1,0 +1,81 @@
+name: Settings app
+
+# Packages the settings GUI (tools/config/dfmgui.py) for each platform with
+# tools/config/build_app.py, stamped with the same version as the firmware,
+# and checks each build with its --self-test. release.yml calls this for a
+# tag and attaches the apps to the release; pull requests that change the
+# tools run it too, so a release doesn't find a broken build first.
+on:
+  workflow_call:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - tools/config/**
+      - tools/requirements-config.txt
+      - tools/requirements-app.txt
+      - .github/workflows/app.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  app:
+    name: App (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows on arm64 isn't built: pyOCD's cmsis-pack-manager has no
+        # wheel for it. Intel Macs: run from source (docs/config-gui.md).
+        os: [ubuntu-24.04, ubuntu-24.04-arm, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # git describe needs the tags
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: tools/requirements-app.txt
+      - name: Install PyInstaller and pyOCD
+        run: pip install -r tools/requirements-app.txt
+      - name: Build the app
+        run: python tools/config/build_app.py --dist dist
+      - name: Self-test the app (version, pyOCD, the board code)
+        run: |
+          want=$(git describe --tags --always --dirty)
+          case "$RUNNER_OS" in
+          macOS) app=$(ls -d dist/*.app); exe="$app/Contents/MacOS/$(basename "$app" .app)" ;;
+          Windows) exe=$(ls dist/*.exe) ;;
+          *) exe=$(ls dist/dfm17-config-*) ;;
+          esac
+          "$exe" --self-test self-test.json
+          cat self-test.json
+          python - "$want" <<'PY'
+          import json, sys
+          r = json.load(open("self-test.json"))
+          assert r["version"] == sys.argv[1], f"app is {r['version']}, the checkout {sys.argv[1]}"
+          assert "probes_error" not in r, r["probes_error"]
+          assert r["simulated"]["match"], r
+          PY
+      - name: Zip the macOS app
+        if: runner.os == 'macOS'
+        run: |
+          app=$(ls -d dist/*.app)
+          ditto -c -k --keepParent "$app" "${app%.app}.zip"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: app-${{ matrix.os }}
+          path: |
+            dist/dfm17-config-*.exe
+            dist/dfm17-config-*.zip
+            dist/dfm17-config-*-linux-*
+          if-no-files-found: error

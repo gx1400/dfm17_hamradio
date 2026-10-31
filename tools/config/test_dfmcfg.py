@@ -1,4 +1,5 @@
-"""Unit tests for dfmcfg.py's checks (run by make -C tools/tests)."""
+"""Unit tests for dfmcfg.py: the checks, the field model, the SWD descriptor and
+the board commands against fakeboard.py (run by make -C tools/tests)."""
 
 import os
 import sys
@@ -6,6 +7,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(__file__))
 import dfmcfg as d
+from fakeboard import FakeLink
 
 
 def defaults():
@@ -110,6 +112,138 @@ class Checks(unittest.TestCase):
         bad_crc = defaults()
         bad_crc["ssid"] = 1
         self.assertEqual(d.check(bad_crc), "CRC")
+
+
+class Fields(unittest.TestCase):
+    def test_every_field_has_help(self):
+        helps = d.field_help()
+        for name, _, _ in d.FIELDS:
+            self.assertTrue(helps.get(name), name)
+
+    def test_field_values_round_trip(self):
+        s = defaults()
+        s.update(flags=d.FLAG_START_PAUSED, gps_power=1, freq_hz=432_100_000, path=0x22)
+        for name, _, choices in d.FIELDS:
+            text = d.field_value(s, name)
+            if choices:
+                self.assertIn(text, choices, name)
+            t = dict(s)
+            d.apply_assignment(t, f"{name}={text}")
+            self.assertEqual(t, s, name)
+
+    def test_defaults_match_firmware_defaults(self):
+        # the defaults in the test above are the firmware's, with a callsign
+        want = defaults()
+        want["callsign"] = b"N0CALL"
+        self.assertEqual(d.defaults(), d.seal(want))
+
+
+class Versions(unittest.TestCase):
+    def test_parse(self):
+        self.assertEqual(
+            d.parse_fw_version("DFMFW v0.4.0-3-gabc1234 tracker"), ("v0.4.0-3-gabc1234", "tracker")
+        )
+        self.assertEqual(d.parse_fw_version("garbage"), (None, None))
+
+    def test_match(self):
+        self.assertEqual(d.version_match("DFMFW v0.4.0 fox", "v0.4.0"), (True, ""))
+        ok, why = d.version_match("DFMFW v0.3.0 tracker", "v0.4.0")
+        self.assertFalse(ok)
+        self.assertIn("v0.3.0", why)
+        self.assertFalse(d.version_match("DFMFW unknown cubeide", "v0.4.0")[0])
+        self.assertFalse(d.version_match("DFMFW v0.4.0 tracker", "unknown")[0])
+        self.assertFalse(d.version_match("hello", "v0.4.0")[0])
+
+
+class Descriptor(unittest.TestCase):
+    def test_size_matches_c(self):
+        # 8 + 4 bytes, then 10 pointers: swd_info_t on the Cortex-M3
+        self.assertEqual(d.SWD_INFO_SIZE, 12 + 10 * 4)
+
+    def test_found_anywhere_aligned(self):
+        for at in (0x08000000, 0x08001FF0, 0x08003FFC, 0x0800FFC0):
+            b = d.Board(FakeLink(swd_at=at))
+            self.assertEqual(b.sym["cfg"], (0x20000100, 64), hex(at))
+
+    def test_unaligned_magic_skipped(self):
+        link = FakeLink(swd_at=0x08004000)
+        link._put(0x08001001, d.SWD_INFO_MAGIC)  # e.g. inside other data
+        self.assertEqual(d.Board(link).fw_version.split()[0], "DFMFW")
+
+    def test_missing(self):
+        with self.assertRaisesRegex(d.SettingsError, "no SWD descriptor"):
+            d.Board(FakeLink(swd_at=None))
+
+    def test_other_settings_layout_refused(self):
+        with self.assertRaisesRegex(d.SettingsError, "settings layout is version 2"):
+            d.Board(FakeLink(info={"settings_version": 2}))
+        with self.assertRaisesRegex(d.SettingsError, "settings layout"):
+            d.Board(FakeLink(info={"settings_size": 72}))
+
+    def test_newer_descriptor_accepted(self):
+        b = d.Board(FakeLink(info={"version": d.SWD_INFO_VERSION + 1, "size": d.SWD_INFO_SIZE + 8}))
+        self.assertEqual(b.sym["settings_done"], (0x20000184, 4))
+
+    def test_bad_pointer_refused(self):
+        with self.assertRaisesRegex(d.SettingsError, "isn't in RAM"):
+            d.Board(FakeLink(info={"cfg": 0x08000000}))
+
+
+class BoardCommands(unittest.TestCase):
+    def setUp(self):
+        self.link = FakeLink(fw_version="DFMFW v9.9.9 fox")
+        self.board = d.Board(self.link)
+
+    def test_versions(self):
+        self.assertEqual(self.board.fw_version, "DFMFW v9.9.9 fox")
+        dev, rev, uid = self.board.mcu()
+        self.assertEqual((dev, rev), (0x420, 0x1001))
+        self.assertEqual(len(uid), 24)
+        self.assertEqual(self.board.flash_kb, 64)
+
+    def test_status_of_defaults(self):
+        st = self.board.status()
+        self.assertEqual(st["source"], "EEPROM")
+        self.assertEqual(st["error"], "OK")
+        self.assertFalse(st["tx_allowed"])  # N0CALL
+
+    def test_apply_then_save(self):
+        s = self.board.settings()
+        d.apply_assignment(s, "callsign=NZ0P")
+        d.apply_assignment(s, "freq=432.1MHz")
+        self.board.apply(s)
+        st = self.board.status()
+        self.assertEqual(st["source"], "SWD (not saved)")
+        self.assertTrue(st["tx_allowed"])
+        self.assertEqual(st["settings"]["freq_hz"], 432_100_000)
+        self.assertEqual(d.unpack(self.link.eeprom)["callsign"], b"N0CALL")
+        self.board.run("save")
+        self.assertEqual(self.board.status()["source"], "EEPROM")
+        self.assertEqual(d.unpack(self.link.eeprom)["callsign"], b"NZ0P\0\0")
+
+    def test_apply_and_save_together(self):
+        s = self.board.settings()
+        d.apply_assignment(s, "callsign=NZ0P")
+        self.board.apply(s, save=True)
+        self.assertEqual(self.board.status()["source"], "EEPROM")
+
+    def test_invalid_never_sent(self):
+        s = self.board.settings()
+        s["tracker_settle_s"] = 500
+        done = self.board.u32("settings_done")
+        with self.assertRaisesRegex(d.SettingsError, "tracker timing"):
+            self.board.apply(s)
+        self.assertEqual(self.board.u32("settings_done"), done)
+
+    def test_reload_and_defaults(self):
+        s = self.board.settings()
+        d.apply_assignment(s, "callsign=NZ0P")
+        self.board.apply(s)
+        self.board.run("reload")
+        self.assertEqual(self.board.status()["source"], "EEPROM")
+        self.assertEqual(d.callsign_str(self.board.settings()), "N0CALL")
+        self.board.run("defaults")
+        self.assertEqual(self.board.status()["source"], "built-in defaults")
 
 
 if __name__ == "__main__":

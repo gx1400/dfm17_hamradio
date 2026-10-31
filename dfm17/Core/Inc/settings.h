@@ -131,6 +131,33 @@ const char *settings_callsign(void);
 uint8_t settings_tx_allowed(void);
 uint8_t settings_gps_always_on(void);
 
+/* where tools/config (dfmcfg.py, dfmgui.py) finds the SWD mailbox without the
+ * build's ELF: it scans flash for the magic (docs/config-gui.md). Append
+ * fields only, and bump SWD_INFO_VERSION when the layout changes; the tools
+ * check the layout against the ELF in CI (dfmcfg.py --check-elf) */
+#define SWD_INFO_MAGIC	 "DFM-SWD"
+#define SWD_INFO_VERSION 1
+
+typedef struct {
+	char magic[8];			  /* SWD_INFO_MAGIC */
+	uint8_t version;		  /* SWD_INFO_VERSION */
+	uint8_t size;			  /* sizeof(swd_info_t) */
+	uint8_t settings_version; /* SETTINGS_VERSION */
+	uint8_t settings_size;	  /* sizeof(settings_t) */
+	const char *fw_version;
+	settings_t *cfg;
+	settings_t *settings_edit;
+	volatile uint8_t *settings_cmd;
+	volatile uint8_t *settings_result;
+	volatile uint8_t *settings_source;
+	volatile uint8_t *settings_error;
+	volatile uint32_t *settings_done;
+	volatile uint32_t *settings_repairs;
+	volatile uint32_t *tx_refused;
+} swd_info_t;
+
+extern const swd_info_t swd_info;
+
 /* settings_store.c: EEPROM, the SWD mailbox, applying to the radio */
 void settings_init(void);
 uint8_t settings_apply(const settings_t *s, enum settings_source source);
