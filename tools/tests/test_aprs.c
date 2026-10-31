@@ -519,4 +519,4 @@ TEST_MAIN(SUITE, TEST(crc_reference_vector), TEST(base91_telemetry_values),
 		TEST(status_negative_temperature), TEST(fix_2d_is_a_position),
 		TEST(prepare_fix_trusts_caller), TEST(fcs_matches_frame), TEST(header_addresses),
 		TEST(station_from_settings), TEST(line_bits_position), TEST(line_bits_status),
-		TEST(tx_square_sequence), SINE_TESTS TEST(packets_sent_counted), TEST(send_now_paced))
+		SINE_TESTS TEST(tx_square_sequence), TEST(packets_sent_counted), TEST(send_now_paced))
