@@ -12,8 +12,10 @@ FW_SRC  = $(CORE)/Src/aprs.c $(CORE)/Src/string.c $(CORE)/Src/settings.c
 aprs_harness: aprs_harness.c $(FW_SRC) stubs/*.h
 	$(CC) $(CFLAGS) -o $@ aprs_harness.c $(FW_SRC) -lm
 
+# built with the experimental sine AFSK (APRS_AFSK_SINE, the sine_test build);
+# its square mode is the same as the default builds'
 afsk_harness: afsk_harness.c $(FW_SRC) stubs/*.h
-	$(CC) $(CFLAGS) -o $@ afsk_harness.c $(FW_SRC) -lm
+	$(CC) $(CFLAGS) -DAPRS_AFSK_SINE=1 -o $@ afsk_harness.c $(FW_SRC) -lm
 
 # square wave vs sine AFSK through an FM receiver with and without de-emphasis
 afsk-test: afsk_harness

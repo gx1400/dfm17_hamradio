@@ -69,23 +69,26 @@ extern volatile uint16_t aprs_tick;
 extern volatile uint16_t aprs_baud_tick;
 extern volatile uint8_t ppsLockStatus;
 
-/*
- * AFSK modulation, all settable over SWD for testing (takes effect at the next
- * packet):
- * 0: square wave on GPIO3, async direct 2FSK at the settings deviation
- * 1: sine AFSK from MODEM_FREQ_OFFSET writes (aprs_afsk_tick), with separate
- *    mark and space deviation. a louder space tone (pre-emphasis) makes up for
- *    the de-emphasis in FM receivers, which leaves 2200 Hz 5.3 dB below 1200 Hz
- */
-volatile uint8_t aprs_afsk_sine = APRS_AFSK_SINE;
-volatile uint16_t aprs_mark_dev_hz = APRS_MARK_DEV_HZ;
-volatile uint16_t aprs_space_dev_hz = APRS_SPACE_DEV_HZ;
-/* samples skipped in the last packet because the radio wasn't ready */
-volatile uint32_t aprs_afsk_skipped;
 volatile uint8_t aprs_send_now;
 volatile uint32_t aprs_packets_sent;
 /* si4060_tx_refused when the packet started: unchanged at the end = keyed */
 static uint32_t refused_at_start;
+
+#if APRS_AFSK_SINE
+/*
+ * AFSK modulation in the sine_test build, all settable over SWD for testing
+ * (takes effect at the next packet):
+ * 0: square wave on GPIO3, async direct 2FSK at the settings deviation
+ * 1 (the default in this build): sine AFSK from MODEM_FREQ_OFFSET writes
+ *    (aprs_afsk_tick), with separate mark and space deviation. a louder space
+ *    tone (pre-emphasis) makes up for the de-emphasis in FM receivers, which
+ *    leaves 2200 Hz 5.3 dB below 1200 Hz
+ */
+volatile uint8_t aprs_afsk_sine = 1;
+volatile uint16_t aprs_mark_dev_hz = APRS_MARK_DEV_HZ;
+volatile uint16_t aprs_space_dev_hz = APRS_SPACE_DEV_HZ;
+/* samples skipped in the last packet because the radio wasn't ready */
+volatile uint32_t aprs_afsk_skipped;
 static volatile uint8_t afsk_run;
 static uint32_t afsk_phase, afsk_inc_mark, afsk_inc_space;
 static int32_t afsk_amp_mark, afsk_amp_space;
@@ -127,6 +130,10 @@ void aprs_afsk_tick(void) {
 	if (!si4060_set_offset_fast(offset))
 		aprs_afsk_skipped++;
 }
+
+/* whether the packet being sent uses sine AFSK, fixed at aprs_tx_start() */
+static uint8_t tx_sine;
+#endif /* APRS_AFSK_SINE */
 
 /* AX.25 header: APZDFM destination, then the source callsign/SSID and the
  * WIDEn-N path from the settings, filled in by aprs_set_station() */
@@ -495,9 +502,6 @@ uint8_t get_next_bit(void) {
 	return bit_d;
 }
 
-/* whether the packet being sent uses sine AFSK, fixed at aprs_tx_start() */
-static uint8_t tx_sine;
-
 /*
  * aprs_tx_start
  *
@@ -507,9 +511,10 @@ static uint8_t tx_sine;
  * between polls (tools/aprs_sim).
  */
 void aprs_tx_start(void) {
-	tx_sine = aprs_afsk_sine;
 	refused_at_start = si4060_tx_refused;
 
+#if APRS_AFSK_SINE
+	tx_sine = aprs_afsk_sine;
 	if (tx_sine) {
 		afsk_amp_mark = si4060_offset_units(aprs_mark_dev_hz);
 		afsk_amp_space = si4060_offset_units(aprs_space_dev_hz);
@@ -520,6 +525,7 @@ void aprs_tx_start(void) {
 		/* the carrier only moves by MODEM_FREQ_OFFSET */
 		si4060_set_deviation(0);
 	}
+#endif
 	aprs_init();
 	ledOnGreen();
 	deassertSiGPIO3();
@@ -532,11 +538,13 @@ void aprs_tx_start(void) {
 	/* add some TX delay */
 	HAL_Delay(250);
 
+#if APRS_AFSK_SINE
 	if (tx_sine) {
 		/* from here on only the TIM15 ISR uses the SPI */
 		si4060_spi_fast(1);
 		afsk_run = 1;
 	}
+#endif
 	aprs_tick = 0;
 }
 
@@ -552,7 +560,9 @@ uint8_t aprs_tx_poll(void) {
 	if (aprs_tick) {
 		/* running with APRS sample clock */
 		aprs_tick = 0;
+#if APRS_AFSK_SINE
 		if (!tx_sine)
+#endif
 			toggleSiGPIO3();
 		if (aprs_baud_tick) {
 			/* running with bit clock (1200 / sec) */
@@ -574,17 +584,21 @@ uint8_t aprs_tx_poll(void) {
  */
 void aprs_tx_stop(void) {
 	deassertSiGPIO3();
+#if APRS_AFSK_SINE
 	if (tx_sine) {
 		afsk_run = 0;
 		si4060_spi_fast(0);
 		si4060_set_offset(0);
 	}
+#endif
 
 	HAL_Delay(100);
 	si4060_stop_tx();
 	stopAprsTickTimer();
+#if APRS_AFSK_SINE
 	if (tx_sine)
 		si4060_set_deviation(cfg.dev_hz);
+#endif
 	ledOffGreen();
 	if (si4060_tx_refused == refused_at_start)
 		aprs_packets_sent++;

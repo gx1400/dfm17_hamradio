@@ -382,7 +382,8 @@ static void line_bits_status(void) { line_bits_decode_to_frame(0); }
 
 /* sends the prepared packet, standing in for the TIM15 ISR: a sample tick
  * per poll, a baud tick every APRS_MARK_TICKS (the exact rate doesn't matter
- * here), and aprs_afsk_tick() for the sine samples. returns the ticks. */
+ * here), and aprs_afsk_tick() for the sine samples in the sine build
+ * (test_aprs_sine). returns the ticks. */
 static int transmit(void) {
 	int ticks = 0;
 	ncalls = toggles = fast_offsets = 0;
@@ -391,7 +392,9 @@ static int transmit(void) {
 	do {
 		aprs_tick = 1;
 		aprs_baud_tick = ticks % APRS_MARK_TICKS == 0;
+#if APRS_AFSK_SINE
 		aprs_afsk_tick();
+#endif
 		ticks++;
 	} while (aprs_tx_poll() && ticks < 200000);
 	aprs_tx_stop();
@@ -403,13 +406,21 @@ static int transmit(void) {
  * and released, and the deviation and SPI are left alone */
 static void tx_square_sequence(void) {
 	GNSS_StateHandle g = fix_3d();
+#if APRS_AFSK_SINE
 	aprs_afsk_sine = 0;
+#endif
 	aprs_prepare_buffer(&g, 0);
 	int ticks = transmit();
 	CHECK(ticks < 200000); /* finished */
 	CHECK_STR(calls, "GTSPtg");
 	CHECK_EQ(toggles, ticks);
 	CHECK_EQ(fast_offsets, 0);
+}
+
+#if APRS_AFSK_SINE
+/* the sine_test build starts in sine AFSK */
+static void sine_is_the_default(void) {
+	CHECK_EQ(aprs_afsk_sine, 1);
 }
 
 /* sine AFSK: deviation 0 while the TIM15 tick writes the tone as frequency
@@ -453,6 +464,14 @@ static void tx_sine_counts_skipped_samples(void) {
 	aprs_afsk_sine = 0;
 }
 
+#define SUITE "aprs_sine"
+#define SINE_TESTS                                                                                 \
+	TEST(sine_is_the_default), TEST(tx_sine_sequence), TEST(tx_sine_counts_skipped_samples),
+#else
+#define SUITE "aprs"
+#define SINE_TESTS
+#endif
+
 /* aprs_packets_sent counts packets that were keyed, not ones the gate refused */
 static void packets_sent_counted(void) {
 	GNSS_StateHandle g = fix_3d();
@@ -494,11 +513,10 @@ void test_setup(void) {
 	aprs_set_station();
 }
 
-TEST_MAIN("aprs", TEST(crc_reference_vector), TEST(base91_telemetry_values),
+TEST_MAIN(SUITE, TEST(crc_reference_vector), TEST(base91_telemetry_values),
 		TEST(position_packet_fields), TEST(usb_channel_zero_on_battery), TEST(telemetry_sequence),
 		TEST(low_altitude_clamped), TEST(no_pps_sends_status), TEST(no_fix_status_shows_gps_state),
 		TEST(status_negative_temperature), TEST(fix_2d_is_a_position),
 		TEST(prepare_fix_trusts_caller), TEST(fcs_matches_frame), TEST(header_addresses),
 		TEST(station_from_settings), TEST(line_bits_position), TEST(line_bits_status),
-		TEST(tx_square_sequence), TEST(tx_sine_sequence), TEST(tx_sine_counts_skipped_samples),
-		TEST(packets_sent_counted), TEST(send_now_paced))
+		TEST(tx_square_sequence), SINE_TESTS TEST(packets_sent_counted), TEST(send_now_paced))
