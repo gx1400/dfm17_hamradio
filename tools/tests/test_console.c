@@ -366,7 +366,7 @@ static void analog_ver_status(void) {
 
 TEST_MAIN("console", TEST(off_on_battery), TEST(on_with_usb_and_banner),
 		TEST(follows_usb_after_two_readings), TEST(echo_backspace_and_prompt),
-		TEST(echo_catches_up_at_the_end), TEST(bad_lines),
-		TEST(line_pending_drops_input), TEST(fox_and_log), TEST(config_mode_gates_changes),
-		TEST(cfg_get_format), TEST(cfg_put_checks_the_block), TEST(cal_put),
-		TEST(gps_and_back_to_run), TEST(reset_only_on_usb), TEST(analog_ver_status))
+		TEST(echo_catches_up_at_the_end), TEST(bad_lines), TEST(line_pending_drops_input),
+		TEST(fox_and_log), TEST(config_mode_gates_changes), TEST(cfg_get_format),
+		TEST(cfg_put_checks_the_block), TEST(cal_put), TEST(gps_and_back_to_run),
+		TEST(reset_only_on_usb), TEST(analog_ver_status))
