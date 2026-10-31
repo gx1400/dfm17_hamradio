@@ -169,6 +169,9 @@ of the tag ([docs/settings.md](docs/settings.md)).
 - [docs/config-gui.md](docs/config-gui.md): the settings app (`tools/config/dfmgui.py`),
   released with the firmware for each platform, and how it stays in step
   with the firmware
+- [docs/tx-sequencer.md](docs/tx-sequencer.md): plan for RTTY (#53) and a
+  transmit sequencer defined in the EEPROM (#56): decisions so far, proposals,
+  open questions
 
 ## Using the board
 
