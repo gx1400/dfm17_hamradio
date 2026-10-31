@@ -317,7 +317,7 @@ static void run_line(char *s) {
 	static const block cal_block
 			= {&cal, &cal_edit, CAL_SIZE, CMD_CAL_EDIT, &cal_source, &cal_error};
 	char *p = s;
-	char *cmd = word(&p), *sub = word(&p), *arg = word(&p);
+	const char *cmd = word(&p), *sub = word(&p), *arg = word(&p);
 
 	if (is(cmd, "help")) {
 		reply("ok help ver status analog log fox config run gps cfg cal reset");
