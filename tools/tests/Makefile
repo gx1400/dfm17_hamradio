@@ -53,11 +53,16 @@ $(BUILD)/test_%: test_%.c fake_hal.c test.h fake_hal.h fakehal/stm32f1xx_hal.h \
 # coverage: the same tests built with --coverage into build-cov/ (no
 # sanitizer: its checks add branches of their own), run, and reported with
 # gcovr (tools/requirements.txt) for dfm17/Core/Src. Writes coverage.md (also
-# shown in the CI job summary) and html/index.html.
+# shown in the CI job summary) and html/index.html, then fails under the
+# floors below, or if a source is neither tested nor in not_host_tested.txt.
 COV       = build-cov
 TESTED    = $(sort $(foreach t,$(TESTS),$(SRC_$(t))))
-UNTESTED  = $(filter-out $(TESTED),$(notdir $(wildcard $(CORE)/Src/*.c)))
+NOT_TESTED = $(shell sed -n 's/^\([A-Za-z0-9_]*\.c\):.*/\1/p' not_host_tested.txt)
+UNLISTED  = $(filter-out $(TESTED) $(NOT_TESTED),$(notdir $(wildcard $(CORE)/Src/*.c)))
 GCOVR     = gcovr --root ../.. --filter '../../dfm17/Core/Src/' $(COV)
+# every line and function of the tested files is covered or excluded with a
+# reason (GCOVR_EXCL_*); branches are held at the level reached (#40)
+FLOORS    = --fail-under-line 100 --fail-under-function 100 --fail-under-branch 90
 
 coverage:
 	rm -rf $(COV)
@@ -66,8 +71,16 @@ coverage:
 	@mkdir -p $(COV)/html
 	$(GCOVR) --html-details $(COV)/html/index.html --markdown $(COV)/coverage.md \
 		--markdown-title "Host test coverage of dfm17/Core/Src"
-	@{ echo; echo "Not built into any host test: $(UNTESTED)"; } >> $(COV)/coverage.md
+	@{ echo; echo "**Not host-tested, by design** (not_host_tested.txt):"; echo; \
+		sed -n 's/^\([A-Za-z0-9_]*\.c\): \(.*\)/- `\1`: \2/p' not_host_tested.txt; \
+		if [ -n "$(UNLISTED)" ]; then echo; \
+			echo "**Not tested and not listed:** $(UNLISTED). Add a test, or a line with the reason to tools/tests/not_host_tested.txt."; \
+		fi; } >> $(COV)/coverage.md
 	@echo "report: $(COV)/coverage.md, $(COV)/html/index.html"
+	@if [ -n "$(UNLISTED)" ]; then \
+		echo "FAILED: not built into any host test and not in not_host_tested.txt: $(UNLISTED)"; exit 1; fi
+	@$(GCOVR) $(FLOORS) > /dev/null || { echo "FAILED: coverage under $(FLOORS)"; exit 1; }
+	@echo "coverage floors met: $(FLOORS)"
 
 clean:
 	rm -rf $(BUILD) $(COV)

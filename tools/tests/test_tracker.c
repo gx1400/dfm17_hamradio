@@ -222,17 +222,42 @@ static void reacquires_after_losing_fix(void) {
 }
 
 /* every test runs on a board set up as NZ0P (fake_settings.h) */
+/* gps_power=always_on (#37): positions as before, the GPS never sleeps */
+static void always_on_never_sleeps(void) {
+	cfg.gps_power = GPS_POWER_ALWAYS_ON;
+	settings_seal(&cfg);
+	reset(fix_after_5s);
+	run(3 * cfg.tracker_period_s * 1000UL + 30000);
+	CHECK_EQ(nsent, 4);
+	for (int i = 0; i < nsent; i++)
+		CHECK(POSITION(i));
+	CHECK_EQ(sleeps, 0);
+	CHECK_EQ(wakes, 0);
+}
+
+/* switched on while the GPS sleeps: woken at once, and never slept again */
+static void always_on_wakes_a_sleeping_gps(void) {
+	reset(fix_after_5s);
+	run(30000);
+	CHECK_EQ(sleeps, 1);
+	CHECK(asleep);
+	cfg.gps_power = GPS_POWER_ALWAYS_ON;
+	settings_seal(&cfg);
+	run(200);
+	CHECK(!asleep);
+	CHECK_EQ(wakes, 1);
+	run(2 * cfg.tracker_period_s * 1000UL);
+	CHECK_EQ(sleeps, 1);
+	CHECK_EQ(wakes, 1);
+}
+
 void test_setup(void) {
 	provision();
 }
 
-TEST_MAIN("tracker",
-	TEST(quick_fix_sends_position_and_sleeps),
-	TEST(cycle_repeats_every_period),
-	TEST(no_fix_times_out_and_keeps_gps_on),
-	TEST(two_d_only_is_sent_at_timeout),
-	TEST(flaky_fix_sends_last_3d_fix),
-	TEST(last_fix_does_not_carry_over),
-	TEST(stale_fix_after_wake_is_ignored),
-	TEST(late_first_fix),
-	TEST(reacquires_after_losing_fix))
+TEST_MAIN("tracker", TEST(quick_fix_sends_position_and_sleeps), TEST(cycle_repeats_every_period),
+		TEST(no_fix_times_out_and_keeps_gps_on), TEST(two_d_only_is_sent_at_timeout),
+		TEST(flaky_fix_sends_last_3d_fix), TEST(last_fix_does_not_carry_over),
+		TEST(stale_fix_after_wake_is_ignored), TEST(late_first_fix),
+		TEST(reacquires_after_losing_fix), TEST(always_on_never_sleeps),
+		TEST(always_on_wakes_a_sleeping_gps))

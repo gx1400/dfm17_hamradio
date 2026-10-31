@@ -441,8 +441,9 @@ uint8_t get_next_byte(void) {
 				i = 0;
 			}
 			break;
-		default:
+		default: /* GCOVR_EXCL_START: every state is handled above */
 			retval = AX25_FLAG;
+			/* GCOVR_EXCL_STOP */
 	}
 	return retval;
 }
@@ -587,14 +588,12 @@ void aprs_tx_stop(void) {
  *
  * transmits the APRS packet prepared in aprs_buf
  */
+/* GCOVR_EXCL_START: the loop is paced by the TIM15 ISR; the three parts are
+ * tested on their own (test_aprs.c) and through tools/aprs_sim */
 void tx_aprs(void) {
 	aprs_tx_start();
 	while (aprs_tx_poll())
 		;
 	aprs_tx_stop();
 }
-
-
-
-
-
+/* GCOVR_EXCL_STOP */

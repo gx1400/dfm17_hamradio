@@ -76,10 +76,24 @@ static void usb_presence_and_voltage(void) {
 	CHECK_EQ(r.on_usb, 0);
 }
 
-TEST_MAIN("analog",
-	TEST(vdda_from_vrefint),
-	TEST(supply_voltage_and_current),
-	TEST(readings_independent_of_vdda),
-	TEST(temperature),
-	TEST(vrefint_zero_does_not_divide_by_zero),
-	TEST(usb_presence_and_voltage))
+/* analog_read() through the fake ADC: every conversion is ready at once and
+ * reads the same count, so each channel's 16-sample average is that count */
+static void read_averages_each_channel(void) {
+	analog_reading r;
+	fake_adc1.SR = ADC_SR_EOC;
+	fake_adc1.DR = 1489; /* VREFINT at 3.3 V */
+	fake_adc1.CR2 = 0;
+	analog_read(&r);
+	CHECK(fake_adc1.CR2 & ADC_CR2_SWSTART);
+	CHECK_EQ(fake_adc1.SQR3, 12); /* PC2, the last channel read */
+	CHECK_EQ(fake_adc1.SQR1, 0);  /* one conversion per start */
+	CHECK_EQ(r.vref_raw, 1489);
+	CHECK_EQ(r.vin_raw, 1489);
+	CHECK_EQ(r.iin_raw, 1489);
+	CHECK_EQ(r.usb_raw, 1489);
+	CHECK_NEAR(r.vdda_mv, 3300, 3);
+}
+
+TEST_MAIN("analog", TEST(vdda_from_vrefint), TEST(read_averages_each_channel),
+		TEST(supply_voltage_and_current), TEST(readings_independent_of_vdda), TEST(temperature),
+		TEST(vrefint_zero_does_not_divide_by_zero), TEST(usb_presence_and_voltage))

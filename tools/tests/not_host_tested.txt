@@ -1,0 +1,31 @@
+# Firmware sources in dfm17/Core/Src that the host tests don't build, on
+# purpose, one per line as "file: reason". `make coverage` lists them in the
+# report and fails if a source is neither built into a test nor listed here
+# (tools/tests/README.md, "Coverage"). Lines inside tested files are excluded
+# with GCOVR_EXCL_LINE / GCOVR_EXCL_START..STOP and a reason in the comment.
+
+# STM32CubeMX-generated peripheral set-up and HAL glue: regenerated from the
+# .ioc, and the hardware is the test
+dma.c: CubeMX-generated DMA set-up
+gpio.c: CubeMX-generated pin set-up
+spi.c: CubeMX-generated SPI set-up
+tim.c: CubeMX-generated timer set-up
+usart.c: CubeMX-generated UART set-up, and printf's _write
+stm32f1xx_hal_msp.c: CubeMX-generated HAL MSP callbacks
+stm32f1xx_it.c: interrupt handlers; the user code in them calls tested functions (diag_pps, assertGpsLock)
+system_stm32f1xx.c: CMSIS start-up clock code
+syscalls.c: newlib system call stubs
+sysmem.c: newlib heap (_sbrk)
+
+# board bring-up and glue, verified on the board
+main.c: the main loop, calling tested modules in turn
+init.c: hardware bring-up order (clocks, radio, GPS); tested on the board at every flash
+led.c: GPIO writes for the LEDs
+i2c_ee.c: I2C transactions with the M24LR04E-R EEPROM; settings_store.c is tested against a fake EEPROM
+version.c: the build's version string
+
+# bench and diagnostic builds, verified on a board by their own procedures
+hw_survey.c: hw_survey build (docs/hardware-investigation.md)
+rf_test.c: rf_test build (docs/rf-measurements.md)
+radio_probe.c: optional boot-time Si4063 clock-output diagnostics (init.c), read over SWD
+nfc_tool.c: nfc_tool build (tools/hw_survey/eeprom_backup.sh, nfc_tool.sh)
