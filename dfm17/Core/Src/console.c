@@ -376,6 +376,8 @@ static void run_line(char *s) {
 void console_poll(void) {
 	if (!enabled)
 		return;
+	/* ready first: once it's set the line is complete, so n is all of it */
+	uint8_t ready = line_ready;
 	uint8_t n = line_len;
 	if (echoed < n)
 		console_hw_send(&line[echoed], n - echoed);
@@ -384,7 +386,7 @@ void console_poll(void) {
 		echoed--;
 	}
 	echoed = n;
-	if (!line_ready)
+	if (!ready)
 		return;
 
 	console_hw_send("\r\n", 2);

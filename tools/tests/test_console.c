@@ -168,6 +168,22 @@ static void echo_backspace_and_prompt(void) {
 	CHECK(strcmp(out + out_len - 2, "> ") == 0);
 }
 
+/* the end of a line arrives between two main loop passes: all of it is
+ * echoed before the reply (found on board 1: "gps off" echoed as "gps o") */
+static void echo_catches_up_at_the_end(void) {
+	clear();
+	console_rx('f');
+	console_rx('o');
+	console_poll();
+	clear();
+	const char *s = "x stop\r";
+	while (*s)
+		console_rx((uint8_t)*s++);
+	console_poll();
+	CHECK(strncmp(out, "x stop\r\nok\r\n", 12) == 0);
+	CHECK_EQ(paused, 1);
+}
+
 static void bad_lines(void) {
 	CHECK(strstr(type("frob"), "err unknown") != NULL);
 	char longline[CONSOLE_LINE_MAX + 10];
@@ -349,7 +365,8 @@ static void analog_ver_status(void) {
 }
 
 TEST_MAIN("console", TEST(off_on_battery), TEST(on_with_usb_and_banner),
-		TEST(follows_usb_after_two_readings), TEST(echo_backspace_and_prompt), TEST(bad_lines),
+		TEST(follows_usb_after_two_readings), TEST(echo_backspace_and_prompt),
+		TEST(echo_catches_up_at_the_end), TEST(bad_lines),
 		TEST(line_pending_drops_input), TEST(fox_and_log), TEST(config_mode_gates_changes),
 		TEST(cfg_get_format), TEST(cfg_put_checks_the_block), TEST(cal_put),
 		TEST(gps_and_back_to_run), TEST(reset_only_on_usb), TEST(analog_ver_status))
