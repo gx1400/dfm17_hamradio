@@ -59,6 +59,11 @@ static void answer(const uint8_t *bytes, int n) {
 
 void delay_us(uint16_t us) { (void)us; }
 
+static uint8_t powered_off;
+uint8_t diag_powered_off(void) {
+	return powered_off;
+}
+
 /* ---- helpers ------------------------------------------------------------------ */
 
 static void reset(void) {
@@ -236,6 +241,15 @@ static void tx_gate(void) {
 	si4060_start_tx(0);
 	CHECK(find_cmd(CMD_START_TX) >= 0);
 	CHECK_EQ(si4060_tx_refused, refused + 3);
+
+	/* set up, but powering off (#44) */
+	reset();
+	provision();
+	powered_off = 1;
+	si4060_start_tx(0);
+	powered_off = 0;
+	CHECK(find_cmd(CMD_START_TX) < 0);
+	CHECK_EQ(si4060_tx_refused, refused + 4);
 }
 
 static void cts_timeout(void) {
