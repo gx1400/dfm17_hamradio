@@ -39,6 +39,7 @@
 #include "version.h"
 #include "settings.h"
 #include "ppscap.h"
+#include "console.h"
 
 
 extern UART_HandleTypeDef huart2;
@@ -65,6 +66,9 @@ void initHw(void) {
 	analog_init();
 	MX_DMA_Init();
 	MX_USART1_UART_Init();
+	// the serial console: on with USB power, else quiet (#50)
+	analog_read(&analog_last);
+	console_init(analog_last.on_usb);
 	// which build this is, on the UART (PA9, 115200) before anything else.
 	// read through swd_info (volatile, so it isn't folded away), which keeps
 	// the descriptor in the image with --gc-sections

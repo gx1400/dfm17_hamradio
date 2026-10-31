@@ -46,6 +46,7 @@ refused. Other options:
 | Option | |
 |---|---|
 | `--link pyocd` / `--link cube` | the ST-Link through pyOCD (default) or STM32_Programmer_CLI |
+| `--port COM20` | the serial console instead of SWD: a 3.3 V USB-serial adapter on the mini-USB data pins, board on USB power ([serial-console.md](serial-console.md)); everything but `send` |
 | `--elf build.elf` | for firmware older than the descriptor: the build on the board, whose symbols give the addresses (its version string is compared with the board's flash first) |
 | `--check-elf build.elf` | offline: check a build's descriptor against its symbols (CI) |
 | `--version` | the tools' version |

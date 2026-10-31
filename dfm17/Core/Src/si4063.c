@@ -36,6 +36,7 @@
 #include "tim.h"
 #include "settings.h"
 #include "diag.h"
+#include "console.h"
 #include <stdio.h>
 
 /* key-ups refused because the settings don't allow transmitting (no callsign
@@ -324,8 +325,8 @@ void si4060_start_tx(uint8_t channel) {
 			printf("TX refused: no callsign set up (tools/config/dfmcfg.py)\r\n");
 		return;
 	}
-	/* powering off, or "off" on USB (#44) */
-	if (diag_powered_off()) {
+	/* powering off, or "off" on USB (#44); or config mode on the console */
+	if (diag_powered_off() || console_config_mode()) {
 		si4060_tx_refused++;
 		return;
 	}

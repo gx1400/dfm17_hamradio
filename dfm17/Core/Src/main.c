@@ -97,6 +97,7 @@
 #include "settings.h"
 #include "ppscap.h"
 #include "nfc_tool.h"
+#include "console.h"
 
 /* USER CODE END Includes */
 
@@ -205,7 +206,8 @@ int main(void)
 #endif
   if (cfg.flags & SETTINGS_FLAG_START_PAUSED)
 	  foxPaused = 1;
-  // a long button press resumes the fox/tracker
+  // from here on diag_paused(): a long button press (or "fox start" on the
+  // serial console) resumes the fox/tracker
   diag_set_paused(foxPaused);
 
   /* USER CODE END 2 */
@@ -251,7 +253,11 @@ int main(void)
 	  if (HAL_GetTick() - lastAnalog >= 1000) {
 		  lastAnalog = HAL_GetTick();
 		  analog_read(&analog_last);
+		  // the serial console follows USB power
+		  console_usb(analog_last.on_usb);
 	  }
+	  // a command line typed on the serial console
+	  console_poll();
 
 #ifdef HW_NFC
 	  /* the tool build never transmits: it may run on someone else's board,
@@ -266,9 +272,8 @@ int main(void)
 		  fox_test_tone_aprs(gnss);
 		  break;
 	  case DIAG_BUTTON_LONG:
-		  foxPaused = !foxPaused;
-		  diag_set_paused(foxPaused);
-		  printf("fox %s\r\n", foxPaused ? "paused" : "running");
+		  diag_set_paused(!diag_paused());
+		  printf("fox %s\r\n", diag_paused() ? "paused" : "running");
 		  break;
 	  default:
 		  break;
@@ -290,7 +295,7 @@ int main(void)
 #ifndef HW_NFC
 	  // send-now trigger over SWD (#51): one APRS packet, no test tone; works
 	  // while paused, and the transmit gate still applies
-	  if (aprs_send_now_due(HAL_GetTick())) {
+	  if (!console_config_mode() && aprs_send_now_due(HAL_GetTick())) {
 		  if (cfg.mode == MODE_FOX)
 			  fox_send_now(gnss);
 		  else
@@ -298,8 +303,8 @@ int main(void)
 	  }
 #endif
 
-	  if (foxPaused) {
-		  // nothing to do
+	  if (diag_paused() || console_config_mode()) {
+		  // nothing to do: paused, or config mode on the serial console
 	  } else if (cfg.mode == MODE_FOX) {
 		  if (HAL_GetTick() - lastFox >= cfg.fox_period_s * 1000UL) {
 			  lastFox = HAL_GetTick();

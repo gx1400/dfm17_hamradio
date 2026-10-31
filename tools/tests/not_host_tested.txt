@@ -22,6 +22,7 @@ main.c: the main loop, calling tested modules in turn
 init.c: hardware bring-up order (clocks, radio, GPS); tested on the board at every flash
 led.c: GPIO writes for the LEDs
 i2c_ee.c: I2C transactions with the M24LR04E-R EEPROM; settings_store.c is tested against a fake EEPROM
+console_hw.c: USART1 registers, pins and interrupt, and the ver/status/reset replies; console.c is tested against fakes of them
 version.c: the build's version string
 
 # bench and diagnostic builds, verified on a board by their own procedures

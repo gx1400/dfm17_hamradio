@@ -171,9 +171,36 @@ typedef struct {
 
 extern const swd_info_t swd_info;
 
+/* the mailbox commands (settings_cmd over SWD, or settings_command()) */
+enum settings_cmd {
+	CMD_NONE,
+	CMD_EDIT,	  /* settings_edit = live settings */
+	CMD_APPLY,	  /* check settings_edit and use it */
+	CMD_SAVE,	  /* write the live settings to the EEPROM */
+	CMD_RELOAD,	  /* load and use the EEPROM block, if valid */
+	CMD_DEFAULTS, /* use the built-in defaults (not saved) */
+	/* the same for the analog calibration (cal_edit, cal_error) */
+	CMD_CAL_EDIT,
+	CMD_CAL_APPLY,
+	CMD_CAL_SAVE,
+	CMD_CAL_RELOAD,
+	CMD_CAL_DEFAULTS,
+};
+
+enum settings_result {
+	RESULT_NONE,
+	RESULT_OK,
+	RESULT_INVALID, /* settings_error says why; nothing changed */
+	RESULT_EEPROM,	/* EEPROM write or read-back failed */
+	RESULT_BAD_CMD,
+};
+
 /* settings_store.c: EEPROM, the SWD mailbox, applying to the radio */
 void settings_init(void);
 uint8_t settings_apply(const settings_t *s, enum settings_source source);
 void settings_poll(void);
+uint8_t settings_command(uint8_t cmd);
+extern settings_t settings_edit;
+extern cal_t cal_edit;
 
 #endif /* INC_SETTINGS_H_ */

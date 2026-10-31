@@ -242,12 +242,15 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
 
 /* USER CODE BEGIN 1 */
 
+#include "console.h"
+
+/* printf: on the serial console only while it's on (USB power), for its
+ * replies and, with "log on", the diagnostics; dropped otherwise (#50) */
 int _write(int file, char *ptr, int len) {
 	(void)file;
-    //for (int DataIdx = 0; DataIdx < len; DataIdx++)
-    //    ITM_SendChar(*ptr++);
-	HAL_UART_Transmit(&huart1, (uint8_t*)ptr, len, HAL_MAX_DELAY);
-    return len;
+	if (console_output_on())
+		HAL_UART_Transmit(&huart1, (uint8_t *)ptr, len, 100);
+	return len;
 }
 
 /* USER CODE END 1 */

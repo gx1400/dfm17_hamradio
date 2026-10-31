@@ -7,7 +7,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(__file__))
 import dfmcfg as d
-from fakeboard import FakeLink
+from fakeboard import FakeLink, FakeSerial
 
 
 def defaults():
@@ -386,6 +386,105 @@ class CalibrationCommands(unittest.TestCase):
         self.board.run("save")
         self.assertEqual(self.board.cal()["iin_b"], 3)
         self.assertEqual(d.cal_unpack(self.link.cal_eeprom)["iin_b"], 3)
+
+
+class SerialConsole(unittest.TestCase):
+    """the same board commands over the serial console (#50), against
+    FakeSerial (console.c's protocol on FakeLink's settings)"""
+
+    def setUp(self):
+        self.ser = FakeSerial(FakeLink(fw_version="DFMFW v9.9.9 tracker"))
+        self.board = d.SerialBoard(d.SerialLink(ser=self.ser))
+
+    def test_connect(self):
+        self.assertEqual(self.board.fw_version, "DFMFW v9.9.9 tracker")
+        self.assertEqual(self.ser.lines[:2], ["log off", "ver"])
+        self.assertFalse(self.ser.log)
+        dev, rev, uid = self.board.mcu()
+        self.assertIsNone(rev)
+        self.assertIsNone(dev)
+        self.assertEqual(len(uid), 24)
+        self.assertEqual(self.board.flash_kb, 64)
+
+    def test_other_layout_refused(self):
+        ser = FakeSerial()
+        ser._run = lambda line: ser._reply(
+            "ok DFMFW v1 tracker proto 1 settings 2 72 cal 1 32 uid 00 flash 64"
+            if line == "ver"
+            else "ok"
+        )
+        with self.assertRaisesRegex(d.SettingsError, "settings layout"):
+            d.SerialBoard(d.SerialLink(ser=ser))
+
+    def test_no_reply_on_battery(self):
+        link = d.SerialLink(ser=FakeSerial(on_usb=False))
+        with self.assertRaisesRegex(d.SettingsError, "USB power"):
+            link.command("ver", timeout=0.3)
+
+    def test_status_and_apply_save(self):
+        st = self.board.status()
+        self.assertEqual(st["source"], "EEPROM")
+        self.assertFalse(st["tx_allowed"])
+        s = self.board.settings()
+        d.apply_assignment(s, "callsign=NZ0P")
+        d.apply_assignment(s, "freq=432.1MHz")
+        self.board.apply(s, save=True)
+        st = self.board.status()
+        self.assertTrue(st["tx_allowed"])
+        self.assertEqual(st["settings"]["freq_hz"], 432_100_000)
+        self.assertEqual(d.unpack(self.ser.link.eeprom)["callsign"], b"NZ0P\0\0")
+        # through config mode, and back to run mode
+        self.assertIn("config", self.ser.lines)
+        self.assertEqual(self.ser.lines[-1], "cfg get")
+        self.assertEqual(self.ser.config, 0)
+
+    def test_config_mode_kept_if_on_already(self):
+        self.ser.config = 1
+        self.board.run("defaults")
+        self.assertEqual(self.ser.config, 1)
+        self.assertNotIn("run", self.ser.lines)
+
+    def test_invalid_refused_with_reason(self):
+        s = self.board.settings()
+        s["tracker_settle_s"] = 500
+        with self.assertRaisesRegex(d.SettingsError, "tracker timing"):
+            self.board.apply(s)  # checked here first: never sent
+        self.assertNotIn("config", self.ser.lines)
+        # the firmware's own refusal comes back with its reason
+        s = self.board.settings()
+        s["callsign"] = b"N0CALL"
+        self.ser.link._apply = lambda s, source: (
+            self.ser.link._put(0x20000183, bytes([d.ERRORS.index("FREQ")])) or 2
+        )
+        with self.assertRaisesRegex(d.SettingsError, "FREQ"):
+            self.board.apply(s)
+
+    def test_damaged_line_caught_by_crc(self):
+        self.ser.config = 1
+        raw = bytearray(d.pack(d.defaults()))
+        raw[5] ^= 1
+        with self.assertRaisesRegex(d.ConsoleError, "CRC"):
+            self.board.link.command(f"cfg put {raw.hex()}")
+
+    def test_changes_need_config_mode(self):
+        with self.assertRaisesRegex(d.ConsoleError, "config mode"):
+            self.board.link.command("cfg save")
+
+    def test_calibration(self):
+        st = self.board.cal_status()
+        self.assertEqual(st["error"], "MAGIC")
+        self.assertEqual(st["analog"]["vin_mv"], 4980)
+        c = self.board.cal()
+        d.cal_assignment(c, "vin_a=1.9992")
+        self.board.cal_apply(c, save=True)
+        self.assertEqual(self.board.cal()["vin_a"], 131020)
+        self.assertEqual(d.cal_unpack(self.ser.link.cal_eeprom)["vin_a"], 131020)
+        self.board.cal_run("defaults")
+        self.assertEqual(self.board.cal()["vin_a"], 131072)
+
+    def test_send_not_over_serial(self):
+        with self.assertRaisesRegex(d.SettingsError, "serial"):
+            self.board.send(1)
 
 
 if __name__ == "__main__":

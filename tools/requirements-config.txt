@@ -3,3 +3,5 @@
 # (.github/dependabot.yml) proposes updates. Tkinter comes with Python (on
 # Linux, the python3-tk package).
 pyocd==0.46.0
+# the serial console on the mini-USB connector (--port, #50)
+pyserial==3.5

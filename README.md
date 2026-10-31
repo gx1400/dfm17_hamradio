@@ -117,8 +117,9 @@ Every build carries its version, `git describe` plus the variant (e.g.
 `v0.1.0 tracker`, or `abc1234-dirty fox` for an untagged or modified tree;
 STM32CubeIDE builds say `unknown cubeide`):
 
-- printed at boot on the UART on the mini-USB connector (USART1, PA9,
-  115200 8N1);
+- printed at boot, and by `ver`, on the serial console on the mini-USB
+  connector (USART1, 115200 8N1; on USB power only,
+  [docs/serial-console.md](docs/serial-console.md));
 - read from a running board over SWD with `tools/hw_survey/read_version.sh`.
   It finds the string in a flash dump, so it works whatever build is on it;
 - shown by the settings app and `dfmcfg.py show`, which compare it with their
