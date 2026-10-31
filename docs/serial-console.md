@@ -27,6 +27,8 @@ Any terminal at 115200 8N1 works; the console echoes what you type. Each command
 
 The firmware's diagnostics (`GPS Update!`, …) go to the same port. `log off` stops them; command replies are always sent.
 
+**One command at a time:** a line runs from the main loop between other work. While the board is busy (booting, configuring the GPS, transmitting a packet or a fox tone), the line waits, and anything typed meanwhile is dropped. Send a command and wait for its `ok`/`err`; the tools do.
+
 | Command | Does |
 |---|---|
 | `help` | the command list |
