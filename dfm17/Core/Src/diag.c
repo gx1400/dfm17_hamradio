@@ -295,6 +295,11 @@ void diag_set_paused(uint8_t on) {
 	paused = on;
 }
 
+/* the fox/tracker is paused: by a long press, at boot, or over the console */
+uint8_t diag_paused(void) {
+	return paused;
+}
+
 /*
  * diag_get_button
  *

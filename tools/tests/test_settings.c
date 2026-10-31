@@ -66,9 +66,6 @@ extern cal_t cal_edit;
 extern volatile uint8_t settings_cmd, settings_result;
 extern volatile uint32_t settings_done;
 
-enum { CMD_EDIT = 1, CMD_APPLY, CMD_SAVE, CMD_RELOAD, CMD_DEFAULTS };
-enum { CMD_CAL_EDIT = 6, CMD_CAL_APPLY, CMD_CAL_SAVE, CMD_CAL_RELOAD, CMD_CAL_DEFAULTS };
-enum { RESULT_OK = 1, RESULT_INVALID, RESULT_EEPROM };
 
 static void put(const settings_t *s) {
 	memcpy(eeprom + SETTINGS_EE_ADDR, s, sizeof(*s));

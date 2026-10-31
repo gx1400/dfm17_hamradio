@@ -6,6 +6,7 @@ and the mailbox, and a write to settings_cmd runs the command at once as
 settings_store.c's run() does (the EEPROM is a copy of the saved block).
 """
 
+import binascii
 import struct
 
 import dfmcfg as d
@@ -199,3 +200,130 @@ class FakeLink:
         self._put(RAM_AT["settings_result"], bytes([result]))
         self._put(RAM_AT["settings_done"], struct.pack("<I", done))
         self._put(RAM_AT["settings_cmd"], b"\0")
+
+
+class FakeSerial:
+    """the board's serial console (console.c), as a pyserial-like object for
+    SerialLink: the same commands and replies, on top of FakeLink's settings
+    and mailbox. on_usb=False: the console is off and nothing answers."""
+
+    def __init__(self, link=None, on_usb=True):
+        self.link = link or FakeLink()
+        self.on_usb = on_usb
+        self.config = 0
+        self.log = True
+        self.typed = b""
+        self.out = bytearray()
+        self.lines = []  # every command line received
+        self.closed = False
+
+    # ---- pyserial ---------------------------------------------------------
+
+    def write(self, data):
+        if not self.on_usb:
+            return len(data)
+        for b in data:
+            if b in b"\r\n":
+                if self.typed:
+                    self._run(self.typed.decode("ascii"))
+                self.typed = b""
+            else:
+                self.typed += bytes([b])
+        return len(data)
+
+    def readline(self):
+        at = self.out.find(b"\n")
+        if at < 0:
+            return b""
+        line, self.out = bytes(self.out[: at + 1]), self.out[at + 1 :]
+        return line
+
+    def reset_input_buffer(self):
+        self.out.clear()
+
+    def close(self):
+        self.closed = True
+
+    # ---- console.c ----------------------------------------------------------
+
+    def _reply(self, text):
+        self.out += text.encode("ascii") + b"\r\n"
+
+    def _mailbox(self, cmd):
+        self.link.write(RAM_AT["settings_cmd"], bytes([cmd]))
+        return self.link.read(RAM_AT["settings_result"], 1)[0]
+
+    def _block(self, which, sub, arg):
+        live, edit, size, base = (
+            ("cfg", "settings_edit", d.SIZE, 1)
+            if which == "cfg"
+            else ("cal", "cal_edit", d.CAL_SIZE, 6)
+        )
+        src, err = (
+            ("settings_source", "settings_error") if which == "cfg" else ("cal_source", "cal_error")
+        )
+        if sub == "get":
+            g = self.link._get
+            words = [
+                g(live).hex(),
+                g(src)[0],
+                g(err)[0],
+                struct.unpack("<I", g("settings_repairs"))[0],
+                struct.unpack("<I", g("si4060_tx_refused"))[0],
+            ]
+            return self._reply("ok " + " ".join(str(w) for w in words))
+        subs = ["put", "save", "reload", "defaults"]
+        if sub not in subs:
+            return self._reply("err usage")
+        if not self.config:
+            return self._reply("err config")
+        if sub == "put":
+            if len(arg) != 2 * size:
+                return self._reply("err length")
+            try:
+                raw = bytes.fromhex(arg)
+            except ValueError:
+                return self._reply("err hex")
+            crc = struct.unpack("<H", raw[-2:])[0]
+            if crc != binascii.crc_hqx(raw[:-2], 0xFFFF):
+                return self._reply("err crc")
+            self.link.write(RAM_AT[edit], raw)
+            result = self._mailbox(base + 1)
+        else:
+            result = self._mailbox(base + 1 + subs.index(sub))
+        if result == 1:
+            self._reply("ok")
+        elif result == 2:
+            self._reply(f"err invalid {self.link._get(err)[0]}")
+        else:
+            self._reply("err eeprom")
+
+    def _run(self, line):
+        self.lines.append(line)
+        self.out += line.encode("ascii") + b"\r\n"  # the echo
+        w = line.split()
+        cmd, sub = w[0], (w[1] if len(w) > 1 else "")
+        arg = w[2] if len(w) > 2 else ""
+        if cmd == "ver":
+            fw = self.link.read(FW_AT, 64).split(b"\0")[0].decode()
+            uid = self.link.read(d.UID_REG, 12).hex().upper()
+            self._reply(
+                f"ok {fw} proto 1 settings {d.VERSION} {d.SIZE} cal {d.CAL_VERSION} {d.CAL_SIZE} "
+                f"uid {uid} flash 64"
+            )
+        elif cmd == "log" and sub in ("on", "off"):
+            self.log = sub == "on"
+            self._reply("ok")
+        elif cmd == "config":
+            self._reply(f"ok {self.config}")
+            self.config = 1
+        elif cmd == "run":
+            self.config = 0
+            self._reply("ok")
+        elif cmd == "analog":
+            self._reply("ok " + " ".join(str(ANALOG_LAST[n]) for n, _ in d.ANALOG))
+        elif cmd in ("cfg", "cal"):
+            self._block(cmd, sub, arg)
+        else:
+            self._reply("err unknown")
+        self.out += b"> "

@@ -104,7 +104,7 @@ class App:
         top = ttk.Frame(self.root, padding=6)
         top.pack(fill="x")
         ttk.Label(top, text="Link").pack(side="left")
-        links = ["simulated"] if self.simulate else list(d.LINKS)
+        links = ["simulated", "simulated serial"] if self.simulate else [*d.LINKS, "serial"]
         self.link = tk.StringVar(value=links[0])
         link = ttk.Combobox(top, textvariable=self.link, values=links, width=9, state="readonly")
         link.pack(side="left", **pad)
@@ -260,8 +260,24 @@ class App:
     # ---- probe and connection -----------------------------------------------
 
     def refresh_probes(self):
+        if self.link.get() == "serial":
+            # the serial console (#50): a USB-serial adapter, board on USB power
+            try:
+                found = d.SerialLink.ports()
+            except Exception as e:  # noqa: BLE001 pyserial missing
+                found = []
+                self.say(f"can't list serial ports: {e}", error=True)
+            self.probe_ids = [dev for dev, _ in found]
+            names = [f"{dev} ({desc})" for dev, desc in found] or ["no serial port found"]
+            self.probe_box.config(values=names)
+            self.probe_box.current(0)
+            return
         if self.link.get() != "pyocd":
-            note = {"cube": "(STM32CubeProgrammer picks the probe)", "simulated": "(no hardware)"}
+            note = {
+                "cube": "(STM32CubeProgrammer picks the probe)",
+                "simulated": "(no hardware)",
+                "simulated serial": "(no hardware)",
+            }
             self.probe_box.config(values=[note[self.link.get()]])
             self.probe_box.current(0)
             return
@@ -281,11 +297,26 @@ class App:
             return
         link_name = self.link.get()
         uid = None
-        if link_name == "pyocd":
+        if link_name in ("pyocd", "serial"):
             i = self.probe_box.current()
             uid = self.probe_ids[i] if 0 <= i < len(getattr(self, "probe_ids", [])) else None
 
         def work():
+            if link_name in ("serial", "simulated serial"):
+                if link_name == "serial":
+                    if not uid:
+                        raise d.SettingsError("no serial port selected")
+                    link = d.SerialLink(uid)
+                else:
+                    from fakeboard import FakeSerial
+
+                    link = d.SerialLink(ser=FakeSerial())
+                try:
+                    board = d.SerialBoard(link)
+                    return board, board.mcu(), board.status()
+                except Exception:
+                    link.close()
+                    raise
             if link_name == "simulated":
                 from fakeboard import FakeLink
 
@@ -310,9 +341,8 @@ class App:
         self.conn_label.config(text=f"connected ({self.board.link.name})", foreground="#1b7a1b")
         self.info["firmware"].config(text=self.board.fw_version)
         dev, rev, uid = mcu
-        self.info["mcu"].config(
-            text=f"device 0x{dev:03X} rev 0x{rev:04X}, flash {self.board.flash_kb} KB, UID {uid}"
-        )
+        device = f"device 0x{dev:03X} rev 0x{rev:04X}, " if dev is not None else ""
+        self.info["mcu"].config(text=f"{device}flash {self.board.flash_kb} KB, UID {uid}")
         self.matched, why = d.version_match(self.board.fw_version)
         if self.matched:
             self.info["match"].config(text="matches", foreground="#1b7a1b")
@@ -446,6 +476,15 @@ def self_test(path):
         out["probes_error"] = f"{type(e).__name__}: {e}"
     board = d.Board(FakeLink())
     out["simulated"] = {"fw": board.fw_version, "match": d.version_match(board.fw_version)[0]}
+    # pyserial and its port listing, and the board code over the console
+    try:
+        from fakeboard import FakeSerial
+
+        out["serial_ports"] = [dev for dev, _ in d.SerialLink.ports()]
+        sboard = d.SerialBoard(d.SerialLink(ser=FakeSerial()))
+        out["simulated_serial"] = {"fw": sboard.fw_version, "tx": sboard.status()["tx_allowed"]}
+    except Exception as e:  # noqa: BLE001 reported, and the CI step fails on it
+        out["serial_error"] = f"{type(e).__name__}: {e}"
     with open(path, "w") as f:
         json.dump(out, f, indent=2)
 

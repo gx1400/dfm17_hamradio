@@ -9,6 +9,7 @@
     dfmcfg.py cal [show]                               (analog calibration, #43)
     dfmcfg.py cal set vin_a=1.9992 vin_b=208 [--save]
     dfmcfg.py cal save | reload | defaults
+    dfmcfg.py --port COM20 show | set ... | cal ...      (serial console, #50)
 
 Settings live in the NFC EEPROM (docs/settings.md); the firmware loads them at
 boot. A board with no settings uses the defaults: callsign N0CALL, and it
@@ -509,7 +510,12 @@ ANALOG_SIZE = 20
 
 
 def analog_unpack(raw):
-    r = dict(zip((n for n, _ in ANALOG), struct.unpack_from(ANALOG_FMT, raw)))
+    return analog_values(struct.unpack_from(ANALOG_FMT, raw))
+
+
+def analog_values(values):
+    """analog_reading's fields in order (from RAM, or the console's `analog`)"""
+    r = dict(zip((n for n, _ in ANALOG), values))
     # the pin voltages calibration is fitted against, as analog_convert()
     for ch in ("vin", "iin", "usb"):
         r[f"{ch}_pin_mv"] = r[f"{ch}_raw"] * r["vdda_mv"] // 4095
@@ -843,6 +849,232 @@ class CubeProgrammerLink:
 LINKS = {"pyocd": PyOcdLink, "cube": CubeProgrammerLink}
 
 
+# ---- the serial console (#50) ------------------------------------------------
+# USART1 on the mini-USB connector, on while the board has USB power: a
+# line-based protocol (docs/serial-console.md) instead of memory access. The
+# firmware only moves the raw blocks as hex; everything readable is here.
+
+CONSOLE_PROTO = 1
+CONSOLE_BAUD = 115200
+
+
+class SerialLink:
+    """a 3.3 V USB-serial adapter on the board's mini-USB data pins (D+ to the
+    adapter's RX, D- to its TX). ser: a pyserial-like object, for tests"""
+
+    name = "serial"
+
+    def __init__(self, port=None, ser=None):
+        if ser is None:
+            try:
+                import serial
+            except ImportError:
+                raise SettingsError(
+                    "pyserial isn't installed: pip install -r tools/requirements-config.txt"
+                ) from None
+            try:
+                ser = serial.Serial(port, CONSOLE_BAUD, timeout=0.2)
+            except serial.SerialException as e:
+                raise SettingsError(f"can't open {port}: {e}") from e
+        self.ser = ser
+
+    @staticmethod
+    def ports():
+        """(device, description) of each serial port"""
+        from serial.tools import list_ports
+
+        return [(p.device, p.description) for p in list_ports.comports()]
+
+    def command(self, line, timeout=5.0):
+        """send one command line; returns the words of its 'ok' reply, and the
+        lines before it. SettingsError for an 'err' reply or no reply"""
+        self.ser.reset_input_buffer()
+        self.ser.write(line.encode("ascii") + b"\r")
+        before = []
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            raw = self.ser.readline()
+            if not raw:
+                continue
+            text = raw.decode("ascii", "replace").strip().removeprefix("> ")
+            words = text.split()
+            if words[:1] == ["ok"]:
+                return words[1:], before
+            if words[:1] == ["err"]:
+                raise ConsoleError(words[1:])
+            if text and text != line:  # not the echo
+                before.append(text)
+        raise SettingsError(
+            f"no reply to '{line.split()[0] if line else line}' on the serial port: is the board "
+            "on USB power (the console is off on battery), and TX/RX the right way round?"
+        )
+
+    def close(self):
+        self.ser.close()
+
+
+class ConsoleError(SettingsError):
+    """an 'err' reply: words[0] says what, e.g. ['invalid', '9']"""
+
+    def __init__(self, words):
+        self.words = words or ["?"]
+        why = {
+            "config": "needs config mode",
+            "crc": "the block was damaged on the way (CRC)",
+            "eeprom": "the EEPROM write or read-back failed",
+            "unknown": "the firmware doesn't know this command",
+        }.get(self.words[0], " ".join(self.words))
+        super().__init__(f"the board refused it: {why}")
+
+
+class SerialBoard:
+    """a DFM-17 over its serial console, with the methods of Board that the CLI
+    and the GUI use. Changes go through config mode (nothing is scheduled or
+    transmitted meanwhile) and back to run mode unless it was on already."""
+
+    flash_kb = 64
+
+    def __init__(self, link):
+        self.link = link
+        self.link.ser.write(b"\r")  # end anything typed before
+        link.command("log off")  # the diagnostics would get in the way
+        words, _ = link.command("ver")
+        self.ver = self._parse_ver(words)
+        self.fw_version = " ".join(words[:3])
+        self.flash_kb = self.ver.get("flash", 64)
+
+    @staticmethod
+    def _parse_ver(words):
+        """'DFMFW v.. tracker proto 1 settings 1 64 cal 1 32 uid ... flash 64'"""
+        v = {}
+        i = 3
+        while i < len(words):
+            key = words[i]
+            n = {"settings": 2, "cal": 2}.get(key, 1)
+            v[key] = words[i + 1 : i + 1 + n]
+            i += 1 + n
+        if v.get("proto") != [str(CONSOLE_PROTO)]:
+            raise SettingsError(
+                f"the board's console protocol is {v.get('proto')}, these tools know "
+                f"{CONSOLE_PROTO}: use the tools released with the board's firmware"
+            )
+        if v.get("settings") != [str(VERSION), str(SIZE)] or v.get("cal") != [
+            str(CAL_VERSION),
+            str(CAL_SIZE),
+        ]:
+            raise SettingsError(
+                f"the board's settings layout is {v.get('settings')} and calibration "
+                f"{v.get('cal')}, these tools know [{VERSION}, {SIZE}] and "
+                f"[{CAL_VERSION}, {CAL_SIZE}]: use the tools released with the board's firmware"
+            )
+        out = {"uid": v.get("uid", ["?"])[0]}
+        if "flash" in v:
+            out["flash"] = int(v["flash"][0])
+        return out
+
+    def mcu(self):
+        """device and revision aren't readable without a debugger: None"""
+        return None, None, self.ver["uid"]
+
+    def _changing(self, fn):
+        words, _ = self.link.command("config")
+        try:
+            return fn()
+        finally:
+            if words[:1] == ["0"]:
+                self.link.command("run")
+
+    def _get(self, which):
+        words, _ = self.link.command(f"{which} get")
+        raw = bytes.fromhex(words[0])
+        return raw, [int(w) for w in words[1:5]]
+
+    def _put(self, which, raw, save):
+        def go():
+            try:
+                self.link.command(f"{which} put {bytes(raw).hex()}")
+            except ConsoleError as e:
+                if e.words[0] == "invalid" and len(e.words) > 1:
+                    names = ERRORS if which == "cfg" else CAL_ERRORS
+                    why = names[int(e.words[1])]
+                    raise SettingsError(
+                        f"the firmware refused it ({why}): {WHY.get(why, why)}"
+                    ) from None
+                raise
+            if save:
+                try:
+                    self.link.command(f"{which} save")
+                except ConsoleError:
+                    raise SettingsError("applied, but saving to the EEPROM failed") from None
+
+        self._changing(go)
+
+    def _run(self, which, name):
+        def go():
+            try:
+                self.link.command(f"{which} {name}")
+            except ConsoleError as e:
+                raise SettingsError(f"{name} failed: {' '.join(e.words)}") from None
+
+        self._changing(go)
+
+    # the settings ----------------------------------------------------------
+
+    def settings(self):
+        return unpack(self._get("cfg")[0])
+
+    def apply(self, s, save=False):
+        err = check(seal(s))
+        if err != "OK":
+            raise SettingsError(f"not applied: {WHY.get(err, err)}")
+        self._put("cfg", pack(s), save)
+
+    def run(self, name):
+        self._run("cfg", name)
+
+    def status(self):
+        raw, (source, error, repairs, refused) = self._get("cfg")
+        s = unpack(raw)
+        return {
+            "settings": s,
+            "source": SOURCES[source],
+            "error": ERRORS[error],
+            "tx_allowed": check(s) == "OK" and callsign_str(s) != "N0CALL",
+            "tx_refused": refused,
+            "repairs": repairs,
+        }
+
+    def send(self, n=1):
+        raise SettingsError("send isn't available over serial (no console command transmits)")
+
+    # the calibration -------------------------------------------------------
+
+    def cal(self):
+        return cal_unpack(self._get("cal")[0])
+
+    def analog(self):
+        words, _ = self.link.command("analog")
+        return analog_values([int(w) for w in words])
+
+    def cal_apply(self, c, save=False):
+        err = cal_check(cal_seal(c))
+        if err != "OK":
+            raise SettingsError(f"not applied: {err} ({', '.join(cal_bad_channels(c))})")
+        self._put("cal", cal_pack(c), save)
+
+    def cal_run(self, name):
+        self._run("cal", name)
+
+    def cal_status(self):
+        raw, (source, error, _, _) = self._get("cal")
+        return {
+            "cal": cal_unpack(raw),
+            "source": CAL_SOURCES[source],
+            "error": CAL_ERRORS[error],
+            "analog": self.analog(),
+        }
+
+
 def elf_symbols(elf):
     nm = find_tool(
         ["arm-none-eabi-nm"],
@@ -1150,8 +1382,18 @@ def read_only(a):
 
 def connect(a):
     """the board, with the version check: SettingsError if writes aren't allowed"""
-    link = LINKS[a.link]()
-    board = Board(link, a.elf)
+    if a.port:
+        if a.elf:
+            raise SettingsError("--elf is for SWD; the serial console needs no ELF")
+        link = SerialLink(a.port)
+        try:
+            board = SerialBoard(link)
+        except Exception:
+            link.close()
+            raise
+    else:
+        link = LINKS[a.link]()
+        board = Board(link, a.elf)
     if not a.elf:
         ok, why = version_match(board.fw_version)
         if not ok:
@@ -1172,6 +1414,11 @@ def main():
         help="the build on the board, for firmware without the SWD descriptor (older builds)",
     )
     ap.add_argument("--link", choices=sorted(LINKS), default="pyocd", help="SWD access (pyocd)")
+    ap.add_argument(
+        "--port",
+        help="use the serial console instead of SWD: a 3.3 V USB-serial adapter on the "
+        "mini-USB data pins, board on USB power (e.g. COM20, /dev/ttyUSB0)",
+    )
     ap.add_argument(
         "--allow-mismatch",
         action="store_true",

@@ -52,29 +52,6 @@
 #include "version.h"
 #include <stdio.h>
 
-enum settings_cmd {
-	CMD_NONE,
-	CMD_EDIT,	  /* settings_edit = live settings */
-	CMD_APPLY,	  /* check settings_edit and use it */
-	CMD_SAVE,	  /* write the live settings to the EEPROM */
-	CMD_RELOAD,	  /* load and use the EEPROM block, if valid */
-	CMD_DEFAULTS, /* use the built-in defaults (not saved) */
-	/* the same for the analog calibration (cal_edit, cal_error) */
-	CMD_CAL_EDIT,
-	CMD_CAL_APPLY,
-	CMD_CAL_SAVE,
-	CMD_CAL_RELOAD,
-	CMD_CAL_DEFAULTS,
-};
-
-enum settings_result {
-	RESULT_NONE,
-	RESULT_OK,
-	RESULT_INVALID, /* settings_error says why; nothing changed */
-	RESULT_EEPROM,	/* EEPROM write or read-back failed */
-	RESULT_BAD_CMD,
-};
-
 settings_t settings_edit;
 cal_t cal_edit;
 volatile uint8_t settings_cmd;
@@ -273,7 +250,13 @@ static uint8_t run_cal(uint8_t cmd) {
 	}
 }
 
-static uint8_t run(uint8_t cmd) {
+/*
+ * settings_command
+ *
+ * runs a mailbox command (enum settings_cmd) and returns its enum
+ * settings_result: the SWD mailbox below, and the serial console (console.c)
+ */
+uint8_t settings_command(uint8_t cmd) {
 	settings_t s;
 
 	if (cmd >= CMD_CAL_EDIT && cmd <= CMD_CAL_DEFAULTS)
@@ -326,7 +309,7 @@ void settings_poll(void) {
 	uint8_t cmd = settings_cmd;
 	if (cmd == CMD_NONE)
 		return;
-	settings_result = run(cmd);
+	settings_result = settings_command(cmd);
 	settings_done++;
 	settings_cmd = CMD_NONE;
 }

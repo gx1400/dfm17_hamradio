@@ -21,6 +21,7 @@ and a summary, and the run fails if any check does.
 | `test_ppsdisc` | ppsdisc.c | the TCXO correction: estimate from a full window, slow and fast TCXOs, the corrected carrier, sub-cycle resolution, one-sided outliers trimmed, missed pulses / wake-up / HSI samples rejected, estimate kept without GPS, retune threshold, disable, queue overflow |
 | `test_analog` | analog.c | VDDA from VREFINT, supply voltage and current with the default and a board's calibration, independence from VDDA, temperature, USB VBUS (0 on battery), the averaged reads through a fake ADC |
 | `test_cal` | cal.c | the calibration block's defaults and CRC (same as Python), magic/version/CRC/range checks at the limits, per-channel fallback on load, fixed-point scaling, rounding and clamping |
+| `test_console` | console.c | the serial console: off on battery, on with USB after two readings, echo and backspace, long and control characters, input dropped while a line waits, `fox`/`log`/`gps`, config mode required for changes and left on USB loss (GPS woken again), `cfg`/`cal get` format, `put` refusing bad length, hex and CRC, the firmware's refusal reported, `reset` refused on battery |
 
 How it works:
 

@@ -63,6 +63,10 @@ static uint8_t powered_off;
 uint8_t diag_powered_off(void) {
 	return powered_off;
 }
+static uint8_t config_mode;
+uint8_t console_config_mode(void) {
+	return config_mode;
+}
 
 /* ---- helpers ------------------------------------------------------------------ */
 
@@ -252,6 +256,15 @@ static void tx_gate(void) {
 	powered_off = 0;
 	CHECK(find_cmd(CMD_START_TX) < 0);
 	CHECK_EQ(si4060_tx_refused, refused + 4);
+
+	/* set up, but config mode on the serial console (#50) */
+	reset();
+	provision();
+	config_mode = 1;
+	si4060_start_tx(0);
+	config_mode = 0;
+	CHECK(find_cmd(CMD_START_TX) < 0);
+	CHECK_EQ(si4060_tx_refused, refused + 5);
 }
 
 static void cts_timeout(void) {

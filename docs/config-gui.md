@@ -30,8 +30,12 @@ Releases include a ready-to-run app for each platform (see
   EEPROM, asks first.
 
 Not in scope (later, if wanted): flashing firmware, live telemetry, the PPS
-and diag counters beyond the two shown, serial (UART) access, the NFC side of
-the EEPROM, the GPS and radio chip versions (not kept in RAM by the firmware).
+and diag counters beyond the two shown, the NFC side of the EEPROM, the GPS
+and radio chip versions (not kept in RAM by the firmware).
+
+**Over serial instead of SWD:** pick the `serial` link and the adapter's port.
+The board must be on USB power; [serial-console.md](serial-console.md) has
+the wiring. `--simulate` offers a simulated serial board too.
 
 ## How it finds the board's settings: the SWD descriptor
 

@@ -188,8 +188,9 @@ later) and use sector 3.
 Ways to change settings, in order of effort:
 
 1. Over SWD (write the bytes with the programmer; a small script can do it).
-2. A text command interface on USART1 (the mini-USB connector carries UART,
-   not USB), e.g. `set call NZ0P-12`, `set freq 432500000`, `save`.
+2. The serial console on USART1 (the mini-USB connector carries UART, not
+   USB: D+ is PA9 TX, D- is PA10 RX, checked on board 1), on USB power only:
+   [serial-console.md](serial-console.md), #50.
 3. **NFC from a phone** (ST's NFC Tap / ST25 apps read and write ISO 15693
    tags), see below.
 

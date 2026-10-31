@@ -64,6 +64,7 @@ void diag_clear_error(diag_error err);
 void diag_set_tx(uint8_t on);
 void diag_set_gps_fix(uint8_t fix3d);
 void diag_set_paused(uint8_t paused);
+uint8_t diag_paused(void);
 diag_button diag_get_button(void);
 uint8_t diag_powered_off(void);
 
