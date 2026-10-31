@@ -39,6 +39,10 @@
   * 2026-10-29: 31 cycles without a fix in one parking spot, a fix within
   * 5 min of a restart that kept the GPS on, same spot. The same applies to
   * the cold start after power-up.
+  *
+  * With gps_power=always_on in the settings (issue #37) the GPS never sleeps:
+  * a continuous 1PPS for the frequency discipline and faster fixes, for
+  * 20-25 mA more. Switching it on while the GPS sleeps wakes it right away.
   ******************************************************************************
   */
 
@@ -61,6 +65,8 @@ static uint8_t fixing;
 /* the last 3D fix of this cycle */
 static GNSS_StateHandle last_fix;
 static uint8_t have_last_fix;
+/* the tracker put the GPS in backup mode */
+static uint8_t gps_off;
 
 /*
  * tracker_start
@@ -72,6 +78,7 @@ void tracker_start(void) {
 	cycle_start = HAL_GetTick();
 	fixing = 0;
 	have_last_fix = 0;
+	gps_off = 0;
 }
 
 /* returns 1 if the packet carried a position */
@@ -122,14 +129,24 @@ void tracker_poll(GNSS_StateHandle *GNSS) {
 			uint8_t position = send_aprs(GNSS);
 			printf("tracker: sent %s\r\n", position ? "position" : "status, no fix");
 			/* no fix: keep the GPS on so it can finish reacquiring */
-			if (position)
+			if (position && !settings_gps_always_on()) {
 				gpsSleep();
+				gps_off = 1;
+			}
 			state = TRK_WAIT;
 		}
 		break;
 	case TRK_WAIT:
-		if (now - cycle_start >= cfg.tracker_period_s * 1000UL) {
+		/* switched to always on while the GPS sleeps */
+		if (gps_off && settings_gps_always_on()) {
 			gpsWake();
+			gps_off = 0;
+		}
+		if (now - cycle_start >= cfg.tracker_period_s * 1000UL) {
+			/* always on: the GPS is awake and its fix current, nothing to clear */
+			if (gps_off || !settings_gps_always_on())
+				gpsWake();
+			gps_off = 0;
 			cycle_start = now;
 			fixing = 0;
 			have_last_fix = 0;

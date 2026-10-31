@@ -56,6 +56,7 @@ builds.
 | `fox_period_s` | 30 | >= 10 |
 | `fox_tone_ms` | 10000 | <= 60000, and tone + 8 s must fit in the period |
 | `fox_aprs_every` | 10 | APRS after every Nth fox cycle; 0 = never (for an actual hunt: APRS gives the fox's position away) |
+| `gps_power` | default (duty_cycle) | `duty_cycle`: the GPS goes into backup mode between tracker fixes. `always_on`: never; continuous 1PPS for the frequency correction and faster fixes, for about 20-25 mA more (on the stock CR123A cells that shortens the run time noticeably, #15). `default`: duty_cycle for now; #36 may make it switch on USB power |
 
 ## Protection against bad values
 
@@ -113,7 +114,8 @@ data is overwritten, and it's open for phone access since #8). Little-endian:
 | 30 | 2 | fox period, s |
 | 32 | 2 | fox tone, ms |
 | 34 | 1 | APRS every Nth fox cycle |
-| 35 | 27 | reserved (0xFF) |
+| 35 | 1 | GPS power: 0 duty cycle, 1 always on, 0xFF default |
+| 36 | 26 | reserved (0xFF) |
 | 62 | 2 | CRC-16/CCITT-FALSE of bytes 0-61 (Python: `binascii.crc_hqx(data, 0xFFFF)`) |
 
 `settings_t` in `dfm17/Core/Inc/settings.h` pins these offsets with static
