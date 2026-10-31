@@ -22,6 +22,24 @@ RAM_AT = {
     "si4060_tx_refused": 0x2000018C,
     "aprs_send_now": 0x20000190,
     "aprs_packets_sent": 0x20000194,
+    "cal": 0x200001A0,
+    "cal_edit": 0x200001C0,
+    "cal_source": 0x200001E0,
+    "cal_error": 0x200001E1,
+    "analog_last": 0x200001E4,
+}
+# a board on USB: 4.98 V in, 57 mA, 4.99 V VBUS, with the default calibration
+ANALOG_LAST = {
+    "vin_raw": 2956,
+    "iin_raw": 66,
+    "vref_raw": 1486,
+    "vdda_mv": 3306,
+    "vin_mv": 4980,
+    "iin_ma": 57,
+    "temp_c": 30,
+    "usb_raw": 3060,
+    "usb_mv": 4990,
+    "on_usb": 1,
 }
 FW_AT = 0x08005000
 
@@ -51,6 +69,12 @@ class FakeLink:
         self.eeprom = bytes(d.pack(d.seal(dict(s))))
         self._put(RAM_AT["cfg"], self.eeprom)
         self._put(RAM_AT["settings_source"], bytes([1]))  # loaded from the EEPROM
+        # the calibration block: erased, so the defaults (MAGIC)
+        self.cal_eeprom = b"\xff" * d.CAL_SIZE
+        self._put(RAM_AT["cal"], bytes(d.cal_pack(d.cal_defaults())))
+        self._put(RAM_AT["cal_error"], bytes([d.CAL_ERRORS.index("MAGIC")]))
+        a = struct.pack(d.ANALOG_FMT, *(ANALOG_LAST[n] for n, _ in d.ANALOG))
+        self._put(RAM_AT["analog_last"], a.ljust(d.ANALOG_SIZE, b"\0"))
 
     # ---- memory -------------------------------------------------------------
 
@@ -116,8 +140,47 @@ class FakeLink:
         self._put(RAM_AT["settings_source"], bytes([source]))
         return 1
 
+    def _cal_use(self, c, source):
+        self._put(RAM_AT["cal"], bytes(d.cal_pack(c)))
+        self._put(RAM_AT["cal_source"], bytes([source]))
+
+    def _cal_command(self, cmd):
+        """CMD_CAL_*, as settings_store.c's run_cal()"""
+        if cmd == 6:  # CAL_EDIT
+            self._put(RAM_AT["cal_edit"], self._get("cal"))
+            return 1
+        if cmd == 7:  # CAL_APPLY: refused whole if anything is wrong
+            c = d.cal_seal(d.cal_unpack(self._get("cal_edit")))
+            err = d.cal_check(c)
+            self._put(RAM_AT["cal_error"], bytes([d.CAL_ERRORS.index(err)]))
+            if err != "OK":
+                return 2
+            self._cal_use(c, 2)
+            return 1
+        if cmd == 8:  # CAL_SAVE
+            self.cal_eeprom = bytes(d.cal_pack(d.cal_seal(d.cal_unpack(self._get("cal")))))
+            self._put(RAM_AT["cal_source"], bytes([1]))
+            return 1
+        if cmd == 9:  # CAL_RELOAD: out-of-range channels get their defaults
+            c = d.cal_unpack(self.cal_eeprom)
+            err = d.cal_check(c)
+            self._put(RAM_AT["cal_error"], bytes([d.CAL_ERRORS.index(err)]))
+            if err not in ("OK", "RANGE"):
+                return 2
+            for ch in d.cal_bad_channels(c):
+                c[f"{ch}_a"], c[f"{ch}_b"] = d.CAL_DEFAULT[ch]
+                c["measured"] &= ~(1 << [n for n, _, _ in d.CAL_CHANNELS].index(ch))
+            self._cal_use(d.cal_seal(c), 1)
+            return 1
+        # CAL_DEFAULTS
+        self._cal_use(d.cal_defaults(), 0)
+        self._put(RAM_AT["cal_error"], b"\0")
+        return 1
+
     def _command(self, cmd):
-        if cmd == 1:  # EDIT
+        if 6 <= cmd <= 10:
+            result = self._cal_command(cmd)
+        elif cmd == 1:  # EDIT
             result = 1
             self._put(RAM_AT["settings_edit"], self._get("cfg"))
         elif cmd == 2:  # APPLY: the firmware seals what the editor wrote

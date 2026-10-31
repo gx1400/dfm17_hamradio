@@ -30,17 +30,10 @@
 
 #include <inttypes.h>
 
-/* PA0 is the supply input through a divider: Vin = V(PA0) * ANALOG_VIN_DIVIDER.
- * 2.0 is a guess (2.33 V on PA0 from about 4.7 V); confirm against a meter,
- * see docs/hardware-investigation.md */
-#define ANALOG_VIN_DIVIDER		2.0f
+/* PA0 (supply input through a divider and a diode), PB1 (supply current
+ * monitor, 1 V/A) and PC2 (mini-USB VBUS through a divider) are scaled with
+ * each board's calibration factors, a * V(pin) + b (cal.h, #43) */
 
-/* PB1 is the supply current monitor, about 1 V per A */
-#define ANALOG_I_MA_PER_V		1000.0f
-
-/* PC2 is the mini-USB VBUS through a divider (traced on the PCB, see
- * docs/hardware-investigation.md). 2.0 is a placeholder until measured */
-#define ANALOG_USB_DIVIDER		2.0f
 /* USB power is present when PC2 itself reads above this; on battery it reads
  * near 0, so this works whatever the divider turns out to be */
 #define ANALOG_USB_PRESENT_MV	500

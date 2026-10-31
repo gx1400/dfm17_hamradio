@@ -30,6 +30,8 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "analog.h"
+#include "cal.h"
 
 /* station settings in the NFC EEPROM, user memory 0x180 (sector 3, the free
  * sector; open for phone access since #8). docs/settings.md has the map;
@@ -123,6 +125,7 @@ extern volatile uint32_t settings_repairs; /* live settings found corrupt and re
 
 /* settings.c: no hardware access, so the host tests can link it */
 void settings_defaults(settings_t *s);
+uint16_t crc16_ccitt(const void *data, size_t n);
 uint16_t settings_crc(const settings_t *s);
 void settings_seal(settings_t *s);
 enum settings_error settings_check(const settings_t *s);
@@ -136,7 +139,7 @@ uint8_t settings_gps_always_on(void);
  * fields only, and bump SWD_INFO_VERSION when the layout changes; the tools
  * check the layout against the ELF in CI (dfmcfg.py --check-elf) */
 #define SWD_INFO_MAGIC	 "DFM-SWD"
-#define SWD_INFO_VERSION 2
+#define SWD_INFO_VERSION 3
 
 typedef struct {
 	char magic[8];			  /* SWD_INFO_MAGIC */
@@ -157,6 +160,13 @@ typedef struct {
 	/* version 2: the send-now trigger (#51) */
 	volatile uint8_t *aprs_send_now;
 	volatile uint32_t *aprs_packets_sent;
+	/* version 3: the analog calibration (#43; same mailbox, CMD_CAL_*), and
+	 * the latest readings */
+	cal_t *cal;
+	cal_t *cal_edit;
+	volatile uint8_t *cal_source;
+	volatile uint8_t *cal_error;
+	analog_reading *analog_last;
 } swd_info_t;
 
 extern const swd_info_t swd_info;

@@ -31,6 +31,8 @@
   * settings_edit (EDIT), change fields there, then APPLY (checked; refused if
   * invalid, the old settings stay) and SAVE (written to the EEPROM, read back
   * and compared). RELOAD and DEFAULTS too. Results in settings_result.
+  * The CAL_* commands do the same for the analog calibration block (cal.c,
+  * cal_edit, cal_error), which is loaded first at boot and saved separately.
   *
   * Every main loop pass re-checks the live settings; if something corrupted
   * them (e.g. a stray SWD write into cfg), the last good copy is restored.
@@ -41,7 +43,9 @@
 
 #include "settings.h"
 #include "main.h"
+#include "analog.h"
 #include "aprs.h"
+#include "cal.h"
 #include "i2c_ee.h"
 #include "ppsdisc.h"
 #include "si4063.h"
@@ -55,6 +59,12 @@ enum settings_cmd {
 	CMD_SAVE,	  /* write the live settings to the EEPROM */
 	CMD_RELOAD,	  /* load and use the EEPROM block, if valid */
 	CMD_DEFAULTS, /* use the built-in defaults (not saved) */
+	/* the same for the analog calibration (cal_edit, cal_error) */
+	CMD_CAL_EDIT,
+	CMD_CAL_APPLY,
+	CMD_CAL_SAVE,
+	CMD_CAL_RELOAD,
+	CMD_CAL_DEFAULTS,
 };
 
 enum settings_result {
@@ -66,6 +76,7 @@ enum settings_result {
 };
 
 settings_t settings_edit;
+cal_t cal_edit;
 volatile uint8_t settings_cmd;
 volatile uint8_t settings_result;
 volatile uint32_t settings_done;
@@ -89,35 +100,54 @@ const swd_info_t swd_info = {
 		.tx_refused = &si4060_tx_refused,
 		.aprs_send_now = &aprs_send_now,
 		.aprs_packets_sent = &aprs_packets_sent,
+		.cal = &cal,
+		.cal_edit = &cal_edit,
+		.cal_source = &cal_source,
+		.cal_error = &cal_error,
+		.analog_last = &analog_last,
 };
 
 /* the last settings that passed settings_check(), for the runtime check */
 static settings_t good;
 
-static uint8_t same(const settings_t *a, const settings_t *b) {
-	const uint8_t *p = (const uint8_t *)a, *q = (const uint8_t *)b;
-	for (unsigned i = 0; i < sizeof(*a); i++)
+static uint8_t same_bytes(const void *a, const void *b, unsigned n) {
+	const uint8_t *p = a, *q = b;
+	for (unsigned i = 0; i < n; i++)
 		if (p[i] != q[i])
 			return 0;
 	return 1;
 }
 
-static uint8_t ee_load(settings_t *s) {
-	return ee_read(EE_USER_ADDR, SETTINGS_EE_ADDR, (volatile uint8_t *)s, sizeof(*s));
+static uint8_t same(const settings_t *a, const settings_t *b) {
+	return same_bytes(a, b, sizeof(*a));
 }
 
-/* 4-byte page writes, then read back and compare */
-static uint8_t ee_store(const settings_t *s) {
-	const uint8_t *p = (const uint8_t *)s;
-	settings_t back;
+/* a block of the user memory: the settings or the calibration */
+static uint8_t ee_load_at(uint16_t addr, void *buf, unsigned n) {
+	return ee_read(EE_USER_ADDR, addr, (volatile uint8_t *)buf, n);
+}
 
-	for (unsigned off = 0; off < sizeof(*s); off += 4) {
-		if (!ee_write(EE_USER_ADDR, SETTINGS_EE_ADDR + off, p + off, 4))
+/* 4-byte page writes, then read back and compare (n a multiple of 4, at
+ * most 64) */
+static uint8_t ee_store_at(uint16_t addr, const void *buf, unsigned n) {
+	const uint8_t *p = buf;
+	uint8_t back[SETTINGS_SIZE];
+
+	for (unsigned off = 0; off < n; off += 4) {
+		if (!ee_write(EE_USER_ADDR, addr + off, p + off, 4))
 			return 0;
 		if (ee_poll(EE_USER_ADDR) == 0xFF)
 			return 0;
 	}
-	return ee_load(&back) && same(&back, s);
+	return ee_load_at(addr, back, n) && same_bytes(back, buf, n);
+}
+
+static uint8_t ee_load(settings_t *s) {
+	return ee_load_at(SETTINGS_EE_ADDR, s, sizeof(*s));
+}
+
+static uint8_t ee_store(const settings_t *s) {
+	return ee_store_at(SETTINGS_EE_ADDR, s, sizeof(*s));
 }
 
 /* make s the live settings (already checked) */
@@ -136,16 +166,35 @@ static void print_settings(void) {
 			settings_tx_allowed() ? "TX allowed" : "TX disabled (no callsign)");
 }
 
+/* the calibration block at boot: each channel from the EEPROM if it's in
+ * range, else its default */
+static void cal_init(void) {
+	static const char *const from[] = {"defaults", "EEPROM", "SWD"};
+	cal_t c;
+
+	if (!ee_load_at(CAL_EE_ADDR, &c, sizeof(c)))
+		cal_error = CAL_ERR_EEPROM;
+	else
+		cal_error = cal_load(&c);
+	if (cal_error != CAL_OK && cal_error != CAL_ERR_RANGE) {
+		cal_defaults(&cal);
+		cal_source = CAL_FROM_DEFAULTS;
+	}
+	printf("calibration: %s (error %u), measured 0x%x\r\n", from[cal_source], cal_error,
+			cal.measured);
+}
+
 /*
  * settings_init
  *
- * load the settings at boot, before the radio is set up (initRadio() uses
- * them)
+ * load the analog calibration and the settings at boot, before the radio is
+ * set up (initRadio() uses them)
  */
 void settings_init(void) {
 	settings_t s;
 
 	i2c_init();
+	cal_init();
 	if (!ee_load(&s)) {
 		settings_error = SETTINGS_ERR_EEPROM;
 	} else {
@@ -179,9 +228,56 @@ uint8_t settings_apply(const settings_t *s, enum settings_source source) {
 	return 1;
 }
 
+static uint8_t run_cal(uint8_t cmd) {
+	cal_t c;
+
+	switch (cmd) {
+	case CMD_CAL_EDIT:
+		cal_edit = cal;
+		return RESULT_OK;
+	case CMD_CAL_APPLY:
+		/* refused whole if anything is wrong; the old factors stay */
+		c = cal_edit;
+		cal_seal(&c);
+		cal_error = cal_check(&c);
+		if (cal_error != CAL_OK)
+			return RESULT_INVALID;
+		cal = c;
+		cal_source = CAL_FROM_SWD;
+		return RESULT_OK;
+	case CMD_CAL_SAVE:
+		cal_seal(&cal);
+		if (!ee_store_at(CAL_EE_ADDR, &cal, sizeof(cal)))
+			return RESULT_EEPROM;
+		cal_source = CAL_FROM_EEPROM;
+		return RESULT_OK;
+	case CMD_CAL_RELOAD: {
+		if (!ee_load_at(CAL_EE_ADDR, &c, sizeof(c))) {
+			cal_error = CAL_ERR_EEPROM;
+			return RESULT_EEPROM;
+		}
+		/* as at boot, out-of-range channels get their defaults; no valid
+		 * block at all: the factors in use stay */
+		enum cal_error err = cal_load(&c);
+		if (err != CAL_OK && err != CAL_ERR_RANGE) {
+			cal_error = err;
+			return RESULT_INVALID;
+		}
+		return RESULT_OK;
+	}
+	default: /* CMD_CAL_DEFAULTS */
+		cal_defaults(&cal);
+		cal_source = CAL_FROM_DEFAULTS;
+		cal_error = CAL_OK;
+		return RESULT_OK;
+	}
+}
+
 static uint8_t run(uint8_t cmd) {
 	settings_t s;
 
+	if (cmd >= CMD_CAL_EDIT && cmd <= CMD_CAL_DEFAULTS)
+		return run_cal(cmd);
 	switch (cmd) {
 	case CMD_EDIT:
 		settings_edit = cfg;

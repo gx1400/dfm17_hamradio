@@ -34,6 +34,7 @@ tools/config/dfmcfg.py show
 | `check name=value ...` | check values offline, without a board |
 | `fields` | the list below |
 | `send [N]` | send N APRS packets now (default 1), no test tone, 1 s apart; works while paused. Prints how many went out and how many the transmit gate refused (no callsign set up). For testing decoders and AFSK changes (#51) |
+| `cal [show\|set\|save\|reload\|defaults]` | the analog calibration, kept apart from the settings ([below](#analog-calibration)) |
 
 The script finds the settings through the descriptor the firmware keeps in
 flash (`swd_info`, [config-gui.md](config-gui.md)) and compares the board's
@@ -133,6 +134,68 @@ data is overwritten, and it's open for phone access since #8). Little-endian:
 
 `settings_t` in `dfm17/Core/Inc/settings.h` pins these offsets with static
 asserts. `make test` checks that `dfmcfg.py` uses the same ones.
+
+## Analog calibration
+
+The supply voltage, supply current and USB VBUS readings (APRS telemetry, the
+`USB`/`BAT` tag) are scaled with each board's own factors, kept in a block of
+their own in the EEPROM (#43). Each channel is `value = a × x + b`, with `x`
+the pin voltage in mV after VDDA compensation:
+
+| Channel | Pin | Default `a` | Default `b` | From |
+|---|---|---|---|---|
+| `vin`, supply voltage | PA0 | 2.0 | +208 mV | board 1 (#14): divider and input diode |
+| `iin`, supply current | PB1 | 1.0 mA/mV | +4 mA | board 1 (#43): 1 V/A |
+| `usb`, USB VBUS | PC2 | 2.02 | 0 | board 1 (#14) |
+
+`usb` reads 0 on battery, whatever its offset. The factors measured on each
+board are listed in
+[hardware-investigation.md](hardware-investigation.md#calibration-factors-by-board).
+
+```sh
+tools/config/dfmcfg.py cal                  # factors in use, and the live readings with each pin voltage
+tools/config/dfmcfg.py cal set vin_a=1.9992 vin_b=208 iin_a=1.001 iin_b=3.7 --save
+tools/config/dfmcfg.py cal set usb=default  # one channel back to its default
+tools/config/dfmcfg.py cal save | reload | defaults
+```
+
+`cal set` marks the channels it sets as measured and dates the block today
+(or `date=2026-10-30`). Like the settings, a change applies at once and
+survives a reset only once saved.
+
+**Separate from the settings:** `save`, `defaults` and `reload` (and the
+settings app) never touch the calibration, and `cal save` etc. never touch the
+settings. The calibration describes the hardware, not the station.
+
+**Checks:** a gain more than 25% from the default or an offset over ±500 is
+refused by `dfmcfg.py` and by the firmware (`cal_check()` in `cal.c`). At boot
+an erased or corrupt block (magic, version, CRC) means the defaults; a valid
+block with one channel out of range uses that channel's default and the rest
+of the block. `cal_source` and `cal_error` say what happened.
+
+### Layout
+
+32 bytes at user-memory address `0x160` (sector 2, writable over I2C but not
+open to a phone, unlike sector 3). Little-endian:
+
+| Offset | Size | Field |
+|---|---|---|
+| 0 | 2 | magic `CA` |
+| 2 | 1 | layout version (1) |
+| 3 | 1 | length (32) |
+| 4 | 4 + 2 | `vin`: `a` (int32, Q16: 65536 = 1.0), `b` (int16, mV) |
+| 10 | 4 + 2 | `iin`: `a`, `b` (mA) |
+| 16 | 4 + 2 | `usb`: `a`, `b` (mV) |
+| 22 | 1 | measured: bit 0 `vin`, 1 `iin`, 2 `usb` (else the default) |
+| 23 | 1 | reserved (0xFF) |
+| 24 | 4 | date of the calibration, YYYYMMDD (0xFFFFFFFF: none) |
+| 28 | 2 | reserved (0xFF) |
+| 30 | 2 | CRC-16/CCITT-FALSE of bytes 0-29 |
+
+`cal_t` in `dfm17/Core/Inc/cal.h` pins these offsets; `make test` checks
+`dfmcfg.py`'s `CAL_LAYOUT` against them. Not calibrated yet: the temperature
+sensor and VREFINT use the datasheet's typical values (the reserved bytes
+leave room for them).
 
 ## Not yet (issue #18)
 

@@ -58,17 +58,35 @@ void si4060_set_tx_power(uint8_t p) {
 volatile uint32_t si4060_tx_refused;
 volatile uint8_t aprs_send_now;
 volatile uint32_t aprs_packets_sent;
+analog_reading analog_last;
 const char fw_version[] = "DFMFW test tracker";
 
 extern settings_t settings_edit;
+extern cal_t cal_edit;
 extern volatile uint8_t settings_cmd, settings_result;
 extern volatile uint32_t settings_done;
 
 enum { CMD_EDIT = 1, CMD_APPLY, CMD_SAVE, CMD_RELOAD, CMD_DEFAULTS };
+enum { CMD_CAL_EDIT = 6, CMD_CAL_APPLY, CMD_CAL_SAVE, CMD_CAL_RELOAD, CMD_CAL_DEFAULTS };
 enum { RESULT_OK = 1, RESULT_INVALID, RESULT_EEPROM };
 
 static void put(const settings_t *s) {
 	memcpy(eeprom + SETTINGS_EE_ADDR, s, sizeof(*s));
+}
+
+static void put_cal(const cal_t *c) {
+	memcpy(eeprom + CAL_EE_ADDR, c, sizeof(*c));
+}
+
+/* a calibrated board: board 1's PA0 fit */
+static cal_t calibrated(void) {
+	cal_t c;
+	cal_defaults(&c);
+	c.ch[CAL_VIN].a_q16 = 131020;
+	c.measured = 1 << CAL_VIN;
+	c.date = 20261030;
+	cal_seal(&c);
+	return c;
 }
 
 static uint8_t command(uint8_t cmd) {
@@ -447,6 +465,136 @@ static void runtime_check_restores_settings(void) {
 	CHECK_EQ(settings_check(&cfg), SETTINGS_OK);
 }
 
+/* ---- settings_store.c: the calibration block (#43) ------------------------- */
+
+static void boot_loads_calibration(void) {
+	cal_t c, d;
+	cal_defaults(&d);
+
+	/* erased: the defaults */
+	settings_init();
+	CHECK_EQ(cal_source, CAL_FROM_DEFAULTS);
+	CHECK_EQ(cal_error, CAL_ERR_MAGIC);
+	CHECK_MEM(&cal, &d, sizeof(cal));
+
+	c = calibrated();
+	put_cal(&c);
+	settings_init();
+	CHECK_EQ(cal_source, CAL_FROM_EEPROM);
+	CHECK_EQ(cal_error, CAL_OK);
+	CHECK_MEM(&cal, &c, sizeof(cal));
+
+	/* one channel out of range: that one from the defaults, the rest used */
+	c.ch[CAL_USB].b = 900;
+	cal_seal(&c);
+	put_cal(&c);
+	settings_init();
+	CHECK_EQ(cal_source, CAL_FROM_EEPROM);
+	CHECK_EQ(cal_error, CAL_ERR_RANGE);
+	CHECK_EQ(cal.ch[CAL_VIN].a_q16, 131020);
+	CHECK_EQ(cal.ch[CAL_USB].b, 0);
+
+	/* a corrupt block: the defaults */
+	eeprom[CAL_EE_ADDR + 5] ^= 0x01;
+	settings_init();
+	CHECK_EQ(cal_source, CAL_FROM_DEFAULTS);
+	CHECK_EQ(cal_error, CAL_ERR_CRC);
+	CHECK_MEM(&cal, &d, sizeof(cal));
+
+	/* the EEPROM doesn't answer */
+	ee_fail_reads = 1;
+	settings_init();
+	CHECK_EQ(cal_error, CAL_ERR_EEPROM);
+	CHECK_EQ(cal_source, CAL_FROM_DEFAULTS);
+}
+
+static void swd_cal_edit_apply_save_reload(void) {
+	settings_init();
+	CHECK_EQ(command(CMD_CAL_EDIT), RESULT_OK);
+	CHECK_MEM(&cal_edit, &cal, sizeof(cal));
+
+	/* the tool changes fields only; APPLY seals and checks */
+	cal_edit.ch[CAL_IIN].a_q16 = 65602;
+	cal_edit.ch[CAL_IIN].b = 4;
+	cal_edit.measured = 1 << CAL_IIN;
+	cal_edit.crc = 0;
+	CHECK_EQ(command(CMD_CAL_APPLY), RESULT_OK);
+	CHECK_EQ(cal_source, CAL_FROM_SWD);
+	CHECK_EQ(cal.ch[CAL_IIN].a_q16, 65602);
+	CHECK_EQ(cal_check(&cal), CAL_OK);
+
+	CHECK_EQ(command(CMD_CAL_SAVE), RESULT_OK);
+	CHECK_EQ(cal_source, CAL_FROM_EEPROM);
+	CHECK_MEM(eeprom + CAL_EE_ADDR, &cal, sizeof(cal));
+	cal_t saved = cal;
+
+	/* defaults (not saved), then reload */
+	CHECK_EQ(command(CMD_CAL_DEFAULTS), RESULT_OK);
+	CHECK_EQ(cal_source, CAL_FROM_DEFAULTS);
+	CHECK_EQ(cal.ch[CAL_IIN].a_q16, 65536);
+	CHECK_EQ(command(CMD_CAL_RELOAD), RESULT_OK);
+	CHECK_MEM(&cal, &saved, sizeof(cal));
+
+	/* a reboot finds it too */
+	settings_init();
+	CHECK_EQ(cal_source, CAL_FROM_EEPROM);
+	CHECK_MEM(&cal, &saved, sizeof(cal));
+}
+
+/* an out-of-range value over SWD is refused whole and changes nothing */
+static void swd_cal_apply_refuses_out_of_range(void) {
+	settings_init();
+	cal_t before = cal;
+	command(CMD_CAL_EDIT);
+	cal_edit.ch[CAL_VIN].a_q16 = 65536; /* 1.0: half the divider */
+	cal_edit.ch[CAL_IIN].a_q16 = 65602;
+	CHECK_EQ(command(CMD_CAL_APPLY), RESULT_INVALID);
+	CHECK_EQ(cal_error, CAL_ERR_RANGE);
+	CHECK_MEM(&cal, &before, sizeof(cal));
+	CHECK_EQ(cal_source, CAL_FROM_DEFAULTS);
+}
+
+/* the settings and the calibration are saved and reset separately */
+static void settings_commands_leave_calibration_alone(void) {
+	cal_t c = calibrated();
+	put_cal(&c);
+	settings_init();
+	CHECK_EQ(command(CMD_DEFAULTS), RESULT_OK);
+	CHECK_EQ(command(CMD_SAVE), RESULT_OK);
+	CHECK_MEM(&cal, &c, sizeof(cal));
+	CHECK_MEM(eeprom + CAL_EE_ADDR, &c, sizeof(c));
+
+	/* and the other way round */
+	settings_t s = cfg;
+	CHECK_EQ(command(CMD_CAL_DEFAULTS), RESULT_OK);
+	CHECK_EQ(command(CMD_CAL_SAVE), RESULT_OK);
+	CHECK_MEM(&cfg, &s, sizeof(cfg));
+	CHECK_MEM(eeprom + SETTINGS_EE_ADDR, &s, sizeof(s));
+}
+
+static void cal_eeprom_failures_reported(void) {
+	cal_t c = calibrated();
+	put_cal(&c);
+	settings_init();
+
+	ee_fail_writes = 1;
+	CHECK_EQ(command(CMD_CAL_SAVE), RESULT_EEPROM);
+	ee_fail_writes = 0;
+
+	ee_fail_reads = 1;
+	CHECK_EQ(command(CMD_CAL_RELOAD), RESULT_EEPROM);
+	CHECK_EQ(cal_error, CAL_ERR_EEPROM);
+	ee_fail_reads = 0;
+
+	/* no valid block to reload: the factors in use stay */
+	command(CMD_CAL_DEFAULTS);
+	memset(eeprom + CAL_EE_ADDR, 0xFF, CAL_SIZE);
+	cal_t before = cal;
+	CHECK_EQ(command(CMD_CAL_RELOAD), RESULT_INVALID);
+	CHECK_EQ(cal_error, CAL_ERR_MAGIC);
+	CHECK_MEM(&cal, &before, sizeof(cal));
+}
+
 /* field offsets for the layout check against tools/config/dfmcfg.py */
 static void write_layout(void) {
 	/* the Makefile names the file: build/ or build-cov/ */
@@ -481,6 +629,24 @@ static void write_layout(void) {
 	FIELD(reserved);
 	FIELD(crc);
 #undef FIELD
+	/* the calibration block, as dfmcfg.py's CAL_LAYOUT names it */
+#define CAL_FIELD(name, member)                                                                    \
+	fprintf(f, "cal.%s %zu %zu\n", name, offsetof(cal_t, member), sizeof(((cal_t *)0)->member))
+	CAL_FIELD("magic", magic);
+	CAL_FIELD("version", version);
+	CAL_FIELD("length", length);
+	CAL_FIELD("vin_a", ch[CAL_VIN].a_q16);
+	CAL_FIELD("vin_b", ch[CAL_VIN].b);
+	CAL_FIELD("iin_a", ch[CAL_IIN].a_q16);
+	CAL_FIELD("iin_b", ch[CAL_IIN].b);
+	CAL_FIELD("usb_a", ch[CAL_USB].a_q16);
+	CAL_FIELD("usb_b", ch[CAL_USB].b);
+	CAL_FIELD("measured", measured);
+	CAL_FIELD("reserved1", reserved1);
+	CAL_FIELD("date", date);
+	CAL_FIELD("reserved", reserved);
+	CAL_FIELD("crc", crc);
+#undef CAL_FIELD
 	fclose(f);
 }
 
@@ -503,6 +669,11 @@ static void swd_info_points_at_mailbox(void) {
 	CHECK(swd_info.tx_refused == &si4060_tx_refused);
 	CHECK(swd_info.aprs_send_now == &aprs_send_now);
 	CHECK(swd_info.aprs_packets_sent == &aprs_packets_sent);
+	CHECK(swd_info.cal == &cal);
+	CHECK(swd_info.cal_edit == &cal_edit);
+	CHECK(swd_info.cal_source == &cal_source);
+	CHECK(swd_info.cal_error == &cal_error);
+	CHECK(swd_info.analog_last == &analog_last);
 }
 
 TEST_MAIN("settings", TEST(defaults_are_valid_but_dont_transmit), TEST(crc_matches_python),
@@ -510,5 +681,7 @@ TEST_MAIN("settings", TEST(defaults_are_valid_but_dont_transmit), TEST(crc_match
 		TEST(boot_with_erased_eeprom_uses_defaults), TEST(boot_loads_valid_block),
 		TEST(boot_ignores_corrupt_block), TEST(swd_edit_apply_save_reload),
 		TEST(swd_apply_refuses_bad_values), TEST(save_failure_reported),
-		TEST(runtime_check_restores_settings), TEST(swd_info_points_at_mailbox),
-		TEST(write_layout), )
+		TEST(runtime_check_restores_settings), TEST(boot_loads_calibration),
+		TEST(swd_cal_edit_apply_save_reload), TEST(swd_cal_apply_refuses_out_of_range),
+		TEST(settings_commands_leave_calibration_alone), TEST(cal_eeprom_failures_reported),
+		TEST(swd_info_points_at_mailbox), TEST(write_layout), )
