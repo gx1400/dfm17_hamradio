@@ -39,13 +39,16 @@ FW_VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo u
 HAL     = $(FW)/Drivers/STM32F1xx_HAL_Driver/Src
 HAL_OBJS = $(patsubst $(HAL)/%.c,$(BUILD)/hal/%.o,$(wildcard $(HAL)/*.c))
 
-# build variants: the selectable modes in main.c
-VARIANTS = tracker fox hw_survey rf_test nfc_tool
+# build variants: the selectable modes in main.c. sine_test is the tracker
+# with the experimental sine AFSK built in and on (aprs.h, #54); it's built
+# here so it doesn't rot, but its packets don't decode yet
+VARIANTS = tracker fox hw_survey rf_test nfc_tool sine_test
 DEFS_tracker   =
 DEFS_fox       = -DFOX
 DEFS_hw_survey = -DHW_SURVEY
 DEFS_rf_test   = -DRF_TEST_SWD
 DEFS_nfc_tool  = -DHW_NFC
+DEFS_sine_test = -DAPRS_AFSK_SINE=1
 
 all: firmware test
 

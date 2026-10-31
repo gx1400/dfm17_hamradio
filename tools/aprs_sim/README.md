@@ -30,7 +30,8 @@ make afsk-test
 `afsk_harness` runs the firmware's `tx_aprs()` with the TIM15 ISR simulated
 in a second thread and prints the carrier offset at every tick, for the
 square wave on GPIO3 (`square`) and the sine AFSK from `MODEM_FREQ_OFFSET`
-writes (`sine`, `aprs_afsk_sine = 1`). `afsk_sim.py` turns that into receiver
+writes (`sine`, `aprs_afsk_sine = 1`; the harness is built with
+`-DAPRS_AFSK_SINE=1` like the `sine_test` firmware). `afsk_sim.py` turns that into receiver
 audio, with `--deemph` applying the 6 dB/octave de-emphasis of a two-way radio,
 and prints how much weaker the 2200 Hz tone arrives than 1200 Hz:
 

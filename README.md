@@ -47,8 +47,13 @@ backup is in `docs/data/`.
 
 - STM32CubeIDE: open the `dfm17/` project as before.
 - Command line: `make firmware` builds every variant into `build/<variant>/`
-  (`tracker`, `fox`, `hw_survey`, `rf_test`, `nfc_tool`) with warnings as errors, using
-  `arm-none-eabi-gcc` from PATH or the one inside STM32CubeIDE.
+  (`tracker`, `fox`, `hw_survey`, `rf_test`, `nfc_tool`, `sine_test`) with warnings as
+  errors, using `arm-none-eabi-gcc` from PATH or the one inside STM32CubeIDE.
+- APRS uses square-wave AFSK, the only modulation that decodes on air. The
+  experimental sine AFSK (#54) is only in the `sine_test` build
+  (`-DAPRS_AFSK_SINE=1`, the tracker with sine on; `aprs_afsk_sine` = 0 over
+  SWD switches it back to square). Leaving it out of the other builds saves
+  1.1 KB of flash and 32 B of RAM (#55).
 - `make test` runs the host unit tests (`tools/tests`) and checks that the
   APRS packets decode with Dire Wolf (`tools/aprs_sim`, Python packages in
   `tools/requirements.txt`). `make -C tools/tests coverage` reports which

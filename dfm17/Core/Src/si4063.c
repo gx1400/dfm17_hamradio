@@ -351,6 +351,9 @@ void si4060_stop_tx(void) {
 	si4060_change_state(STATE_READY);
 }
 
+#if APRS_AFSK_SINE
+/* the sine AFSK's radio side, only in the sine_test build (aprs.h) */
+
 /*
  * si4060_set_offset
  *
@@ -425,6 +428,7 @@ uint8_t si4060_set_offset_fast(int16_t offset) {
 	spi_deselect();
 	return 1;
 }
+#endif /* APRS_AFSK_SINE */
 
 /*
  * si4060_set_property_8

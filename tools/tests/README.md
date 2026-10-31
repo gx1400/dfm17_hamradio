@@ -5,6 +5,10 @@ their logic can be tested without the board. `make` (here, or `make test` at
 the top level) builds and runs everything; each suite prints its failed checks
 and a summary, and the run fails if any check does.
 
+`test_aprs` and `test_si4063` are also built as `test_aprs_sine` and
+`test_si4063_sine` with `-DAPRS_AFSK_SINE=1`, the experimental sine AFSK of the
+`sine_test` firmware build; the sine checks below run only in those (#55).
+
 | Suite | Source under test | What it covers |
 |---|---|---|
 | `test_aprs` | aprs.c | position and status packets field by field (base91 position, altitude, telemetry), sequence numbers, fix validity, AX.25 header, FCS, the line bit stream decoded back to the frame (NRZI, flags, bit stuffing), and the transmit sequence for square-wave and sine AFSK (radio, timer and SPI calls in order, sine sample rate and amplitude, skipped samples) |

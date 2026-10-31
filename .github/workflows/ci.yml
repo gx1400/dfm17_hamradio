@@ -28,10 +28,24 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi libnewlib-arm-none-eabi
-      - name: Build every variant (tracker, fox, hw_survey, rf_test, nfc_tool)
+      - name: Build every variant (tracker, fox, hw_survey, rf_test, nfc_tool, sine_test)
         run: make firmware
       - name: SWD descriptor in each build matches the settings tools
         run: for elf in build/*/dfm17.elf; do python3 tools/config/dfmcfg.py --check-elf "$elf"; done
+      - name: Sine AFSK only in the sine_test build (#55)
+        run: |
+          sine='aprs_afsk_tick|sine64|si4060_set_offset_fast'
+          for elf in build/*/dfm17.elf; do
+            n=$(arm-none-eabi-nm "$elf" | grep -cwE "$sine" || true)
+            case "$elf" in
+              build/sine_test/*) want=3 ;;
+              *) want=0 ;;
+            esac
+            if [ "$n" != "$want" ]; then
+              echo "::error::$elf has $n of the sine AFSK symbols ($sine), expected $want"
+              exit 1
+            fi
+          done
       - name: Build the base commit for the size comparison
         env:
           BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}

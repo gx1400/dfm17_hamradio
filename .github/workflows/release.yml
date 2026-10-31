@@ -60,6 +60,8 @@ jobs:
           mkdir dist
           for elf in build/*/dfm17.elf; do
             variant=$(basename "$(dirname "$elf")")
+            # experimental, its packets don't decode yet (#54): build from a checkout
+            [ "$variant" = sine_test ] && continue
             for ext in elf hex bin; do
               cp "build/$variant/dfm17.$ext" "dist/dfm17-$TAG-$variant.$ext"
             done

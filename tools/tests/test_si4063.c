@@ -154,6 +154,7 @@ static void deviation_scales_with_band(void) {
 	si4060_set_frequency(446175000);
 }
 
+#if APRS_AFSK_SINE
 static void offset_units(void) {
 	reset();
 	si4060_set_frequency(446175000);
@@ -163,6 +164,7 @@ static void offset_units(void) {
 	/* the sine AFSK's largest offset fits MODEM_FREQ_OFFSET (16-bit signed) */
 	CHECK(si4060_offset_units(25000) < 32767);
 }
+#endif
 
 static void modulation_modes(void) {
 	reset();
@@ -268,6 +270,7 @@ static void cts_timeout(void) {
 	CHECK_EQ(si4060_get_cts(0), 0);
 }
 
+#if APRS_AFSK_SINE
 static void fast_spi_for_afsk(void) {
 	reset();
 	SPI1->CR1 = SPI_CR1_SPE | SPI_BAUDRATEPRESCALER_32;
@@ -279,6 +282,7 @@ static void fast_spi_for_afsk(void) {
 	CHECK_EQ(SPI1->CR1 & SPI_CR1_BR, SPI_BAUDRATEPRESCALER_32);
 	CHECK(SPI1->CR1 & SPI_CR1_SPE);
 }
+#endif
 
 /* the radio set-up after POWER_UP: the DIV_CLK that clocks the STM32 (an
  * old bug zeroed GLOBAL_CLK_CFG and stopped it), async direct modulation
@@ -346,6 +350,7 @@ static void get_property_waits_for_cts(void) {
 	CHECK_EQ(txn[get][3], PA_PWR_LVL);
 }
 
+#if APRS_AFSK_SINE
 /* the AFSK offset, written without waiting for CTS */
 static void offset_written(void) {
 	reset();
@@ -354,14 +359,21 @@ static void offset_written(void) {
 			0x1234);
 }
 
+/* the sine AFSK's radio side, only in the sine build (test_si4063_sine) */
+#define SUITE	   "si4063_sine"
+#define SINE_TESTS TEST(offset_units), TEST(fast_spi_for_afsk), TEST(offset_written),
+#else
+#define SUITE "si4063"
+#define SINE_TESTS
+#endif
+
 /* every test runs on a board set up as NZ0P (fake_settings.h) */
 void test_setup(void) {
 	provision();
 }
 
-TEST_MAIN("si4063", TEST(frequency_across_70cm), TEST(frequency_default_channel),
-		TEST(band_selection), TEST(deviation_scales_with_band), TEST(offset_units),
-		TEST(modulation_modes), TEST(dfm17_config), TEST(tx_power), TEST(start_and_stop_tx),
-		TEST(tx_gate), TEST(cts_timeout), TEST(fast_spi_for_afsk), TEST(setup_configures_radio),
-		TEST(reset_and_power_up), TEST(part_info_reads_part_number),
-		TEST(get_property_waits_for_cts), TEST(offset_written))
+TEST_MAIN(SUITE, TEST(frequency_across_70cm), TEST(frequency_default_channel), TEST(band_selection),
+		TEST(deviation_scales_with_band), TEST(modulation_modes), TEST(dfm17_config),
+		TEST(tx_power), TEST(start_and_stop_tx), TEST(tx_gate), TEST(cts_timeout),
+		TEST(setup_configures_radio), TEST(reset_and_power_up), TEST(part_info_reads_part_number),
+		TEST(get_property_waits_for_cts), SINE_TESTS)

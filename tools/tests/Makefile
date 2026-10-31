@@ -10,6 +10,9 @@ SANITIZE ?= -fsanitize=undefined,bounds-strict -fsanitize-trap=all
 CFLAGS   = -std=gnu11 -Wall -Werror -g -O1 $(SANITIZE) -iquote . -iquote fakehal -iquote $(CORE)/Inc
 
 TESTS = aprs tracker gps gnss si4063 fox diag analog ppsdisc settings ppscap
+# the same tests again with the experimental sine AFSK built in (APRS_AFSK_SINE,
+# the sine_test firmware build): test_<name>_sine from test_<name>.c
+SINE_TESTS = aprs si4063
 
 # firmware sources linked into each test
 SRC_aprs    = aprs.c string.c settings.c
@@ -24,14 +27,14 @@ SRC_ppsdisc = ppsdisc.c settings.c
 SRC_settings = settings.c settings_store.c
 SRC_ppscap  = ppscap.c
 
-BINS = $(TESTS:%=$(BUILD)/test_%)
+BINS = $(TESTS:%=$(BUILD)/test_%) $(SINE_TESTS:%=$(BUILD)/test_%_sine)
 
 all: $(BINS)
 	@failed=""; \
 	for t in $(BINS); do \
 		SETTINGS_LAYOUT=$(BUILD)/settings_layout.txt $$t > $$t.log 2>&1 \
 			|| failed="$$failed $${t##*/}"; \
-		grep -E "^(FAIL|  FAIL)|^[a-z0-9]+: [0-9]+ checks" $$t.log; \
+		grep -E "^(FAIL|  FAIL)|^[a-z0-9_]+: [0-9]+ checks" $$t.log; \
 	done; \
 	if [ -n "$$failed" ]; then \
 		echo "FAILED:$$failed (logs in $(BUILD)/)"; exit 1; \
@@ -49,6 +52,12 @@ $(BUILD)/test_%: test_%.c fake_hal.c test.h fake_hal.h fakehal/stm32f1xx_hal.h \
 		$$(addprefix $(CORE)/Src/,$$(SRC_$$*)) $(wildcard $(CORE)/Inc/*.h)
 	@mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) -o $@ test_$*.c fake_hal.c $(addprefix $(CORE)/Src/,$(SRC_$*)) -lm
+
+$(BUILD)/test_%_sine: test_%.c fake_hal.c test.h fake_hal.h fakehal/stm32f1xx_hal.h \
+		$$(addprefix $(CORE)/Src/,$$(SRC_$$*)) $(wildcard $(CORE)/Inc/*.h)
+	@mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) -DAPRS_AFSK_SINE=1 -o $@ test_$*.c fake_hal.c \
+		$(addprefix $(CORE)/Src/,$(SRC_$*)) -lm
 
 # coverage: the same tests built with --coverage into build-cov/ (no
 # sanitizer: its checks add branches of their own), run, and reported with
