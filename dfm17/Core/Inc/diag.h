@@ -47,6 +47,9 @@ typedef enum {
 
 #define DIAG_BUTTON_MEDIUM_MS	1000
 #define DIAG_BUTTON_LONG_MS		3000
+/* held this long, a release powers the board off instead of a long press
+ * (#44): handled inside diag.c, never returned by diag_get_button() */
+#define DIAG_BUTTON_OFF_MS		10000
 
 extern volatile uint32_t pps_cycles;
 /* pulses kept from the discipline: GPS time not locked (#35) */
@@ -62,5 +65,6 @@ void diag_set_tx(uint8_t on);
 void diag_set_gps_fix(uint8_t fix3d);
 void diag_set_paused(uint8_t paused);
 diag_button diag_get_button(void);
+uint8_t diag_powered_off(void);
 
 #endif /* INC_DIAG_H_ */

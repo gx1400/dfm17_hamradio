@@ -219,6 +219,17 @@ int main(void)
     /* USER CODE BEGIN 3 */
 	  checkRadioClock();
 
+	  // a 10 s button press powers off (diag.c). on USB the board stays up:
+	  // nothing more until a press restarts it
+	  if (diag_powered_off()) {
+		  static uint8_t reported = 0;
+		  if (!reported) {
+			  reported = 1;
+			  printf("power off\r\n");
+		  }
+		  continue;
+	  }
+
 	  if (gpsUpdateDue) {
 		  uint32_t timeouts = GNSS_timeouts;
 		  gpsUpdateDue = 0;

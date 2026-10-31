@@ -4,6 +4,7 @@
  */
 #include "test.h"
 #include "fake_hal.h"
+#include "main.h"
 #include "diag.h"
 #include "ppscap.h"
 
@@ -27,6 +28,18 @@ GPIO_PinState HAL_GPIO_ReadPin(GPIO_TypeDef *port, uint16_t pin) {
 	(void)port; (void)pin;
 	return button ? GPIO_PIN_SET : GPIO_PIN_RESET;
 }
+/* power off: radio SDN (PC3), battery hold (PC0), and the restart on USB */
+static int sdn, batt_on = 1, resets;
+void HAL_GPIO_WritePin(GPIO_TypeDef *port, uint16_t pin, GPIO_PinState state) {
+	if (port == oSiSDN_GPIO_Port && pin == oSiSDN_Pin)
+		sdn = state == GPIO_PIN_SET;
+	if (port == oBattOn_GPIO_Port && pin == oBattOn_Pin)
+		batt_on = state == GPIO_PIN_SET;
+}
+void NVIC_SystemReset(void) {
+	resets++;
+}
+
 void ledOnGreen(void) { green = 1; }
 void ledOffGreen(void) { green = 0; }
 void ledOnYellow(void) { yellow = 1; }
@@ -181,6 +194,81 @@ static void pps_cycle_count(void) {
 	CHECK_EQ(sample_ms, 1000);
 }
 
+/* just under the power-off hold: still an ordinary long press */
+static void long_press_below_power_off(void) {
+	press(DIAG_BUTTON_OFF_MS - 100);
+	CHECK_EQ(diag_get_button(), DIAG_BUTTON_LONG);
+	CHECK(!diag_powered_off());
+	CHECK(batt_on && !sdn);
+}
+
+/* LED state as a bitmask: red 1, yellow 2, green 4 */
+static int leds(void) {
+	return red | (yellow << 1) | (green << 2);
+}
+
+/* #44: held 10 s, all three blink fast; released, a red-yellow-green chase,
+ * then radio shutdown and the battery hold released. on USB the board stays
+ * up, dark and refusing to transmit, and a press restarts it. Runs last: the
+ * module stays powered off */
+static void power_off(void) {
+	button = 1;
+	ms(DIAG_BUTTON_OFF_MS - 500);
+	CHECK_EQ(leds(), 7); /* the 3 s "long press" indication */
+	ms(500);
+	/* all three together, 60 ms on / 60 ms off */
+	int toggles = 0, prev = leds();
+	for (int i = 0; i < 1200; i++) {
+		ms(1);
+		CHECK(leds() == 0 || leds() == 7);
+		toggles += leds() != prev;
+		prev = leds();
+	}
+	CHECK(toggles >= 18 && toggles <= 21);
+	CHECK(!diag_powered_off()); /* not until released */
+
+	button = 0;
+	ms(20); /* debounced: the chase starts */
+	CHECK(diag_powered_off());
+	CHECK_EQ(diag_get_button(), DIAG_BUTTON_NONE);
+	/* a press during the chase is ignored: no event, no restart */
+	press(40);
+	CHECK_EQ(diag_get_button(), DIAG_BUTTON_NONE);
+	CHECK_EQ(resets, 0);
+	/* one LED at a time, red -> yellow -> green */
+	int seen[8] = {0}, order_ok = 1, last = 0;
+	for (int i = 0; i < 750; i++) {
+		ms(1);
+		int l = leds();
+		seen[l]++;
+		if (l != last && last && !(l == (last == 4 ? 1 : last << 1)))
+			order_ok = 0;
+		last = l;
+	}
+	CHECK(order_ok);
+	CHECK(seen[1] && seen[2] && seen[4]);
+	CHECK(!seen[0] && !seen[3] && !seen[5] && !seen[6] && !seen[7]);
+	CHECK(batt_on && !sdn); /* power still held during the chase */
+
+	ms(200); /* chase over: radio off, then power */
+	CHECK(sdn);
+	CHECK(!batt_on);
+	CHECK_EQ(leds(), 0);
+
+	/* still running: on USB. stays dark, no button events */
+	diag_set_tx(1);
+	diag_set_error(DIAG_ERR_GPS);
+	ms(3000);
+	CHECK_EQ(leds(), 0);
+	CHECK(diag_powered_off());
+	CHECK_EQ(resets, 0);
+
+	/* any press restarts it */
+	press(300);
+	CHECK_EQ(resets, 1);
+	CHECK_EQ(diag_get_button(), DIAG_BUTTON_NONE);
+}
+
 static void leds_off_stops_patterns(void) {
 	diag_set_tx(1);
 	diag_leds_off();
@@ -253,4 +341,4 @@ TEST_MAIN("diag", TEST(held_at_boot_is_ignored), TEST(short_medium_long), TEST(e
 		TEST(glitch_ignored), TEST(contact_bounce_is_one_press), TEST(hold_feedback_leds),
 		TEST(heartbeat), TEST(blink_codes), TEST(yellow_fix_and_pps), TEST(pps_cycle_count),
 		TEST(pps_capture_feeds_discipline), TEST(pps_unlocked_not_sampled),
-		TEST(leds_off_stops_patterns))
+		TEST(leds_off_stops_patterns), TEST(long_press_below_power_off), TEST(power_off))

@@ -30,7 +30,15 @@
   * Yellow: on with a 3D GPS fix; a short flash on each GPS PPS pulse without one
   * Red:    blink code of the lowest active diag_error, repeating
   * Button: held 1 s lights green, held 3 s lights all three, showing which
-  *         action a release will pick (short / medium / long press)
+  *         action a release will pick (short / medium / long press). Held
+  *         10 s all three blink fast: a release then powers the board off
+  *
+  * Power off (#44): a red-yellow-green chase for about a second, then the radio
+  * goes into shutdown and oBattOn (PC0) is released, which removes battery
+  * power. On USB the board stays powered, so it stays "off" instead: LEDs dark,
+  * no transmissions (diag_powered_off()), until a press restarts it. The
+  * chase runs before the radio shutdown: SYSCLK comes from the radio's DIV_CLK,
+  * and losing it drops SysTick to the bare 8 MHz HSI.
   ******************************************************************************
   */
 
@@ -49,6 +57,11 @@
 #define BLINK_SLOT_MS		500
 #define BLINK_GAP_MS		1500
 #define ACK_MS				200
+#define OFF_BLINK_MS		60 /* held past DIAG_BUTTON_OFF_MS: on/off, all three */
+#define OFF_CHASE_STEP_MS	40 /* power off: each LED of the chase */
+#define OFF_CHASE_MS		(8 * 3 * OFF_CHASE_STEP_MS) /* eight rounds */
+
+enum { POWER_ON = 0, POWER_CHASE, POWER_OFF };
 
 static volatile uint8_t ready = 0;
 static volatile uint8_t errors = 0;			/* bit n set = diag_error n active */
@@ -71,6 +84,9 @@ static uint8_t button_down = 0;
 static uint8_t button_armed = 0;	/* released once since boot */
 static uint8_t button_raw_count = 0;
 static uint32_t button_down_tick = 0;
+
+static volatile uint8_t power_state = POWER_ON;
+static uint32_t power_off_tick = 0;
 
 static void set_green(uint8_t on) { if (on) ledOnGreen(); else ledOffGreen(); }
 static void set_yellow(uint8_t on) { if (on) ledOnYellow(); else ledOffYellow(); }
@@ -138,7 +154,19 @@ static void button_sample(uint32_t now) {
 		button_armed = 1;
 		return;
 	}
+	if (power_state == POWER_OFF) {
+		/* still running after power off: on USB. any press starts it again */
+		NVIC_SystemReset();
+		return;
+	}
+	if (power_state != POWER_ON)
+		return;
 	uint32_t held = now - button_down_tick;
+	if (held >= DIAG_BUTTON_OFF_MS) {
+		power_state = POWER_CHASE;
+		power_off_tick = now;
+		return;
+	}
 	if (held < DIAG_BUTTON_MEDIUM_MS)
 		button_event = DIAG_BUTTON_SHORT;
 	else if (held < DIAG_BUTTON_LONG_MS)
@@ -161,6 +189,28 @@ static uint8_t red_pattern(uint32_t now) {
 	return phase < code * BLINK_SLOT_MS && (phase % BLINK_SLOT_MS) < BLINK_ON_MS;
 }
 
+/* power off after a DIAG_BUTTON_OFF_MS press: the chase, then radio shutdown
+ * and the battery hold released. the board loses power here on battery */
+static void power_tick(uint32_t now) {
+	if (power_state == POWER_CHASE) {
+		uint32_t t = now - power_off_tick;
+		if (t < OFF_CHASE_MS) {
+			uint32_t step = t / OFF_CHASE_STEP_MS % 3;
+			set_red(step == 0);
+			set_yellow(step == 1);
+			set_green(step == 2);
+			return;
+		}
+		/* PA off first, then the power */
+		HAL_GPIO_WritePin(oSiSDN_GPIO_Port, oSiSDN_Pin, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(oBattOn_GPIO_Port, oBattOn_Pin, GPIO_PIN_RESET);
+		power_state = POWER_OFF;
+	}
+	set_red(0);
+	set_yellow(0);
+	set_green(0);
+}
+
 /*
  * diag_tick
  *
@@ -173,8 +223,20 @@ void diag_tick(void) {
 	uint32_t now = HAL_GetTick();
 	button_sample(now);
 
+	if (power_state != POWER_ON) {
+		power_tick(now);
+		return;
+	}
 	if (button_down && button_armed) {
 		uint32_t held = now - button_down_tick;
+		if (held >= DIAG_BUTTON_OFF_MS) {
+			/* a release now powers off: all three blinking, unlike anything else */
+			uint8_t on = (held - DIAG_BUTTON_OFF_MS) % (2 * OFF_BLINK_MS) < OFF_BLINK_MS;
+			set_green(on);
+			set_yellow(on);
+			set_red(on);
+			return;
+		}
 		set_green(held >= DIAG_BUTTON_MEDIUM_MS);
 		set_yellow(held >= DIAG_BUTTON_LONG_MS);
 		set_red(held >= DIAG_BUTTON_LONG_MS);
@@ -244,4 +306,14 @@ diag_button diag_get_button(void) {
 	button_event = DIAG_BUTTON_NONE;
 	__enable_irq();
 	return event;
+}
+
+/*
+ * diag_powered_off
+ *
+ * returns 1 once a power-off press has started: the board is turning off, or
+ * on USB stays powered but must do nothing (no transmissions) until restarted
+ */
+uint8_t diag_powered_off(void) {
+	return power_state != POWER_ON;
 }

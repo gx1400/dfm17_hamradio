@@ -160,8 +160,12 @@ callsign=YOURCALL ssid=NN --save --elf dfm17-<tag>-tracker.elf`
 ## Using the board
 
 - Button, acting on release: under 1 s = 5 s unmodulated carrier on the
-  transmit frequency; 1-3 s = 5 s 1200 Hz tone then one APRS packet; over
-  3 s = pause / resume the fox or tracker
+  transmit frequency; 1-3 s = 5 s 1200 Hz tone then one APRS packet; 3-10 s
+  = pause / resume the fox or tracker (all three LEDs on while held); over
+  10 s = power off (all three LEDs blink fast while held; on release a quick
+  red-yellow-green chase, then the board switches off). On USB power the
+  board can't switch itself off: it goes dark and stops transmitting until
+  the next press restarts it
 - Green: on while transmitting, short heartbeat flash when idle (double flash
   while paused). Yellow: flashes with GPS PPS, solid with a 3D fix. Red: blink
   code, 1 = radio not found, 2 = not running from the radio clock,
