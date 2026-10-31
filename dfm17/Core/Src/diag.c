@@ -57,9 +57,9 @@
 #define BLINK_SLOT_MS		500
 #define BLINK_GAP_MS		1500
 #define ACK_MS				200
-#define OFF_BLINK_MS		60		/* held past DIAG_BUTTON_OFF_MS: on/off, all three */
-#define OFF_CHASE_STEP_MS	40		/* power off: each LED of the chase */
-#define OFF_CHASE_MS		(8 * 3 * OFF_CHASE_STEP_MS)	/* eight rounds */
+#define OFF_BLINK_MS		60 /* held past DIAG_BUTTON_OFF_MS: on/off, all three */
+#define OFF_CHASE_STEP_MS	40 /* power off: each LED of the chase */
+#define OFF_CHASE_MS		(8 * 3 * OFF_CHASE_STEP_MS) /* eight rounds */
 
 enum { POWER_ON = 0, POWER_CHASE, POWER_OFF };
 

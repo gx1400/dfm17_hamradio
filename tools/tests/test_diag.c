@@ -36,7 +36,9 @@ void HAL_GPIO_WritePin(GPIO_TypeDef *port, uint16_t pin, GPIO_PinState state) {
 	if (port == oBattOn_GPIO_Port && pin == oBattOn_Pin)
 		batt_on = state == GPIO_PIN_SET;
 }
-void NVIC_SystemReset(void) { resets++; }
+void NVIC_SystemReset(void) {
+	resets++;
+}
 
 void ledOnGreen(void) { green = 1; }
 void ledOffGreen(void) { green = 0; }
@@ -212,7 +214,7 @@ static int leds(void) {
 static void power_off(void) {
 	button = 1;
 	ms(DIAG_BUTTON_OFF_MS - 500);
-	CHECK_EQ(leds(), 7);			/* the 3 s "long press" indication */
+	CHECK_EQ(leds(), 7); /* the 3 s "long press" indication */
 	ms(500);
 	/* all three together, 60 ms on / 60 ms off */
 	int toggles = 0, prev = leds();
@@ -223,10 +225,10 @@ static void power_off(void) {
 		prev = leds();
 	}
 	CHECK(toggles >= 18 && toggles <= 21);
-	CHECK(!diag_powered_off());		/* not until released */
+	CHECK(!diag_powered_off()); /* not until released */
 
 	button = 0;
-	ms(20);							/* debounced: the chase starts */
+	ms(20); /* debounced: the chase starts */
 	CHECK(diag_powered_off());
 	CHECK_EQ(diag_get_button(), DIAG_BUTTON_NONE);
 	/* one LED at a time, red -> yellow -> green */
@@ -242,9 +244,9 @@ static void power_off(void) {
 	CHECK(order_ok);
 	CHECK(seen[1] && seen[2] && seen[4]);
 	CHECK(!seen[0] && !seen[3] && !seen[5] && !seen[6] && !seen[7]);
-	CHECK(batt_on && !sdn);			/* power still held during the chase */
+	CHECK(batt_on && !sdn); /* power still held during the chase */
 
-	ms(200);						/* chase over: radio off, then power */
+	ms(200); /* chase over: radio off, then power */
 	CHECK(sdn);
 	CHECK(!batt_on);
 	CHECK_EQ(leds(), 0);

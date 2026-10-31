@@ -50,7 +50,9 @@ uint8_t spi_read(void) {
 void delay_us(uint16_t us) { (void)us; }
 
 static uint8_t powered_off;
-uint8_t diag_powered_off(void) { return powered_off; }
+uint8_t diag_powered_off(void) {
+	return powered_off;
+}
 
 /* ---- helpers ------------------------------------------------------------------ */
 
