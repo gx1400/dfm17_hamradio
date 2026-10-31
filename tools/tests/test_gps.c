@@ -24,7 +24,18 @@ HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *h, const uint8_t *d, uin
 	return HAL_OK;
 }
 
-void GNSS_GetPVTData(GNSS_StateHandle *g) { (void)g; pvt_polls++; }
+/* the NAV-PVT the fake GPS answers with; pvt_answers = 0: the poll fails */
+static GNSS_StateHandle pvt;
+static int pvt_answers = 1;
+void GNSS_GetPVTData(GNSS_StateHandle *g) {
+	pvt_polls++;
+	if (!pvt_answers)
+		return;
+	g->fixType = pvt.fixType;
+	g->valid = pvt.valid;
+	g->tAcc = pvt.tAcc;
+	g->pvtTick = fake_tick;
+}
 void GNSS_GetUniqID(GNSS_StateHandle *g) { g->uniqueID[0] = 1; }
 void GNSS_SetMode(GNSS_StateHandle *g, short mode) { g->selectedMode = mode; }
 void GNSS_ParseBuffer(GNSS_StateHandle *g) { (void)g; }
@@ -39,6 +50,11 @@ void GNSS_LoadConfig(GNSS_StateHandle *g) {
 }
 
 static void reset(void) {
+	pvt.fixType = Fix3D;
+	pvt.valid = GNSS_VALID_DATE | GNSS_VALID_TIME | GNSS_FULLY_RESOLVED;
+	pvt.tAcc = 30;
+	pvt_answers = 1;
+	fake_tick = 1000;
 	uart_len = 0;
 	pvt_polls = config_calls = config_failures_left = 0;
 	GNSS_timeouts = 0;
@@ -183,8 +199,85 @@ static void config_is_ubx_only_9600(void) {
 	CHECK_EQ(configUBX[20] | configUBX[21] << 8, 1);	/* outProtoMask: UBX */
 }
 
+/* locked GPS time (#35): a fix, valid and fully resolved time, tAcc in range */
+static void time_locked_from_pvt(void) {
+	reset();
+	assertGpsLock();
+	CHECK(!gpsTimeLocked()); /* no NAV-PVT yet */
+	gpsUpdate();
+	CHECK(gpsTimeOk);
+	CHECK(gpsTimeLocked());
+
+	pvt.fixType = TimeOnlyFix;
+	gpsUpdate();
+	CHECK(gpsTimeLocked());
+}
+
+/* the overnight #12 case: pulses with no fix */
+static void time_not_locked_without_fix(void) {
+	reset();
+	assertGpsLock();
+	pvt.fixType = NoFix;
+	gpsUpdate();
+	CHECK(!gpsTimeLocked());
+	pvt.fixType = DeadReckoning;
+	gpsUpdate();
+	CHECK(!gpsTimeLocked());
+}
+
+static void time_not_locked_invalid_or_inaccurate(void) {
+	reset();
+	assertGpsLock();
+	pvt.valid = GNSS_VALID_DATE | GNSS_VALID_TIME; /* not fully resolved */
+	gpsUpdate();
+	CHECK(!gpsTimeLocked());
+
+	pvt.valid = GNSS_VALID_DATE | GNSS_FULLY_RESOLVED; /* time not valid */
+	gpsUpdate();
+	CHECK(!gpsTimeLocked());
+
+	pvt.valid = GNSS_VALID_TIME | GNSS_FULLY_RESOLVED;
+	pvt.tAcc = GPS_TIME_TACC_MAX_NS;
+	gpsUpdate();
+	CHECK(gpsTimeLocked());
+	pvt.tAcc = GPS_TIME_TACC_MAX_NS + 1;
+	gpsUpdate();
+	CHECK(!gpsTimeLocked());
+}
+
+/* failed polls leave the last reply, which ages out */
+static void time_lock_goes_stale(void) {
+	reset();
+	assertGpsLock();
+	gpsUpdate();
+	pvt_answers = 0;
+	fake_tick += GPS_TIME_MAX_AGE_MS;
+	gpsUpdate();
+	CHECK(gpsTimeLocked());
+	fake_tick++;
+	CHECK(!gpsTimeLocked());
+	gpsUpdate();
+	CHECK(!gpsTimeLocked());
+}
+
+/* sleeping or waking the GPS drops it until the next good NAV-PVT */
+static void time_lock_cleared_by_sleep_and_wake(void) {
+	reset();
+	assertGpsLock();
+	gpsUpdate();
+	CHECK(gpsTimeLocked());
+	gpsSleep();
+	CHECK(!gpsTimeLocked());
+	gpsWake();
+	CHECK(!gpsTimeLocked());
+	gpsUpdate();
+	CHECK(gpsTimeLocked());
+}
+
 TEST_MAIN("gps", TEST(sleep_sends_pmreq_backup), TEST(no_polling_while_asleep),
 		TEST(no_polling_without_pps), TEST(wake_clears_stale_fix), TEST(poll_with_fix),
 		TEST(configure_first_try), TEST(configure_retries_until_answered), TEST(configure_gives_up),
 		TEST(ubx_crc_checks), TEST(ubx_build_packet), TEST(static_config_messages_valid),
-		TEST(config_is_ubx_only_9600))
+		TEST(config_is_ubx_only_9600), TEST(time_locked_from_pvt),
+		TEST(time_not_locked_without_fix), TEST(time_not_locked_invalid_or_inaccurate),
+		TEST(time_lock_goes_stale), TEST(time_lock_cleared_by_sleep_and_wake))

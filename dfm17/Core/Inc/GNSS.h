@@ -85,6 +85,11 @@ enum GNSSFixType {
 	FixNotSet       = -1
 };
 
+/* NAV-PVT valid flags */
+#define GNSS_VALID_DATE		0x01
+#define GNSS_VALID_TIME		0x02
+#define GNSS_FULLY_RESOLVED 0x04
+
 typedef struct {
 	UART_HandleTypeDef *huart;
 
@@ -100,6 +105,9 @@ typedef struct {
 	uint8_t sec;
 	enum GNSSFixType fixType;
 	uint8_t numSV;
+	uint8_t valid;		/* NAV-PVT valid: GNSS_VALID_* */
+	unsigned long tAcc; /* time accuracy estimate, ns */
+	uint32_t pvtTick;	/* HAL tick of the last NAV-PVT parsed */
 
 	signed long lon;
 	uint8_t lonBytes[4];

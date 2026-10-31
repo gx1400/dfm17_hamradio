@@ -90,6 +90,9 @@ void GNSS_Init(GNSS_StateHandle *GNSS, UART_HandleTypeDef *huart, uint8_t *txDon
 	GNSS->sec = 0;
 	GNSS->fixType = 0;
 	GNSS->numSV = 0;
+	GNSS->valid = 0;
+	GNSS->tAcc = 0;
+	GNSS->pvtTick = 0;
 	GNSS->lon = 0;
 	GNSS->lat = 0;
 	GNSS->height = 0;
@@ -228,6 +231,11 @@ void GNSS_ParsePVTData(GNSS_StateHandle *GNSS) {
 	GNSS->hour = GNSS->uartWorkingBuffer[14];
 	GNSS->min = GNSS->uartWorkingBuffer[15];
 	GNSS->sec = GNSS->uartWorkingBuffer[16];
+	GNSS->valid = GNSS->uartWorkingBuffer[17];
+	for (int var = 0; var < 4; ++var) {
+		uLong.bytes[var] = GNSS->uartWorkingBuffer[var + 18];
+	}
+	GNSS->tAcc = uLong.uLong;
 	GNSS->fixType = GNSS->uartWorkingBuffer[26];
 	GNSS->numSV = GNSS->uartWorkingBuffer[29];
 
@@ -276,6 +284,7 @@ void GNSS_ParsePVTData(GNSS_StateHandle *GNSS) {
 	/* 1e-5 deg to whole degrees; integer division (truncates toward zero, as
 	 * the old double multiply did) keeps the double routines out of the build */
 	GNSS->headMot = iLong.iLong / 100000;
+	GNSS->pvtTick = HAL_GetTick();
 }
 
 /*!
