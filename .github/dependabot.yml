@@ -14,8 +14,9 @@ updates:
       actions:
         patterns: ["*"]
 
-  # Python packages for the tools and CI (tools/requirements.txt, and the lint
-  # tools in tools/requirements-lint.txt)
+  # Python packages for the tools and CI (tools/requirements.txt, the lint
+  # tools in tools/requirements-lint.txt, the settings tools and app in
+  # tools/requirements-config.txt and tools/requirements-app.txt)
   - package-ecosystem: pip
     directory: /tools
     schedule:

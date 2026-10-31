@@ -45,6 +45,7 @@
 #include "i2c_ee.h"
 #include "ppsdisc.h"
 #include "si4063.h"
+#include "version.h"
 #include <stdio.h>
 
 enum settings_cmd {
@@ -69,6 +70,24 @@ volatile uint8_t settings_cmd;
 volatile uint8_t settings_result;
 volatile uint32_t settings_done;
 volatile uint32_t settings_repairs;
+
+const swd_info_t swd_info = {
+		.magic = SWD_INFO_MAGIC,
+		.version = SWD_INFO_VERSION,
+		.size = sizeof(swd_info_t),
+		.settings_version = SETTINGS_VERSION,
+		.settings_size = sizeof(settings_t),
+		.fw_version = fw_version,
+		.cfg = &cfg,
+		.settings_edit = &settings_edit,
+		.settings_cmd = &settings_cmd,
+		.settings_result = &settings_result,
+		.settings_source = &settings_source,
+		.settings_error = &settings_error,
+		.settings_done = &settings_done,
+		.settings_repairs = &settings_repairs,
+		.tx_refused = &si4060_tx_refused,
+};
 
 /* the last settings that passed settings_check(), for the runtime check */
 static settings_t good;

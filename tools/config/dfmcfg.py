@@ -32,6 +32,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import time
 
 SIZE = 64
 VERSION = 1
@@ -335,7 +336,196 @@ FIELDS_HELP = """settings (name=value):
                          tracker fixes; always_on: never (1PPS kept, ~20-25 mA more)"""
 
 
+# ---- fields, as the GUI shows them ------------------------------------------------
+# (name, group, choices): name is what apply_assignment() takes, choices a
+# list for a drop-down or None for free text. The help comes from FIELDS_HELP.
+FIELDS = [
+    ("callsign", "Station", None),
+    ("ssid", "Station", None),
+    ("symbol", "Station", None),
+    ("path", "Station", list(PATHS)),
+    ("mode", "Station", list(MODES)),
+    ("start_paused", "Station", ["no", "yes"]),
+    ("freq", "Radio", None),
+    ("power", "Radio", None),
+    ("deviation", "Radio", None),
+    ("cw_wpm", "Radio", None),
+    ("tracker_period_s", "Tracker", None),
+    ("tracker_fix_timeout_s", "Tracker", None),
+    ("tracker_settle_s", "Tracker", None),
+    ("gps_power", "Tracker", list(GPS_POWER)),
+    ("fox_period_s", "Fox", None),
+    ("fox_tone_ms", "Fox", None),
+    ("fox_aprs_every", "Fox", None),
+]
+
+
+def field_help():
+    """name -> help text, from FIELDS_HELP (continuation lines included)"""
+    out, name = {}, None
+    for line in FIELDS_HELP.splitlines()[1:]:
+        m = re.match(r"  (\w+)=\S*\s+(.*)", line)
+        if m:
+            name = m.group(1)
+            out[name] = m.group(2)
+        elif name:
+            out[name] += " " + line.strip()
+    return out
+
+
+def field_value(s, name):
+    """a setting as text that apply_assignment() takes back unchanged"""
+    if name == "callsign":
+        return callsign_str(s)
+    if name == "symbol":
+        return (s["symbol_table"] + s["symbol_code"]).decode("ascii", "replace")
+    if name == "path":
+        return next((k for k, v in PATHS.items() if v == s["path"]), f"0x{s['path']:02x}")
+    if name == "mode":
+        return next((k for k, v in MODES.items() if v == s["mode"]), str(s["mode"]))
+    if name == "start_paused":
+        return "yes" if s["flags"] & FLAG_START_PAUSED else "no"
+    if name == "freq":
+        return f"{s['freq_hz'] / 1e6:.6f}".rstrip("0").rstrip(".") + "MHz"
+    if name == "power":
+        return str(s["pa_level"])
+    if name == "deviation":
+        return str(s["dev_hz"])
+    if name == "gps_power":
+        return next((k for k, v in GPS_POWER.items() if v == s["gps_power"]), str(s["gps_power"]))
+    return str(s[name])
+
+
+# ---- versions ------------------------------------------------------------------
+# The tools are released with the firmware and carry its version: a release
+# build writes _version.py (tools/config/build_app.py); in a checkout it's
+# `git describe`, the same command the Makefile stamps the firmware with.
+
+
+def tool_version():
+    try:
+        from _version import FW_VERSION  # written by the release build
+
+        return FW_VERSION
+    except ImportError:
+        pass
+    try:
+        r = subprocess.run(
+            ["git", "describe", "--tags", "--always", "--dirty"],
+            check=False,
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+    return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else "unknown"
+
+
+def parse_fw_version(text):
+    """'DFMFW v0.4.0-3-gabc1234 tracker' -> ('v0.4.0-3-gabc1234', 'tracker')"""
+    f = text.split()
+    if len(f) != 3 or f[0] != "DFMFW":
+        return None, None
+    return f[1], f[2]
+
+
+def version_match(board_fw, tool=None):
+    """(True, '') when the board runs the firmware these tools belong to, else
+    (False, why). 'unknown' (a CubeIDE build, or no git) never matches."""
+    tool = tool or tool_version()
+    version, _ = parse_fw_version(board_fw)
+    if version is None:
+        return False, f"the board's version string '{board_fw}' isn't a DFMFW one"
+    if version == "unknown" or tool == "unknown":
+        return False, f"can't compare versions (board {version}, tools {tool})"
+    if version != tool:
+        return False, f"the board runs firmware {version}, these tools are {tool}"
+    return True, ""
+
+
 # ---- SWD -----------------------------------------------------------------------
+
+FLASH = 0x08000000
+RAM = (0x20000000, 0x20002000)  # STM32F100R8: 8 KB
+FLASH_SIZE_REG = 0x1FFFF7E0  # flash size in KB
+UID_REG = 0x1FFFF7E8  # 96-bit unique ID
+IDCODE_REG = 0xE0042000  # DBGMCU_IDCODE: device and revision
+
+# swd_info_t (dfm17/Core/Inc/settings.h): name, struct format. Pointer fields
+# are named after the symbol they point at (the C tx_refused field points at
+# si4060_tx_refused); --check-elf compares them with the ELF's symbol table.
+SWD_INFO_MAGIC = b"DFM-SWD\0"
+SWD_INFO_VERSION = 1
+SWD_INFO = [
+    ("magic", "8s"),
+    ("version", "B"),
+    ("size", "B"),
+    ("settings_version", "B"),
+    ("settings_size", "B"),
+    ("fw_version", "I"),
+    ("cfg", "I"),
+    ("settings_edit", "I"),
+    ("settings_cmd", "I"),
+    ("settings_result", "I"),
+    ("settings_source", "I"),
+    ("settings_error", "I"),
+    ("settings_done", "I"),
+    ("settings_repairs", "I"),
+    ("si4060_tx_refused", "I"),
+]
+SWD_INFO_FMT = "<" + "".join(f for _, f in SWD_INFO)
+SWD_INFO_SIZE = struct.calcsize(SWD_INFO_FMT)
+# bytes at each pointer (fw_version is a string, read up to its NUL)
+TARGET_SIZES = {"cfg": SIZE, "settings_edit": SIZE, "settings_done": 4, "settings_repairs": 4}
+TARGET_SIZES["si4060_tx_refused"] = 4
+for _n in ("settings_cmd", "settings_result", "settings_source", "settings_error"):
+    TARGET_SIZES[_n] = 1
+
+
+def parse_swd_info(raw):
+    """the descriptor's fields, checked: SettingsError if these tools can't use it"""
+    info = dict(zip((n for n, _ in SWD_INFO), struct.unpack_from(SWD_INFO_FMT, raw)))
+    if info["magic"] != SWD_INFO_MAGIC:
+        raise SettingsError("not an SWD descriptor")
+    # fields are only appended: a newer layout still starts with these
+    if info["version"] < SWD_INFO_VERSION or info["size"] < SWD_INFO_SIZE:
+        raise SettingsError(f"SWD descriptor version {info['version']} is older than these tools")
+    if info["settings_version"] != VERSION or info["settings_size"] != SIZE:
+        raise SettingsError(
+            f"the board's settings layout is version {info['settings_version']} "
+            f"({info['settings_size']} B), these tools know version {VERSION} ({SIZE} B): "
+            "use the tools released with the board's firmware"
+        )
+    for name, size in TARGET_SIZES.items():
+        if not RAM[0] <= info[name] <= RAM[1] - size:
+            raise SettingsError(f"SWD descriptor: {name} at 0x{info[name]:08X} isn't in RAM")
+    if not FLASH <= info["fw_version"] < FLASH + 0x20000:
+        raise SettingsError("SWD descriptor: fw_version isn't in flash")
+    return info
+
+
+def find_swd_info(link, flash_kb):
+    """scan flash for the descriptor (4-byte aligned: it holds pointers)"""
+    chunk = 0x2000
+    tail = b""
+    for base in range(FLASH, FLASH + flash_kb * 1024, chunk):
+        data = tail + link.read(base, chunk)
+        start = base - len(tail)
+        at = data.find(SWD_INFO_MAGIC)
+        while at >= 0:
+            if (start + at) % 4 == 0:
+                raw = data[at : at + SWD_INFO_SIZE]
+                if len(raw) < SWD_INFO_SIZE:
+                    raw += link.read(start + at + len(raw), SWD_INFO_SIZE - len(raw))
+                return parse_swd_info(raw)
+            at = data.find(SWD_INFO_MAGIC, at + 1)
+        tail = data[-(SWD_INFO_SIZE - 1) :]
+    raise SettingsError(
+        "no SWD descriptor in the board's flash: firmware from before the settings GUI? "
+        "Flash a current build, or pass --elf with the build that's on it"
+    )
 
 
 def find_tool(names, pattern):
@@ -348,26 +538,70 @@ def find_tool(names, pattern):
     raise SettingsError(f"can't find {names[0]} (STM32CubeIDE under /opt/st, or on PATH)")
 
 
-class Board:
-    def __init__(self, elf):
-        self.elf = elf
+class PyOcdLink:
+    """an ST-Link (or CMSIS-DAP probe) through pyOCD: one connection, attached
+    without halting or resetting the board"""
+
+    name = "pyocd"
+
+    def __init__(self, unique_id=None):
+        try:
+            from pyocd.core.helpers import ConnectHelper
+        except ImportError:
+            raise SettingsError(
+                "pyOCD isn't installed: pip install -r tools/requirements-config.txt"
+            ) from None
+        try:
+            self.session = ConnectHelper.session_with_chosen_probe(
+                blocking=False,
+                return_first=True,
+                unique_id=unique_id,
+                options={
+                    "target_override": "cortex_m",
+                    "connect_mode": "attach",
+                    "frequency": 1_000_000,
+                },
+            )
+        except Exception as e:  # pyOCD raises many types; all mean "no connection"
+            raise SettingsError(f"couldn't connect: {e}") from e
+        if self.session is None:
+            raise SettingsError("no ST-Link found: is it plugged in (and its USB driver set up)?")
+        self.target = self.session.target
+
+    @staticmethod
+    def probes():
+        """(unique_id, description) of each connected probe"""
+        from pyocd.core.helpers import ConnectHelper
+
+        found = ConnectHelper.get_all_connected_probes(blocking=False, print_wait_message=False)
+        return [(p.unique_id, p.description) for p in found]
+
+    def read(self, addr, n):
+        try:
+            return bytes(self.target.read_memory_block8(addr, n))
+        except Exception as e:
+            raise SettingsError(f"SWD read failed: {e}") from e
+
+    def write(self, addr, raw):
+        try:
+            self.target.write_memory_block8(addr, list(raw))
+        except Exception as e:
+            raise SettingsError(f"SWD write failed: {e}") from e
+
+    def close(self):
+        self.session.close()
+
+
+class CubeProgrammerLink:
+    """STM32_Programmer_CLI in hot-plug mode, one process per access (slow)"""
+
+    name = "cube"
+
+    def __init__(self):
         self.prog = find_tool(
             ["STM32_Programmer_CLI"],
             "/opt/st/stm32cubeide_*/plugins/*cubeprogrammer.linux64*/tools/bin/STM32_Programmer_CLI",
         )
-        nm = find_tool(
-            ["arm-none-eabi-nm"],
-            "/opt/st/stm32cubeide_*/plugins/*gnu-tools-for-stm32*/tools/bin/arm-none-eabi-nm",
-        )
-        out = subprocess.run([nm, "-S", elf], capture_output=True, text=True, check=True).stdout
-        self.sym = {}
-        for line in out.splitlines():
-            f = line.split()
-            if len(f) == 4:
-                self.sym[f[3]] = (int(f[0], 16), int(f[1], 16))
-        for need in ("cfg", "settings_edit", "settings_cmd", "settings_result", "settings_done"):
-            if need not in self.sym:
-                raise SettingsError(f"{elf} has no '{need}': a build without EEPROM settings?")
 
     def _run(self, *args):
         r = subprocess.run(
@@ -390,40 +624,113 @@ class Board:
                 return bytes(data[:n])
         raise SettingsError("SWD read failed: is the ST-Link connected and the board powered?")
 
-    def read_sym(self, name):
-        addr, size = self.sym[name]
-        return self.read(addr, size)
+    def write(self, addr, raw):
+        if addr % 4 == 0 and len(raw) % 4 == 0:
+            words = struct.unpack(f"<{len(raw) // 4}I", raw)
+            self._run("-w32", hex(addr), *(f"0x{w:08X}" for w in words))
+        else:
+            for i, b in enumerate(raw):
+                self._run("-w8", hex(addr + i), f"0x{b:02X}")
 
-    def write_words(self, addr, raw):
-        words = struct.unpack(f"<{len(raw) // 4}I", raw)
-        self._run("-w32", hex(addr), *(f"0x{w:08X}" for w in words))
+    def close(self):
+        pass
 
-    def write_byte(self, addr, value):
-        self._run("-w8", hex(addr), f"0x{value:02X}")
 
-    def check_build(self):
-        """the board must run this ELF: compare its version string with flash"""
+LINKS = {"pyocd": PyOcdLink, "cube": CubeProgrammerLink}
+
+
+def elf_symbols(elf):
+    nm = find_tool(
+        ["arm-none-eabi-nm"],
+        "/opt/st/stm32cubeide_*/plugins/*gnu-tools-for-stm32*/tools/bin/arm-none-eabi-nm",
+    )
+    out = subprocess.run([nm, "-S", elf], capture_output=True, text=True, check=True).stdout
+    sym = {}
+    for line in out.splitlines():
+        f = line.split()
+        if len(f) == 4:
+            sym[f[3]] = (int(f[0], 16), int(f[1], 16))
+    return sym
+
+
+def elf_flash(elf):
+    """the ELF's flash image, as written to the board"""
+    objcopy = find_tool(
+        ["arm-none-eabi-objcopy"],
+        "/opt/st/stm32cubeide_*/plugins/*gnu-tools-for-stm32*/tools/bin/arm-none-eabi-objcopy",
+    )
+    with tempfile.TemporaryDirectory() as d:
+        out = os.path.join(d, "flash.bin")
+        subprocess.run([objcopy, "-O", "binary", elf, out], check=True)
+        with open(out, "rb") as f:
+            return f.read()
+
+
+def check_elf(elf):
+    """CI: the descriptor in a built ELF parses, and every pointer in it is the
+    address of the symbol it's named after, with the size the tools expect"""
+    sym = elf_symbols(elf)
+    if "swd_info" not in sym:
+        raise SettingsError(f"{elf}: no swd_info")
+    addr, size = sym["swd_info"]
+    if size != SWD_INFO_SIZE:
+        raise SettingsError(f"{elf}: swd_info is {size} B, SWD_INFO says {SWD_INFO_SIZE}")
+    image = elf_flash(elf)
+    info = parse_swd_info(image[addr - FLASH : addr - FLASH + size])
+    for name, _ in SWD_INFO[5:]:  # the pointers
+        if name not in sym or sym[name][0] != info[name]:
+            raise SettingsError(f"{elf}: swd_info.{name} doesn't point at {name}")
+        want = TARGET_SIZES.get(name)
+        if want is not None and sym[name][1] != want:
+            raise SettingsError(f"{elf}: {name} is {sym[name][1]} B, the tools expect {want}")
+    return info
+
+
+class Board:
+    """a DFM-17 over SWD: addresses from the descriptor in flash (no ELF
+    needed) or, for older builds, from the ELF's symbol table"""
+
+    def __init__(self, link, elf=None):
+        self.link = link
+        flash_kb = struct.unpack("<H", link.read(FLASH_SIZE_REG, 2))[0]
+        self.flash_kb = flash_kb if 16 <= flash_kb <= 1024 else 64
+        if elf:
+            self.sym = elf_symbols(elf)
+            for need in (
+                "cfg",
+                "settings_edit",
+                "settings_cmd",
+                "settings_result",
+                "settings_done",
+            ):
+                if need not in self.sym:
+                    raise SettingsError(f"{elf} has no '{need}': a build without EEPROM settings?")
+            self.check_elf_matches(elf)
+            fw_addr = self.sym["fw_version"][0] if "fw_version" in self.sym else None
+        else:
+            info = find_swd_info(link, self.flash_kb)
+            self.sym = {n: (info[n], s) for n, s in TARGET_SIZES.items()}
+            fw_addr = info["fw_version"]
+        self.fw_version = self.read_string(fw_addr) if fw_addr else "unknown"
+
+    def check_elf_matches(self, elf):
+        """with --elf: the board must run this ELF (same version string in flash)"""
         if "fw_version" not in self.sym:
             return
         addr, size = self.sym["fw_version"]
-        with tempfile.TemporaryDirectory() as d:
-            objcopy = self.elf_bytes(addr, size, d)
-        if objcopy != self.read(addr, size):
+        if elf_flash(elf)[addr - FLASH : addr - FLASH + size] != self.link.read(addr, size):
             raise SettingsError(
-                f"the board isn't running {self.elf} (its version string differs). "
+                f"the board isn't running {elf} (its version string differs). "
                 "Pass --elf for the build that's on it, or flash this one."
             )
 
-    def elf_bytes(self, addr, size, tmpdir):
-        objcopy = find_tool(
-            ["arm-none-eabi-objcopy"],
-            "/opt/st/stm32cubeide_*/plugins/*gnu-tools-for-stm32*/tools/bin/arm-none-eabi-objcopy",
-        )
-        out = os.path.join(tmpdir, "flash.bin")
-        subprocess.run([objcopy, "-O", "binary", self.elf, out], check=True)
-        with open(out, "rb") as f:
-            data = f.read()
-        return data[addr - 0x08000000 : addr - 0x08000000 + size]
+    def read_string(self, addr, limit=64):
+        raw = self.link.read(addr, limit)
+        return raw.split(b"\0", 1)[0].decode("ascii", "replace")
+
+    def read_sym(self, name):
+        addr, size = self.sym[name]
+        return self.link.read(addr, size)
 
     def u32(self, name):
         if name not in self.sym:
@@ -433,36 +740,135 @@ class Board:
     def u8(self, name):
         return self.read_sym(name)[0] if name in self.sym else None
 
+    def mcu(self):
+        """MCU device and revision ID, and the unique ID as hex"""
+        idcode = struct.unpack("<I", self.link.read(IDCODE_REG, 4))[0]
+        return idcode & 0xFFF, idcode >> 16, self.link.read(UID_REG, 12).hex().upper()
+
+    def settings(self):
+        return unpack(self.read_sym("cfg"))
+
     def command(self, name):
         done = self.u32("settings_done")
-        self.write_byte(self.sym["settings_cmd"][0], CMD[name])
-        for _ in range(20):
+        self.link.write(self.sym["settings_cmd"][0], bytes([CMD[name]]))
+        # the main loop runs it, which can be busy for a fox tone or a packet
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
             if self.u32("settings_done") != done:
                 return RESULTS[self.u8("settings_result")]
+            time.sleep(0.05)
         raise SettingsError("the firmware didn't run the command (still booting? try again)")
 
+    def apply(self, s, save=False):
+        """check s, send it to the board and apply it; then save if asked"""
+        err = check(seal(s))
+        if err != "OK":
+            raise SettingsError(f"not applied: {WHY.get(err, err)}")
+        if self.command("edit") != "OK":
+            raise SettingsError("couldn't read the live settings")
+        self.link.write(self.sym["settings_edit"][0], bytes(pack(s)))
+        if self.command("apply") != "OK":
+            why = ERRORS[self.u8("settings_error")]
+            raise SettingsError(f"the firmware refused it ({why}): {WHY.get(why, why)}")
+        if save and self.command("save") != "OK":
+            raise SettingsError("applied, but saving to the EEPROM failed")
 
-def status(board):
-    s = unpack(board.read_sym("cfg"))
-    src = SOURCES[board.u8("settings_source")]
-    err = ERRORS[board.u8("settings_error")]
-    ok = check(s) == "OK" and callsign_str(s) != "N0CALL"
-    print(f"settings from {src}; last load/apply check: {err}")
-    print(describe(s))
-    print(f"  transmit      {'allowed' if ok else 'DISABLED (no callsign set up)'}")
-    refused, repairs = board.u32("si4060_tx_refused"), board.u32("settings_repairs")
-    if refused or repairs:
-        print(f"  key-ups refused {refused}, live settings restored {repairs} times")
-    return s
+    def run(self, name):
+        """save, reload or defaults"""
+        result = self.command(name)
+        if result != "OK":
+            why = ERRORS[self.u8("settings_error")]
+            raise SettingsError(f"{name} failed: {result} ({why})")
+
+    def status(self):
+        s = self.settings()
+        return {
+            "settings": s,
+            "source": SOURCES[self.u8("settings_source")],
+            "error": ERRORS[self.u8("settings_error")],
+            "tx_allowed": check(s) == "OK" and callsign_str(s) != "N0CALL",
+            "tx_refused": self.u32("si4060_tx_refused"),
+            "repairs": self.u32("settings_repairs"),
+        }
+
+
+def defaults():
+    """settings_defaults() in settings.c: N0CALL, so no transmitting"""
+    s = unpack(bytes(SIZE))
+    s.update(
+        magic=b"DF",
+        version=VERSION,
+        length=SIZE,
+        callsign=b"N0CALL",
+        ssid=12,
+        symbol_table=b"/",
+        symbol_code=b"O",
+        path=0x11,
+        mode=0,
+        flags=0,
+        freq_hz=446175000,
+        pa_level=0x20,
+        cw_wpm=15,
+        dev_hz=2600,
+        tracker_period_s=300,
+        tracker_fix_timeout_s=120,
+        tracker_settle_s=10,
+        fox_period_s=30,
+        fox_tone_ms=10000,
+        fox_aprs_every=10,
+        gps_power=0xFF,
+        reserved=b"\xff" * 26,
+    )
+    return seal(s)
+
+
+def print_status(board):
+    st = board.status()
+    print(f"firmware {board.fw_version}")
+    print(f"settings from {st['source']}; last load/apply check: {st['error']}")
+    print(describe(st["settings"]))
+    print(f"  transmit      {'allowed' if st['tx_allowed'] else 'DISABLED (no callsign set up)'}")
+    if st["tx_refused"] or st["repairs"]:
+        print(f"  key-ups refused {st['tx_refused']}, live settings restored {st['repairs']} times")
+
+
+def connect(a):
+    """the board, with the version check: SettingsError if writes aren't allowed"""
+    link = LINKS[a.link]()
+    board = Board(link, a.elf)
+    if not a.elf:
+        ok, why = version_match(board.fw_version)
+        if not ok:
+            msg = f"{why}. Use the tools released with the board's firmware, or flash this build"
+            if a.command not in ("show",) and not a.allow_mismatch:
+                link.close()
+                raise SettingsError(msg + " (--allow-mismatch to go ahead anyway)")
+            print(f"warning: {msg}", file=sys.stderr)
+    return board
 
 
 def main():
     ap = argparse.ArgumentParser(
         description=__doc__.split("\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    ap.add_argument("--elf", default="build/tracker/dfm17.elf", help="the build on the board")
+    ap.add_argument(
+        "--elf",
+        help="the build on the board, for firmware without the SWD descriptor (older builds)",
+    )
+    ap.add_argument("--link", choices=sorted(LINKS), default="pyocd", help="SWD access (pyocd)")
+    ap.add_argument(
+        "--allow-mismatch",
+        action="store_true",
+        help="change settings although the board's firmware version differs from these tools",
+    )
     ap.add_argument("--save", action="store_true", help="with set: also save to the EEPROM")
     ap.add_argument("--layout", action="store_true", help="print the field offsets and exit")
+    ap.add_argument(
+        "--check-elf",
+        metavar="ELF",
+        help="check the SWD descriptor in a built ELF against its symbols, and exit",
+    )
+    ap.add_argument("--version", action="store_true", help="print the tools' version and exit")
     ap.add_argument(
         "command",
         nargs="?",
@@ -475,37 +881,20 @@ def main():
         for name, off, fmt in LAYOUT:
             print(name, off, struct.calcsize(fmt))
         return 0
-    if a.command in (None, "fields"):
-        print(FIELDS_HELP)
+    if a.version:
+        print(tool_version())
         return 0
     try:
+        if a.check_elf:
+            check_elf(a.check_elf)
+            print(f"{a.check_elf}: SWD descriptor OK")
+            return 0
+        if a.command in (None, "fields"):
+            print(FIELDS_HELP)
+            return 0
         if a.command == "check":
             # offline: the defaults with these changes
-            s = unpack(bytes(SIZE))
-            s.update(
-                magic=b"DF",
-                version=VERSION,
-                length=SIZE,
-                callsign=b"N0CALL",
-                ssid=12,
-                symbol_table=b"/",
-                symbol_code=b"O",
-                path=0x11,
-                mode=0,
-                flags=0,
-                freq_hz=446175000,
-                pa_level=0x20,
-                cw_wpm=15,
-                dev_hz=2600,
-                tracker_period_s=300,
-                tracker_fix_timeout_s=120,
-                tracker_settle_s=10,
-                fox_period_s=30,
-                fox_tone_ms=10000,
-                fox_aprs_every=10,
-                gps_power=0xFF,
-                reserved=b"\xff" * 26,
-            )
+            s = defaults()
             for item in a.values:
                 apply_assignment(s, item)
             err = check(seal(s))
@@ -514,41 +903,26 @@ def main():
             print(describe(s))
             return 0
 
-        board = Board(a.elf)
-        board.check_build()
-        if a.command == "show":
-            status(board)
-        elif a.command == "set":
-            if not a.values:
-                raise SettingsError("set what? e.g. set callsign=NZ0P ssid=12")
-            if board.command("edit") != "OK":
-                raise SettingsError("couldn't read the live settings")
-            s = unpack(board.read_sym("settings_edit"))
-            for item in a.values:
-                apply_assignment(s, item)
-            err = check(seal(s))
-            if err != "OK":
-                raise SettingsError(f"not applied: {WHY.get(err, err)}")
-            board.write_words(board.sym["settings_edit"][0], bytes(pack(s)))
-            result = board.command("apply")
-            if result != "OK":
-                why = ERRORS[board.u8("settings_error")]
-                raise SettingsError(f"the firmware refused it ({why}): {WHY.get(why, why)}")
-            print("applied")
-            if a.save:
-                if board.command("save") != "OK":
-                    raise SettingsError("applied, but saving to the EEPROM failed")
-                print("saved to the EEPROM")
-            else:
-                print("not saved: lost at the next reset unless you run 'dfmcfg.py save'")
-            status(board)
-        else:
-            result = board.command(a.command)
-            if result != "OK":
-                why = ERRORS[board.u8("settings_error")]
-                raise SettingsError(f"{a.command} failed: {result} ({why})")
-            print(f"{a.command}: OK")
-            status(board)
+        if a.command == "set" and not a.values:
+            raise SettingsError("set what? e.g. set callsign=NZ0P ssid=12")
+        board = connect(a)
+        try:
+            if a.command == "set":
+                s = board.settings()
+                for item in a.values:
+                    apply_assignment(s, item)
+                board.apply(s, save=a.save)
+                print("applied")
+                if a.save:
+                    print("saved to the EEPROM")
+                else:
+                    print("not saved: lost at the next reset unless you run 'dfmcfg.py save'")
+            elif a.command != "show":
+                board.run(a.command)
+                print(f"{a.command}: OK")
+            print_status(board)
+        finally:
+            board.link.close()
     except SettingsError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

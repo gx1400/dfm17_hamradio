@@ -1,0 +1,3 @@
+# Packaging the settings app (tools/config/build_app.py, .github/workflows/app.yml)
+-r requirements-config.txt
+pyinstaller==6.22.3

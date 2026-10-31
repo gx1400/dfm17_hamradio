@@ -9,9 +9,12 @@ and **doesn't transmit at all** until a real callsign is set. Issue #18.
 
 Back up the EEPROM first, so Graw's factory data is kept:
 `tools/hw_survey/eeprom_backup.sh`. Then, with the board running a build from
-this repository and the ST-Link connected:
+this repository and the ST-Link connected, use the settings app
+([config-gui.md](config-gui.md): a window, also released ready to run for each
+platform) or the command line:
 
 ```sh
+pip install -r tools/requirements-config.txt   # pyOCD, for the ST-Link
 make firmware
 # flash build/tracker/dfm17.elf, then:
 tools/config/dfmcfg.py set callsign=NZ0P ssid=12 --save
@@ -31,10 +34,19 @@ tools/config/dfmcfg.py show
 | `check name=value ...` | check values offline, without a board |
 | `fields` | the list below |
 
-`--elf` names the build on the board (default `build/tracker/dfm17.elf`).
-The script compares that build's version string with the board's flash
-before touching anything, because the settings' addresses differ between
-builds.
+The script finds the settings through the descriptor the firmware keeps in
+flash (`swd_info`, [config-gui.md](config-gui.md)) and compares the board's
+firmware version with its own (`git describe`, as the firmware is stamped).
+If they differ, `show` warns and the commands that change something refuse
+unless given `--allow-mismatch`; a different settings layout is always
+refused. Other options:
+
+| Option | |
+|---|---|
+| `--link pyocd` / `--link cube` | the ST-Link through pyOCD (default) or STM32_Programmer_CLI |
+| `--elf build.elf` | for firmware older than the descriptor: the build on the board, whose symbols give the addresses (its version string is compared with the board's flash first) |
+| `--check-elf build.elf` | offline: check a build's descriptor against its symbols (CI) |
+| `--version` | the tools' version |
 
 ## Settings
 

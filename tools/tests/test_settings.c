@@ -55,6 +55,8 @@ void si4060_set_deviation(uint32_t d) {
 void si4060_set_tx_power(uint8_t p) {
 	radio_pa = p;
 }
+volatile uint32_t si4060_tx_refused;
+const char fw_version[] = "DFMFW test tracker";
 
 extern settings_t settings_edit;
 extern volatile uint8_t settings_cmd, settings_result;
@@ -480,9 +482,29 @@ static void write_layout(void) {
 	fclose(f);
 }
 
+/* the descriptor tools/config finds over SWD (docs/config-gui.md) */
+static void swd_info_points_at_mailbox(void) {
+	CHECK(memcmp(swd_info.magic, "DFM-SWD", 8) == 0);
+	CHECK_EQ(swd_info.version, SWD_INFO_VERSION);
+	CHECK_EQ(swd_info.size, sizeof(swd_info_t));
+	CHECK_EQ(swd_info.settings_version, SETTINGS_VERSION);
+	CHECK_EQ(swd_info.settings_size, 64);
+	CHECK(swd_info.fw_version == fw_version);
+	CHECK(swd_info.cfg == &cfg);
+	CHECK(swd_info.settings_edit == &settings_edit);
+	CHECK(swd_info.settings_cmd == &settings_cmd);
+	CHECK(swd_info.settings_result == &settings_result);
+	CHECK(swd_info.settings_source == &settings_source);
+	CHECK(swd_info.settings_error == &settings_error);
+	CHECK(swd_info.settings_done == &settings_done);
+	CHECK(swd_info.settings_repairs == &settings_repairs);
+	CHECK(swd_info.tx_refused == &si4060_tx_refused);
+}
+
 TEST_MAIN("settings", TEST(defaults_are_valid_but_dont_transmit), TEST(crc_matches_python),
 		TEST(check_rejects_bad_fields), TEST(gps_always_on_follows_cfg),
 		TEST(boot_with_erased_eeprom_uses_defaults), TEST(boot_loads_valid_block),
 		TEST(boot_ignores_corrupt_block), TEST(swd_edit_apply_save_reload),
 		TEST(swd_apply_refuses_bad_values), TEST(save_failure_reported),
-		TEST(runtime_check_restores_settings), TEST(write_layout), )
+		TEST(runtime_check_restores_settings), TEST(swd_info_points_at_mailbox),
+		TEST(write_layout), )

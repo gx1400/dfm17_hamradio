@@ -80,3 +80,10 @@ ctrlp.root
 /build/
 tools/tests/build/
 tools/tests/build-cov/
+
+# Python
+__pycache__/
+# the app build (tools/config/build_app.py); _version.py is written only
+# for the duration of a build
+/dist/
+tools/config/_version.py

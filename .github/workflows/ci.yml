@@ -30,6 +30,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi libnewlib-arm-none-eabi
       - name: Build every variant (tracker, fox, hw_survey, rf_test, nfc_tool)
         run: make firmware
+      - name: SWD descriptor in each build matches the settings tools
+        run: for elf in build/*/dfm17.elf; do python3 tools/config/dfmcfg.py --check-elf "$elf"; done
       - name: Build the base commit for the size comparison
         env:
           BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
@@ -78,12 +80,14 @@ jobs:
       - name: Install test tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gcc make direwolf
+          sudo apt-get install -y --no-install-recommends gcc make direwolf xvfb
           pip install -r tools/requirements.txt
       - name: Unit tests (firmware sources against a fake HAL)
         run: make -C tools/tests
       - name: APRS packets decode with Dire Wolf
         run: make -C tools/aprs_sim check
+      - name: Settings GUI against a simulated board
+        run: xvfb-run -a python3 tools/config/test_dfmgui.py
       - name: Coverage of the firmware sources by the host tests
         run: |
           make -C tools/tests coverage

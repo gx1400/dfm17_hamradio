@@ -115,13 +115,18 @@ STM32CubeIDE builds say `unknown cubeide`):
 - printed at boot on the UART on the mini-USB connector (USART1, PA9,
   115200 8N1);
 - read from a running board over SWD with `tools/hw_survey/read_version.sh`.
-  It finds the string in a flash dump, so it works whatever build is on it.
+  It finds the string in a flash dump, so it works whatever build is on it;
+- shown by the settings app and `dfmcfg.py show`, which compare it with their
+  own version (the tools are released with the firmware,
+  [docs/config-gui.md](docs/config-gui.md)).
 
 Pushing a `v*` tag (e.g. `v0.1.0`; `v0.2.0-rc1` becomes a pre-release) runs
 `.github/workflows/release.yml`. It builds every variant, checks each is
-stamped with the tag, and publishes a GitHub Release with
-`dfm17-<tag>-<variant>.elf/.hex/.bin`, `SHA256SUMS`, the size report and
-notes from the merged PRs. Release builds use Ubuntu's GCC 13, so they are
+stamped with the tag, builds the settings app for Linux (x64, arm64), Windows
+and macOS with the same version (`.github/workflows/app.yml`), and publishes a
+GitHub Release with `dfm17-<tag>-<variant>.elf/.hex/.bin`,
+`dfm17-config-<tag>-<platform>`, `SHA256SUMS`, the size report and notes from
+the merged PRs. Release builds use Ubuntu's GCC 13, so they are
 about 2.4 KB larger than STM32CubeIDE builds.
 
 To flash a release build:
@@ -135,9 +140,9 @@ To flash a release build:
 4. Confirm it: `tools/hw_survey/read_version.sh`.
 
 **Callsign:** release builds start with the callsign N0CALL and don't
-transmit until a board is set up: `tools/config/dfmcfg.py set
-callsign=YOURCALL ssid=NN --save --elf dfm17-<tag>-tracker.elf`
-([docs/settings.md](docs/settings.md)).
+transmit until a board is set up: with the release's settings app, or
+`tools/config/dfmcfg.py set callsign=YOURCALL ssid=NN --save` from a checkout
+of the tag ([docs/settings.md](docs/settings.md)).
 
 ## Documentation
 
@@ -156,6 +161,9 @@ callsign=YOURCALL ssid=NN --save --elf dfm17-<tag>-tracker.elf`
 - `tools/hw_survey/`: read the hardware survey and live analog values over SWD
 - `tools/rf_sweep/`: transmitter frequency sweep with a HackRF
 - [tools/tests/README.md](tools/tests/README.md): host unit tests
+- [docs/config-gui.md](docs/config-gui.md): the settings app (`tools/config/dfmgui.py`),
+  released with the firmware for each platform, and how it stays in step
+  with the firmware
 
 ## Using the board
 
