@@ -130,6 +130,9 @@ between GPS PPS pulses measure the carrier's error too. The firmware programs
   transmitting heats it more: -0.92 to -1.60 ppm over 7 min of back-to-back
   packets, back to -1.21 ppm 2 min after (#12). That matters for high-duty fox
   modes.
+  A steady carrier at PA 0x20 falls -0.38 ppm (-170 Hz) in its first minute
+  ([tx-test-modes.md](tx-test-modes.md)), enough to throw a 170 Hz RTTY
+  decoder off.
 - **Hardware test:** issue #9; results below.
 
 ### Results, board 1 (#9, #12)
@@ -170,6 +173,7 @@ cannot take commands over the air as built. Options for remote commands:
 | Path | Purpose |
 |---|---|
 | `Core/Src/ppsdisc.c` | carrier correction from the GPS PPS (above) |
-| `Core/Src/rf_test.c` | carrier on a frequency/power written over SWD (`RF_TEST_SWD` in main.c) |
+| `Core/Src/rf_test.c` | carrier on a frequency/power written over SWD (`RF_TEST_SWD` in main.c), and the CW / CW ID / RTTY test transmissions ([tx-test-modes.md](tx-test-modes.md)) |
 | `tools/rf_sweep/sweep.sh` | sweep with a HackRF: `sweep.sh dfm17.elf [power] [freq_hz ...]` |
 | `tools/rf_sweep/measure.py` | carrier frequency from on/off captures, spur rejection |
+| `tools/rf_sweep/tx_test.py` | runs a CW, CW ID or RTTY test transmission over SWD |
