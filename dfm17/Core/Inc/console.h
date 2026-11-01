@@ -37,6 +37,8 @@
 #define CONSOLE_PROTO	 1
 /* "cal put " + 64 hex digits fits; "cfg put " + 128 does too */
 #define CONSOLE_LINE_MAX 144
+/* most APRS packets one "send" asks for (#63) */
+#define CONSOLE_SEND_MAX 10
 
 /* console.c: the protocol, no hardware access (host-tested) */
 void console_init(uint8_t on_usb);

@@ -40,6 +40,7 @@ The firmware's diagnostics (`GPS Update!`, …) go to the same port. `log off` s
 | `config` | config mode: nothing is scheduled or transmitted (the transmit gate refuses every key-up). Replies `ok 0` or `ok 1`: whether it was on already |
 | `run` | back to normal; also wakes a GPS stopped with `gps off` (the tracker starts a new cycle) |
 | `gps on` / `gps off` | wake the GPS, or put it in backup mode (config mode only) |
+| `send` / `send <n>` | `ok <n>`: send n APRS packets now (1–10, default 1), the board's normal packet, as the SWD send-now trigger (#51, #63). Not in config mode. `status` counts them (`sent`, `refused`) |
 | `cfg get` | `ok <128 hex digits> <source> <error> <repairs> <refused>`: the live settings block ([settings.md](settings.md)) |
 | `cfg put <hex>` | load a whole 64-byte block, CRC included; checked like over SWD, then applied (config mode only) |
 | `cfg save` / `cfg reload` / `cfg defaults` | as `dfmcfg.py save/reload/defaults` (config mode only) |
@@ -49,7 +50,7 @@ The firmware's diagnostics (`GPS Update!`, …) go to the same port. `log off` s
 **Errors:**
 - `err unknown`: not a command.
 - `err usage`: wrong arguments.
-- `err config`: a change outside config mode.
+- `err config`: a change outside config mode, or `send` in it.
 - `err length`, `err hex`, `err crc`: a damaged or wrong `put` block.
 - `err invalid <n>`: the firmware's check refused the block; `n` is the `settings_error` / `cal_error` code.
 - `err eeprom`: the EEPROM write or read-back failed.
@@ -57,7 +58,7 @@ The firmware's diagnostics (`GPS Update!`, …) go to the same port. `log off` s
 - `err battery`: `reset` on battery.
 
 **Safety:**
-- No command keys the transmitter.
+- Only `send` transmits, and only the board's normal APRS packet on its configured frequency and power, at most 10 at a time. It goes through the same transmit gate (a callsign set, valid settings), and the console only runs on USB power, so it can't be used on a board in the field.
 - Every change goes through the same checks as over SWD.
 - Config mode is RAM-only, and it ends when USB power goes away, so a board can't be left mute in the field.
 
@@ -72,7 +73,8 @@ tools/config/dfmcfg.py --port COM20 cal
 - **What the tools do:** send `log off`, check `ver` (protocol and both block layouts must match these tools), and change things inside `config` … `run`. If the board was in config mode already, it stays there.
 - **Needs pyserial:** `tools/requirements-config.txt`.
 - **In the settings app:** pick the `serial` link and the port.
-- **Not over serial:** `send` (no console command transmits), and the MCU's device/revision ID (only a debugger can read it; `ver` gives the unique ID).
+- **`send` over serial:** `dfmcfg.py --port COM20 send 3` uses the console's `send` and waits for the packets, as over SWD (up to 10 at a time).
+- **Not over serial:** the MCU's device/revision ID (only a debugger can read it; `ver` gives the unique ID).
 
 ## Code
 

@@ -36,12 +36,14 @@
   * and messages, and the mailbox commands (settings_command()) check
   * everything again, as over SWD. Changing them needs config mode, in which
   * nothing is scheduled or transmitted; it ends when USB power goes away, so
-  * a board can't be left mute in the field. No command keys the transmitter.
+  * a board can't be left mute in the field. Only "send" transmits, and only
+  * the board's normal APRS packet, through the SWD send-now trigger (#63).
   ******************************************************************************
   */
 
 #include "console.h"
 #include "analog.h"
+#include "aprs.h"
 #include "cal.h"
 #include "diag.h"
 #include "gps.h"
@@ -311,6 +313,34 @@ static void gps_off(void) {
 	gpsSleep();
 }
 
+/* send [n]: n APRS packets now, 1 to CONSOLE_SEND_MAX (default 1), through the
+ * send-now trigger (#51): the main loop sends them as over SWD, and the
+ * transmit gate still applies. Not in config mode, which transmits nothing */
+static void send_packets(const char *arg) {
+#ifdef HW_NFC
+	/* the NFC tool build never transmits (main.c): nothing would send them */
+	(void)arg;
+	reply("err unknown");
+	return;
+#endif
+	unsigned n = *arg ? 0 : 1;
+	for (const char *c = arg; *c; c++) {
+		if (*c < '0' || *c > '9' || n > CONSOLE_SEND_MAX) {
+			reply("err usage");
+			return;
+		}
+		n = n * 10 + (unsigned)(*c - '0');
+	}
+	if (n < 1 || n > CONSOLE_SEND_MAX) {
+		reply("err usage");
+	} else if (config_mode) {
+		reply("err config");
+	} else {
+		aprs_send_now = (uint8_t)n;
+		console_printf("ok %u\r\n", n);
+	}
+}
+
 static void run_line(char *s) {
 	static const block cfg_block
 			= {&cfg, &settings_edit, SETTINGS_SIZE, CMD_EDIT, &settings_source, &settings_error};
@@ -320,7 +350,7 @@ static void run_line(char *s) {
 	const char *cmd = word(&p), *sub = word(&p), *arg = word(&p);
 
 	if (is(cmd, "help")) {
-		reply("ok help ver status analog log fox config run gps cfg cal reset");
+		reply("ok help ver status analog log fox config run gps send cfg cal reset");
 	} else if (is(cmd, "ver")) {
 		console_hw_ver();
 	} else if (is(cmd, "status")) {
@@ -351,6 +381,8 @@ static void run_line(char *s) {
 			reply("err config");
 		else
 			on_off(sub, NULL, gps_on, gps_off);
+	} else if (is(cmd, "send")) {
+		send_packets(sub);
 	} else if (is(cmd, "cfg")) {
 		block_cmd(&cfg_block, sub, arg);
 	} else if (is(cmd, "cal")) {
