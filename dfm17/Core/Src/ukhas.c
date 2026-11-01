@@ -89,7 +89,7 @@ uint8_t ukhas_sentence(char *buf, uint8_t size, const char *call, const ukhas_da
 
 	s[n++] = '$';
 	s[n++] = '$';
-	for (uint8_t i = 0; call[i] && i < 9; i++)
+	for (uint8_t i = 0; i < 9 && call[i]; i++)
 		s[n++] = call[i];
 	s[n++] = ',';
 	n += put_uint(&s[n], d->seq, 1);
