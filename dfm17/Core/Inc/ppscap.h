@@ -49,7 +49,8 @@ extern volatile uint32_t pps_log_head; /* pulses logged; entry = head % PPS_LOG 
 extern volatile uint32_t pps_cap_overcaptures; /* an edge was missed (CC3OF) */
 extern volatile uint32_t pps_cap_missing;	   /* no capture at a PPS interrupt */
 
-/* test only: sleep (WFI) in the main loop, debug clocks off in sleep */
+/* test only: the main loop always sleeps (WFI) when idle; this also switches
+ * the debug clocks off in sleep, so an attached debugger can't hide it */
 extern volatile uint8_t pps_sleep_test;
 /* main-loop accounting over the last whole second (#74): passes, WFIs, and
  * time asleep in WFI in us (TIM17, 1 MHz) */

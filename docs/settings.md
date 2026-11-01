@@ -71,7 +71,7 @@ refused. Other options:
 | `fox_period_s` | 30 | >= 10 |
 | `fox_tone_ms` | 10000 | <= 60000, and tone + 8 s must fit in the period |
 | `fox_aprs_every` | 10 | APRS after every Nth fox cycle; 0 = never (for an actual hunt: APRS gives the fox's position away) |
-| `gps_power` | default (duty_cycle) | `duty_cycle`: the GPS goes into backup mode between tracker fixes. `always_on`: never; continuous 1PPS for the frequency correction and faster fixes, for about 20-25 mA more (on the stock CR123A cells that shortens the run time noticeably, #15). `default`: duty_cycle for now; #36 may make it switch on USB power |
+| `gps_power` | default (duty_cycle) | `duty_cycle`: the GPS goes into backup mode between tracker fixes; in the fox mode, after the first settled fix, waking every hour to refresh the fix and the time (`foxgps.c`; APRS uses the last fix meanwhile). `always_on`: never; continuous 1PPS for the frequency correction and faster fixes, for about 20-25 mA more (on the stock CR123A cells that shortens the run time noticeably, #15). `default`: duty_cycle for now; #36 may make it switch on USB power |
 
 ## Protection against bad values
 
