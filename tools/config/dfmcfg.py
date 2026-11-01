@@ -856,6 +856,8 @@ LINKS = {"pyocd": PyOcdLink, "cube": CubeProgrammerLink}
 
 CONSOLE_PROTO = 1
 CONSOLE_BAUD = 115200
+# most packets one console "send" asks for (CONSOLE_SEND_MAX, console.h)
+CONSOLE_SEND_MAX = 10
 
 
 class SerialLink:
@@ -1044,8 +1046,38 @@ class SerialBoard:
             "repairs": repairs,
         }
 
+    def _counters(self):
+        """(packets sent, key-ups refused) from the last line of 'status'"""
+        words, _ = self.link.command("status", timeout=10)
+        v = dict(zip(words[0::2], words[1::2]))
+        return int(v["sent"]), int(v["refused"])
+
     def send(self, n=1):
-        raise SettingsError("send isn't available over serial (no console command transmits)")
+        """n APRS packets with the console's send command (#63), as Board.send
+        does over SWD: waits until n have been keyed or refused by the
+        transmit gate; returns (sent, refused). Refused in config mode."""
+        if not 1 <= n <= CONSOLE_SEND_MAX:
+            raise SettingsError(f"send 1 to {CONSOLE_SEND_MAX} packets over serial")
+        sent0, refused0 = self._counters()
+        try:
+            self.link.command(f"send {n}")
+        except ConsoleError as e:
+            if e.words[0] == "unknown":
+                raise SettingsError(
+                    "this firmware has no send command: flash a newer build"
+                ) from None
+            raise
+        deadline = time.monotonic() + 70 + 3 * n
+        while True:
+            sent, refused = self._counters()
+            sent, refused = sent - sent0, refused - refused0
+            if sent + refused >= n:
+                return sent, refused
+            if time.monotonic() > deadline:
+                raise SettingsError(
+                    f"only {sent} of {n} sent ({refused} refused) before the timeout"
+                )
+            time.sleep(1)
 
     # the calibration -------------------------------------------------------
 
