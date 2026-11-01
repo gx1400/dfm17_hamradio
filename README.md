@@ -66,9 +66,9 @@ backup is in `docs/data/`.
 - `make size` reports flash and RAM per variant (`tools/size/size_report.py`)
   and fails if a variant is over budget or links the software double-precision
   routines. The budgets, set at the top of the script, apply to the default
-  -Os build: flash 48 KB of 64 KB, RAM 7 KB of 8 KB including the linker's
-  1.5 KB heap and stack reserve. 48 KB is sized for one image with every
-  transmit mode, the sequencer and the EEPROM settings (about 42 KB planned);
+  -Os build: flash 50 KB of 64 KB, RAM 7 KB of 8 KB including the linker's
+  1.5 KB heap and stack reserve. 50 KB is sized for one image with every
+  transmit mode, the sequencer and the EEPROM settings (about 45 KB planned);
   a PR that grows a variant by more than 512 B gets a warning. For debugging,
   `make OPT=-Og BUILD=build-og` (CI checks that it links); -O0 isn't expected
   to fit. `make size SIZE_BASE=<dir>` compares with
