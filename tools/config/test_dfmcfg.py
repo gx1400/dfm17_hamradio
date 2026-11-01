@@ -482,8 +482,38 @@ class SerialConsole(unittest.TestCase):
         self.board.cal_run("defaults")
         self.assertEqual(self.board.cal()["vin_a"], 131072)
 
-    def test_send_not_over_serial(self):
-        with self.assertRaisesRegex(d.SettingsError, "serial"):
+    def provision(self):
+        s = self.board.settings()
+        d.apply_assignment(s, "callsign=NZ0P")
+        self.board.apply(s)
+
+    def test_send(self):
+        # #63: the console's send command, counted with status
+        self.provision()
+        self.assertEqual(self.board.send(), (1, 0))
+        self.assertEqual(self.board.send(10), (10, 0))
+        self.assertIn("send 10", self.ser.lines)
+
+    def test_send_refused_without_callsign(self):
+        self.assertEqual(self.board.send(2), (0, 2))  # defaults: N0CALL
+
+    def test_send_count_checked(self):
+        for n in (0, 11):
+            with self.assertRaisesRegex(d.SettingsError, "1 to 10"):
+                self.board.send(n)
+
+    def test_send_refused_in_config_mode(self):
+        self.provision()
+        self.ser.config = 1
+        with self.assertRaisesRegex(d.SettingsError, "config mode"):
+            self.board.send(1)
+
+    def test_send_needs_new_firmware(self):
+        run = self.ser._run
+        self.ser._run = lambda line: (
+            self.ser._reply("err unknown") if line.startswith("send") else run(line)
+        )
+        with self.assertRaisesRegex(d.SettingsError, "no send command"):
             self.board.send(1)
 
 

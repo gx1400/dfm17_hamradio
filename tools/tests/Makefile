@@ -9,7 +9,7 @@ SANITIZE ?= -fsanitize=undefined,bounds-strict -fsanitize-trap=all
 # -iquote: Core/Inc/string.h must not shadow the system <string.h>
 CFLAGS   = -std=gnu11 -Wall -Werror -g -O1 $(SANITIZE) -iquote . -iquote fakehal -iquote $(CORE)/Inc
 
-TESTS = aprs tracker gps gnss si4063 fox diag analog cal ppsdisc settings ppscap console cw rtty
+TESTS = aprs tracker gps gnss si4063 fox diag analog cal ppsdisc settings ppscap console cw rtty ukhas
 # the same tests again with the experimental sine AFSK built in (APRS_AFSK_SINE,
 # the sine_test firmware build): test_<name>_sine from test_<name>.c
 SINE_TESTS = aprs si4063
@@ -30,6 +30,7 @@ SRC_ppscap  = ppscap.c
 SRC_console = console.c settings.c cal.c
 SRC_cw      = cw.c
 SRC_rtty    = rtty.c
+SRC_ukhas   = ukhas.c settings.c
 
 BINS = $(TESTS:%=$(BUILD)/test_%) $(SINE_TESTS:%=$(BUILD)/test_%_sine)
 
