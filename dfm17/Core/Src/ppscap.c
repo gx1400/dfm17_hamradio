@@ -48,6 +48,7 @@ volatile uint32_t pps_log_head;
 volatile uint32_t pps_cap_overcaptures;
 volatile uint32_t pps_cap_missing;
 volatile uint8_t pps_sleep_test;
+volatile sleep_stats sleep_last;
 
 static uint16_t last_capture;
 static uint8_t have_last;
