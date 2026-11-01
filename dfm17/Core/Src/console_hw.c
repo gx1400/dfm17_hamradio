@@ -37,6 +37,7 @@
 #include "diag.h"
 #include "GNSS.h"
 #include "gps.h"
+#include "ppscap.h"
 #include "ppsdisc.h"
 #include "settings.h"
 #include "si4063.h"
@@ -122,6 +123,8 @@ void console_hw_status(void) {
 			(unsigned long)pps_disc_rejected);
 	console_printf("supply %u mV %u mA usb %u mV %d C cal %s\r\n", r->vin_mv, r->iin_ma, r->usb_mv,
 			r->temp_c, from[cal_source]);
+	console_printf("loop %lu/s wfi %lu/s asleep %lu%%\r\n", (unsigned long)sleep_last.loops,
+			(unsigned long)sleep_last.wfi, (unsigned long)(sleep_last.asleep_us / 10000));
 	console_printf("ok sent %lu refused %lu repairs %lu\r\n", (unsigned long)aprs_packets_sent,
 			(unsigned long)si4060_tx_refused, (unsigned long)settings_repairs);
 }

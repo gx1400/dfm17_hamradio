@@ -194,6 +194,8 @@ int main(void)
   tracker_start();
   // first fox transmission right away
   uint32_t lastFox = HAL_GetTick() - cfg.fox_period_s * 1000UL;
+  sleep_stats sleep_now = {0};
+  uint32_t sleep_start = HAL_GetTick();
 
 #ifdef HW_SURVEY
   hw_survey_run();
@@ -317,9 +319,21 @@ int main(void)
 	  // test only (#12): sleep until the next interrupt, as a duty-cycled
 	  // low-power mode would. DWT stops counting while the core sleeps; the
 	  // debug clocks are switched off so an attached ST-Link can't hide that
+	  sleep_now.loops++;
 	  if (pps_sleep_test) {
 		  CLEAR_BIT(DBGMCU->CR, DBGMCU_CR_DBG_SLEEP | DBGMCU_CR_DBG_STOP | DBGMCU_CR_DBG_STANDBY);
+		  uint16_t t0 = (uint16_t)TIM17->CNT;
 		  __WFI();
+		  // TIM17 free-runs at 1 MHz (delay_us); a wake-up comes well
+		  // within its 65 ms wrap
+		  sleep_now.asleep_us += (uint16_t)((uint16_t)TIM17->CNT - t0);
+		  sleep_now.wfi++;
+	  }
+	  // main-loop accounting (#74), one-second snapshots for "status"
+	  if (HAL_GetTick() - sleep_start >= 1000) {
+		  sleep_start = HAL_GetTick();
+		  sleep_last = sleep_now;
+		  sleep_now = (sleep_stats){0};
 	  }
 
   }

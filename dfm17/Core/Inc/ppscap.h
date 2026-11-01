@@ -51,6 +51,12 @@ extern volatile uint32_t pps_cap_missing;	   /* no capture at a PPS interrupt */
 
 /* test only: sleep (WFI) in the main loop, debug clocks off in sleep */
 extern volatile uint8_t pps_sleep_test;
+/* main-loop accounting over the last whole second (#74): passes, WFIs, and
+ * time asleep in WFI in us (TIM17, 1 MHz) */
+typedef struct {
+	uint32_t loops, wfi, asleep_us;
+} sleep_stats;
+extern volatile sleep_stats sleep_last;
 
 void pps_capture_init(void);
 uint32_t pps_capture_interval(uint16_t prev, uint16_t now);
