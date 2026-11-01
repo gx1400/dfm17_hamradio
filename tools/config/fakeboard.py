@@ -324,6 +324,29 @@ class FakeSerial:
             self._reply("ok " + " ".join(str(ANALOG_LAST[n]) for n, _ in d.ANALOG))
         elif cmd in ("cfg", "cal"):
             self._block(cmd, sub, arg)
+        elif cmd == "status":
+            # the last line of console_hw_status(); the lines before it are text
+            g = self.link._get
+            self.out += b"mode tracker running log 1\r\n"
+            self._reply(
+                "ok sent {} refused {} repairs {}".format(
+                    *(
+                        struct.unpack("<I", g(n))[0]
+                        for n in ("aprs_packets_sent", "si4060_tx_refused", "settings_repairs")
+                    )
+                )
+            )
+        elif cmd == "send":
+            # console.c send_packets(): 1-10, not in config mode
+            if sub == "":
+                sub = "1"
+            if not sub.isdigit() or not 1 <= int(sub) <= d.CONSOLE_SEND_MAX:
+                self._reply("err usage")
+            elif self.config:
+                self._reply("err config")
+            else:
+                self._reply(f"ok {int(sub)}")
+                self.link._send_now(int(sub))
         else:
             self._reply("err unknown")
         self.out += b"> "

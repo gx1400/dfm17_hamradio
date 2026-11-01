@@ -58,6 +58,7 @@ settings_t settings_edit;
 cal_t cal_edit;
 volatile uint32_t settings_repairs = 2;
 volatile uint32_t si4060_tx_refused = 3;
+volatile uint8_t aprs_send_now;
 analog_reading analog_last;
 const char fw_version[] = "DFMFW test tracker";
 void gpsWake(void) {
@@ -364,9 +365,34 @@ static void analog_ver_status(void) {
 	CHECK(strstr(type("status"), "ok status") != NULL);
 }
 
+/* #63: send [n] hands n packets to the send-now trigger; never in config mode */
+static void send_packets(void) {
+	aprs_send_now = 0;
+	CHECK(strstr(type("send"), "ok 1\r\n") != NULL);
+	CHECK_EQ(aprs_send_now, 1);
+	CHECK(strstr(type("send 3"), "ok 3\r\n") != NULL);
+	CHECK_EQ(aprs_send_now, 3);
+	CHECK(strstr(type("send 10"), "ok 10\r\n") != NULL);
+	CHECK_EQ(aprs_send_now, CONSOLE_SEND_MAX);
+	aprs_send_now = 0;
+	CHECK(strstr(type("send 0"), "err usage") != NULL);
+	CHECK(strstr(type("send 11"), "err usage") != NULL);
+	CHECK(strstr(type("send 123"), "err usage") != NULL);
+	CHECK(strstr(type("send 99999999999"), "err usage") != NULL);
+	CHECK(strstr(type("send x"), "err usage") != NULL);
+	CHECK(strstr(type("send 2x"), "err usage") != NULL);
+	CHECK(strstr(type("send -1"), "err usage") != NULL);
+	CHECK_EQ(aprs_send_now, 0);
+	type("config");
+	CHECK(strstr(type("send"), "err config") != NULL);
+	CHECK_EQ(aprs_send_now, 0);
+	type("run");
+	CHECK(strstr(type("help"), " send ") != NULL);
+}
+
 TEST_MAIN("console", TEST(off_on_battery), TEST(on_with_usb_and_banner),
 		TEST(follows_usb_after_two_readings), TEST(echo_backspace_and_prompt),
 		TEST(echo_catches_up_at_the_end), TEST(bad_lines), TEST(line_pending_drops_input),
 		TEST(fox_and_log), TEST(config_mode_gates_changes), TEST(cfg_get_format),
 		TEST(cfg_put_checks_the_block), TEST(cal_put), TEST(gps_and_back_to_run),
-		TEST(reset_only_on_usb), TEST(analog_ver_status))
+		TEST(reset_only_on_usb), TEST(analog_ver_status), TEST(send_packets))
