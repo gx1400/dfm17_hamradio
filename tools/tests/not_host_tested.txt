@@ -27,6 +27,7 @@ version.c: the build's version string
 
 # bench and diagnostic builds, verified on a board by their own procedures
 hw_survey.c: hw_survey build (docs/hardware-investigation.md)
-rf_test.c: rf_test build (docs/rf-measurements.md)
+rf_test.c: rf_test build (docs/rf-measurements.md, docs/tx-test-modes.md)
+rtty_hw.c: GPIO3 levels timed by the cycle counter; rtty.c is tested against fakes of it, the timing on the bench (docs/tx-test-modes.md)
 radio_probe.c: optional boot-time Si4063 clock-output diagnostics (init.c), read over SWD
 nfc_tool.c: nfc_tool build (tools/hw_survey/eeprom_backup.sh, nfc_tool.sh)

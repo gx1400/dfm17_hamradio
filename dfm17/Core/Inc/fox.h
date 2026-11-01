@@ -35,9 +35,8 @@
  * settings.h). APRS gives the fox's location away to anyone decoding it: set
  * fox_aprs_every to 0 for an actual hunt */
 
-/* audio tone for both the Morse ID and the hunt tone:
- * TIM15 tick 26402.6 Hz / (2 * 16) = 825 Hz */
-#define FOX_TONE_HALF_TICKS	16
+/* the Morse ID and the hunt tone are the same 825 Hz tone, CW_TONE_HALF_TICKS
+ * (cw.h) */
 
 /* button test transmissions: unmodulated carrier for measuring the frequency,
  * and a 1200 Hz tone (26402.6 Hz / (2 * 11)) for checking deviation */
