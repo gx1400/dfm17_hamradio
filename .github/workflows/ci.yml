@@ -30,6 +30,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi libnewlib-arm-none-eabi
       - name: Build every variant (tracker, fox, hw_survey, rf_test, nfc_tool, sine_test)
         run: make firmware
+      - name: Debug build (-Og) still fits
+        run: make firmware OPT=-Og BUILD=build-og >/dev/null
       - name: SWD descriptor in each build matches the settings tools
         run: for elf in build/*/dfm17.elf; do python3 tools/config/dfmcfg.py --check-elf "$elf"; done
       - name: Sine AFSK only in the sine_test build (#55)
