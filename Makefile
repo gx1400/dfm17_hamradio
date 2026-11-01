@@ -10,9 +10,13 @@
 #
 # The ARM toolchain is arm-none-eabi-gcc on PATH, or else the one bundled with
 # STM32CubeIDE under /opt/st. Override with ARM=/path/to/arm-none-eabi-
-# The build matches the CubeIDE Debug configuration (-O0 -g3), with warnings
-# as errors. Our sources get extra warnings (WARN); the vendor HAL is built once
-# into build/hal/ with -Wall only, since it isn't ours to change.
+# The build is -Os -g3 (OPT), the CubeIDE Release optimisation: what flies and
+# what the size budget measures (#67). For stepping in a debugger use
+# OPT=-Og in its own build directory, e.g. make OPT=-Og BUILD=build-og (CI
+# checks that it still fits); -O0 is no longer expected to fit once every
+# transmit mode is in. Warnings are errors. Our sources get extra warnings
+# (WARN); the vendor HAL is built once into build/hal/ with -Wall only, since
+# it isn't ours to change.
 
 ARM ?= $(shell command -v arm-none-eabi-gcc >/dev/null 2>&1 && echo arm-none-eabi- \
 	|| ls -d /opt/st/stm32cubeide_*/plugins/*gnu-tools-for-stm32*/tools/bin 2>/dev/null \
@@ -23,7 +27,8 @@ SIZE    = $(ARM)size
 
 FW      = dfm17
 BUILD   = build
-CFLAGS  = -mcpu=cortex-m3 -mthumb -std=gnu11 -O0 -g3 -Wall -Werror \
+OPT    ?= -Os
+CFLAGS  = -mcpu=cortex-m3 -mthumb -std=gnu11 $(OPT) -g3 -Wall -Werror \
 	-DUSE_HAL_DRIVER -DSTM32F100xB -ffunction-sections -fdata-sections \
 	-I$(FW)/Core/Inc -I$(FW)/Drivers/STM32F1xx_HAL_Driver/Inc \
 	-I$(FW)/Drivers/STM32F1xx_HAL_Driver/Inc/Legacy \

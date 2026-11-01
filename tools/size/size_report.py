@@ -23,12 +23,17 @@ from pathlib import Path
 # STM32F100R8: 64 KB flash, 8 KB RAM
 FLASH_TOTAL = 64 * 1024
 RAM_TOTAL = 8 * 1024
-# budgets: fail above these. Flash leaves room for the EEPROM settings work
-# (#18); RAM includes the linker's reserved heap + stack (._user_heap_stack)
-FLASH_BUDGET = 56 * 1024
+# budgets, for the -Os build (the Makefile's default OPT): fail above these.
+# The goal is one image with every transmit mode (APRS, fox, CW ID, RTTY and
+# UKHAS) plus the sequencer and the EEPROM settings (#56): about 45 KB with
+# everything planned on CI's GCC 13, so 50 KB keeps 5 KB in hand and the -Og
+# debug build (about 10% bigger) well inside 64 KB. Over it, the modes are
+# split into builds that share the one EEPROM map. RAM includes the linker's
+# reserved heap + stack (._user_heap_stack)
+FLASH_BUDGET = 50 * 1024
 RAM_BUDGET = 7 * 1024
 # warn (don't fail) when a PR grows a variant's flash by more than this
-GROWTH_WARN = 1024
+GROWTH_WARN = 512
 # software double-precision routines from libgcc: none should be linked, the
 # part has no FPU and they cost several KB (see -Wdouble-promotion, Makefile)
 SOFT_DOUBLE = re.compile(r"^__(aeabi_(d[a-z0-9]+|[ilu]+2d|f2d)|[a-z]+df[0-9]?)$")
