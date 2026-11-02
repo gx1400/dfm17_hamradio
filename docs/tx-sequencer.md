@@ -36,8 +36,8 @@ is a starting point for when the work starts, not a decision.
   and `*`.
 - **Defaults:** 50 baud, 425 Hz shift, ASCII, no parity, 2 stop bits. All
   of these are settings.
-- **Modulation:** Si4063 2-FSK, mark/space set by `si4060_set_offset_fast`
-  from a bit clock on TIM16 (one interrupt per bit). About 1 s of mark before
+- **Modulation:** Si4063 2-GFSK, mark/space on GPIO3, the shift set by
+  `MODEM_FREQ_DEV`; the bits are timed on the DWT cycle counter. About 1 s of mark before
   the text so decoders lock.
 - **Settings:** `rtty_gps_every` (X), baud, shift, bits, stop bits.
 - **Receiving it:** an SDR in USB mode (RSPdx with SDRuno, or SDR++ with

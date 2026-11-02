@@ -158,23 +158,11 @@ static void deviation_scales_with_band(void) {
 	si4060_set_frequency(446175000);
 }
 
-#if APRS_AFSK_SINE
-static void offset_units(void) {
-	reset();
-	si4060_set_frequency(446175000);
-	CHECK_EQ(si4060_offset_units(2800), 229);
-	CHECK_EQ(si4060_offset_units(-2800), -229);
-	CHECK_EQ(si4060_offset_units(0), 0);
-	/* the sine AFSK's largest offset fits MODEM_FREQ_OFFSET (16-bit signed) */
-	CHECK(si4060_offset_units(25000) < 32767);
-}
-#endif
-
 static void modulation_modes(void) {
 	reset();
 	si4060_set_cw(0);
 	CHECK_EQ(props[PROP_MODEM][MODEM_MOD_TYPE],
-			MOD_TYPE_2FSK | MOD_SOURCE_DIRECT | MOD_GPIO_3 | MOD_DIRECT_MODE_ASYNC);
+			MOD_TYPE_2GFSK | MOD_SOURCE_DIRECT | MOD_GPIO_3 | MOD_DIRECT_MODE_SYNC);
 	si4060_set_cw(1);
 	CHECK_EQ(props[PROP_MODEM][MODEM_MOD_TYPE],
 			MOD_TYPE_CW | MOD_SOURCE_DIRECT | MOD_GPIO_3 | MOD_DIRECT_MODE_ASYNC);
@@ -184,7 +172,7 @@ static void dfm17_config(void) {
 	int outdiv;
 	reset();
 	si4060_config_dfm17();
-	CHECK_EQ(props[PROP_MODEM][MODEM_MOD_TYPE] & 0x07, MOD_TYPE_2FSK);
+	CHECK_EQ(props[PROP_MODEM][MODEM_MOD_TYPE], SI_MOD_FSK);
 	CHECK_NEAR(synthesized_hz(&outdiv), cfg.freq_hz, 12.3);
 	CHECK_EQ(prop24(PROP_MODEM, MODEM_FREQ_DEV), 212);
 	CHECK_EQ(props[PROP_PA][PA_PWR_LVL], cfg.pa_level);
@@ -283,26 +271,12 @@ static void cts_timeout(void) {
 	CHECK_EQ(si4060_get_cts(0), 0);
 }
 
-#if APRS_AFSK_SINE
-static void fast_spi_for_afsk(void) {
-	reset();
-	SPI1->CR1 = SPI_CR1_SPE | SPI_BAUDRATEPRESCALER_32;
-	si4060_spi_fast(1);
-	CHECK_EQ(SPI1->CR1 & SPI_CR1_BR, SPI_BAUDRATEPRESCALER_4);
-	CHECK(SPI1->CR1 & SPI_CR1_SPE);
-	CHECK_EQ(si4060_set_offset_fast(-229), 1);
-	si4060_spi_fast(0);
-	CHECK_EQ(SPI1->CR1 & SPI_CR1_BR, SPI_BAUDRATEPRESCALER_32);
-	CHECK(SPI1->CR1 & SPI_CR1_SPE);
-}
-#endif
-
 /* the radio set-up after POWER_UP: the DIV_CLK that clocks the STM32 (an
- * old bug zeroed GLOBAL_CLK_CFG and stopped it), async direct modulation
- * from GPIO3, no packet framing, and the TX filter */
+ * old bug zeroed GLOBAL_CLK_CFG and stopped it), 2GFSK from GPIO3 on the TX
+ * data clock, no packet framing, and the TX filter */
 static void setup_configures_radio(void) {
 	reset();
-	si4060_setup(MOD_TYPE_2FSK);
+	si4060_setup(MOD_TYPE_2GFSK);
 	int gpio = find_cmd(CMD_GPIO_PIN_CFG);
 	CHECK(gpio >= 0);
 	CHECK_EQ(txn[gpio][1], GPIO_MODE_TX_DATA_CLK);
@@ -312,14 +286,15 @@ static void setup_configures_radio(void) {
 	CHECK_EQ(props[PROP_GLOBAL][GLOBAL_CLK_CFG], DIV_CLK_EN | DIV_CLK_SEL_2);
 	CHECK_EQ(props[PROP_GLOBAL][GLOBAL_CONFIG], GLOBAL_RESERVED | POWER_MODE_HIGH_PERF);
 	CHECK_EQ(props[PROP_GLOBAL][GLOBAL_XO_TUNE], 0x62);
-	CHECK_EQ(props[PROP_MODEM][MODEM_MOD_TYPE],
-			MOD_TYPE_2FSK | MOD_SOURCE_DIRECT | MOD_GPIO_3 | MOD_DIRECT_MODE_ASYNC);
+	CHECK_EQ(props[PROP_MODEM][MODEM_MOD_TYPE], SI_MOD_FSK);
 	CHECK_EQ(props[PROP_PREAMBLE][PREAMBLE_TX_LENGTH], 0);
 	CHECK_EQ(props[PROP_SYNC][SYNC_CONFIG], SYNC_NO_XMIT);
-	CHECK_EQ(prop24(PROP_MODEM, MODEM_DATA_RATE), RF_MOD_APRS_SR);
-	/* filter (6 dB at 1200 Hz, 4400 Hz low pass): coeff[n] in COEFF_n */
-	CHECK_EQ(props[PROP_MODEM][MODEM_TX_FILTER_COEFF_8], 0x76);
-	CHECK_EQ(props[PROP_MODEM][MODEM_TX_FILTER_COEFF_0], 0x81);
+	/* the TX data clock, within 1 Hz of TIM15 / 2 (24 MHz / 909 / 2) */
+	CHECK_EQ(prop24(PROP_MODEM, MODEM_DATA_RATE), SI_TX_RATE);
+	CHECK_NEAR(SI_TX_RATE, 24e6 / 909 / 2, 1.0);
+	/* a flat 17-tap filter with the Gaussian's gain (17 x 40 = 680) */
+	for (int i = MODEM_TX_FILTER_COEFF_8; i <= MODEM_TX_FILTER_COEFF_0; i++)
+		CHECK_EQ(props[PROP_MODEM][i], 0x28);
 }
 
 /* POR: SDN (PC3) high then low, then POWER_UP with the TCXO frequency */
@@ -363,30 +338,13 @@ static void get_property_waits_for_cts(void) {
 	CHECK_EQ(txn[get][3], PA_PWR_LVL);
 }
 
-#if APRS_AFSK_SINE
-/* the AFSK offset, written without waiting for CTS */
-static void offset_written(void) {
-	reset();
-	si4060_set_offset(0x1234);
-	CHECK_EQ(props[PROP_MODEM][MODEM_FREQ_OFFSET] << 8 | props[PROP_MODEM][MODEM_FREQ_OFFSET + 1],
-			0x1234);
-}
-
-/* the sine AFSK's radio side, only in the sine build (test_si4063_sine) */
-#define SUITE	   "si4063_sine"
-#define SINE_TESTS TEST(offset_units), TEST(fast_spi_for_afsk), TEST(offset_written),
-#else
-#define SUITE "si4063"
-#define SINE_TESTS
-#endif
-
 /* every test runs on a board set up as NZ0P (fake_settings.h) */
 void test_setup(void) {
 	provision();
 }
 
-TEST_MAIN(SUITE, TEST(frequency_across_70cm), TEST(frequency_default_channel), TEST(band_selection),
-		TEST(deviation_scales_with_band), TEST(modulation_modes), TEST(dfm17_config),
-		TEST(tx_power), TEST(start_and_stop_tx), TEST(tx_gate), TEST(cts_timeout),
-		TEST(setup_configures_radio), TEST(reset_and_power_up), TEST(part_info_reads_part_number),
-		TEST(get_property_waits_for_cts), SINE_TESTS)
+TEST_MAIN("si4063", TEST(frequency_across_70cm), TEST(frequency_default_channel),
+		TEST(band_selection), TEST(deviation_scales_with_band), TEST(modulation_modes),
+		TEST(dfm17_config), TEST(tx_power), TEST(start_and_stop_tx), TEST(tx_gate),
+		TEST(cts_timeout), TEST(setup_configures_radio), TEST(reset_and_power_up),
+		TEST(part_info_reads_part_number), TEST(get_property_waits_for_cts))

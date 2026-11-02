@@ -336,9 +336,6 @@ void processAprsTick(void) {
 		return;
 	}
 
-#if APRS_AFSK_SINE
-	aprs_afsk_tick();
-#endif
 	aprs_nco_count++;
 	aprs_bit_count++;
 

@@ -57,7 +57,14 @@ extern volatile uint32_t si4060_tx_refused;
 
 #define RF_RTTY_DEV_HZ			200.0f
 #define RF_APRS_DEV_HZ			1300.0f
-#define RF_MOD_APRS_SR			4400
+/* GPIO3 modulation (si4060_setup, si4060_set_cw): sync direct 2GFSK. the
+ * radio samples the MCU's tone square wave on its TX data clock, SI_TX_RATE,
+ * and smooths the frequency steps with its 17-tap TX filter (si4060_set_filter)
+ * at 10x that rate. the rate is about TIM15 / 2 (13201.3 Hz), so the AFSK
+ * and fox tone edges, every 6, 11 or 16 ticks, keep their spacing to within
+ * a sample; slower clocks mangle the 1200 Hz tone (#54) */
+#define SI_TX_RATE				13201
+#define SI_MOD_FSK (MOD_TYPE_2GFSK | MOD_SOURCE_DIRECT | MOD_GPIO_3 | MOD_DIRECT_MODE_SYNC)
 
 #define F_INT_70CM				(2 * XO_FREQ / 8)
 #define F_INT_2M				(2 * XO_FREQ / 24)
@@ -81,12 +88,6 @@ void si4060_set_frequency(uint32_t freq_hz);
 void si4060_set_deviation(uint32_t dev_hz);
 void si4060_set_tx_power(uint8_t level);
 
-#if APRS_AFSK_SINE /* the sine_test build (aprs.h) */
-void si4060_set_offset(uint16_t offset);
-int32_t si4060_offset_units(int32_t hz);
-void si4060_spi_fast(uint8_t on);
-uint8_t si4060_set_offset_fast(int16_t offset);
-#endif
 void si4060_start_tx(uint8_t channel);
 void si4060_stop_tx(void);
 void si4060_shutdown(void);
