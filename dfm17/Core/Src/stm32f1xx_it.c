@@ -320,7 +320,9 @@ void TIM7_IRQHandler(void)
   /* USER CODE END TIM7_IRQn 0 */
   HAL_TIM_IRQHandler(&htim7);
   /* USER CODE BEGIN TIM7_IRQn 1 */
-  printf("INTERRUPT! GPS Lock Lost!\r\n");
+  // no PPS for 2 s. no printf here: on USB it blocks about 2.6 ms sending to
+  // the console, and during a packet that stalls the AFSK on GPIO3 and breaks
+  // it (#54). gpsUpdate() reports the missing PPS from the main loop
   deassertGpsLock();
 
   /* USER CODE END TIM7_IRQn 1 */
