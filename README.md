@@ -47,13 +47,12 @@ backup is in `docs/data/`.
 
 - STM32CubeIDE: open the `dfm17/` project as before.
 - Command line: `make firmware` builds every variant into `build/<variant>/`
-  (`tracker`, `fox`, `hw_survey`, `rf_test`, `nfc_tool`, `sine_test`) with warnings as
+  (`tracker`, `fox`, `hw_survey`, `rf_test`, `nfc_tool`) with warnings as
   errors, using `arm-none-eabi-gcc` from PATH or the one inside STM32CubeIDE.
-- APRS uses square-wave AFSK, the only modulation that decodes on air. The
-  experimental sine AFSK (#54) is only in the `sine_test` build
-  (`-DAPRS_AFSK_SINE=1`, the tracker with sine on; `aprs_afsk_sine` = 0 over
-  SWD switches it back to square). Leaving it out of the other builds saves
-  1.1 KB of flash and 32 B of RAM (#55).
+- APRS uses square-wave AFSK on the Si4063's GPIO3, smoothed by the radio's
+  TX filter (2GFSK in sync direct mode), which takes the strongest sidebands
+  down by about 12 dB. Sine AFSK can't be made on this radio: it applies
+  frequency offset writes only every 220 us (#54).
 - `make test` runs the host unit tests (`tools/tests`) and checks that the
   APRS packets decode with Dire Wolf (`tools/aprs_sim`, Python packages in
   `tools/requirements.txt`). `make -C tools/tests coverage` reports which

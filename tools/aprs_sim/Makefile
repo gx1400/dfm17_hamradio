@@ -12,18 +12,17 @@ FW_SRC  = $(CORE)/Src/aprs.c $(CORE)/Src/string.c $(CORE)/Src/settings.c
 aprs_harness: aprs_harness.c $(FW_SRC) stubs/*.h
 	$(CC) $(CFLAGS) -o $@ aprs_harness.c $(FW_SRC) -lm
 
-# built with the experimental sine AFSK (APRS_AFSK_SINE, the sine_test build);
-# its square mode is the same as the default builds'
 afsk_harness: afsk_harness.c $(FW_SRC) stubs/*.h
-	$(CC) $(CFLAGS) -DAPRS_AFSK_SINE=1 -o $@ afsk_harness.c $(FW_SRC) -lm
+	$(CC) $(CFLAGS) -o $@ afsk_harness.c $(FW_SRC) -lm
 
-# square wave vs sine AFSK through an FM receiver with and without de-emphasis
+# the square wave as on GPIO3 and as the radio sends it (--si-sync, through its
+# TX filter), into an FM receiver with and without de-emphasis
 afsk-test: afsk_harness
 	@mkdir -p $(OUT)
-	@for m in square sine; do for d in '' --deemph; do \
-		echo "=== $$m $$d ==="; \
-		./afsk_harness $$m | python3 afsk_sim.py $$d -o $(OUT)/afsk_$$m$$d.wav; \
-		atest $(OUT)/afsk_$$m$$d.wav 2>&1 | grep -E "packets decoded"; \
+	@for m in '' --si-sync; do for d in '' --deemph; do \
+		echo "=== square $$m $$d ==="; \
+		./afsk_harness | python3 afsk_sim.py $$m $$d -o $(OUT)/afsk$$m$$d.wav; \
+		atest $(OUT)/afsk$$m$$d.wav 2>&1 | grep -E "packets decoded"; \
 	done; done
 
 test: aprs_harness
@@ -40,22 +39,21 @@ test: aprs_harness
 	done
 
 # pass/fail version of test and afsk-test, for CI: every packet must decode
-# (si-sync is left out, it is the known-bad mode the firmware doesn't use)
 check: aprs_harness afsk_harness
 	@mkdir -p $(OUT)
 	@set -e; \
 	decodes() { atest $$1 2>&1 | grep -q "1 packets decoded" || { echo "FAIL: $$1 did not decode"; exit 1; }; }; \
 	for fix in fix nofix; do \
 		./aprs_harness $$fix > $(OUT)/bits_$$fix.txt; \
-		for m in ideal firmware; do \
+		for m in ideal firmware si-sync; do \
 			python3 aprs_sim.py --mode $$m -o $(OUT)/$$fix-$$m.wav < $(OUT)/bits_$$fix.txt | grep -q "FCS GOOD" \
 				|| { echo "FAIL: $$fix $$m frame check"; exit 1; }; \
 			decodes $(OUT)/$$fix-$$m.wav; \
 		done; \
 	done; \
-	for m in square sine; do for d in '' --deemph; do \
-		./afsk_harness $$m | python3 afsk_sim.py $$d -o $(OUT)/afsk_$$m$$d.wav > /dev/null; \
-		decodes $(OUT)/afsk_$$m$$d.wav; \
+	for m in '' --si-sync; do for d in '' --deemph; do \
+		./afsk_harness | python3 afsk_sim.py $$m $$d -o $(OUT)/afsk$$m$$d.wav > /dev/null; \
+		decodes $(OUT)/afsk$$m$$d.wav; \
 	done; done; \
 	echo "aprs_sim: all packets decoded"
 

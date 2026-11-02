@@ -34,10 +34,6 @@ volatile uint32_t si4060_tx_refused;
 void si4060_start_tx(uint8_t channel) { (void)channel; }
 void si4060_stop_tx(void) {}
 void si4060_set_deviation(uint32_t dev_hz) { (void)dev_hz; }
-void si4060_set_offset(uint16_t offset) { (void)offset; }
-int32_t si4060_offset_units(int32_t hz) { return hz; }
-void si4060_spi_fast(uint8_t on) { (void)on; }
-uint8_t si4060_set_offset_fast(int16_t offset) { (void)offset; return 1; }
 
 /* fixed telemetry, values like the survey measured on the bench */
 #include "analog.h"

@@ -11,8 +11,10 @@ Modes:
             (tests only the bit stream: framing, stuffing, NRZI, FCS)
   firmware  square wave on Si4063 GPIO3 exactly as TIM15 + processAprsTick()
             + the tx_aprs() loop generate it, radio follows the pin instantly
-  si-sync   like firmware, but GPIO3 is re-sampled on the Si4063's own TX data
-            clock (MOD_DIRECT_MODE_SYNC at RF_MOD_APRS_SR), as on the target
+  si-sync   what the radio sends: GPIO3 sampled on the Si4063's TX data clock
+            (MOD_DIRECT_MODE_SYNC at SI_TX_RATE, unrelated in phase to TIM15),
+            each sample held for the 10x oversampling and smoothed by the TX
+            filter (si4060_set_filter); --si-rate tries other data rates
 """
 
 import argparse
@@ -29,7 +31,9 @@ APRS_SPACE = 1
 APRS_MARK_TICKS = 11
 APRS_SPACE_TICKS = 6
 APRS_BAUD_TICKS = 22
-SI_DATA_RATE = 4400  # RF_MOD_APRS_SR
+SI_TX_RATE = 13201  # si4063.h
+SI_OSR = 10  # MODEM_TX_NCO_MOD
+SI_TX_FILTER = np.full(17, 40.0)  # si4060_set_filter(): COEFF_0..8 all 0x28
 
 FINE_RATE = 1_600_000  # simulation grid
 OUT_RATE = 48_000
@@ -152,14 +156,22 @@ def firmware_pin_events(bits, tick_period):
     return tick_rate, np.array(levels)
 
 
-def render_firmware(bits, tick_period, si_sync, rng):
+def si_sync(levels, tick_rate, t, rng, rate=SI_TX_RATE):
+    """the Si4063 in sync direct 2GFSK: the deviation (-1..1) at times t for
+    GPIO3 levels (0/1) per TIM15 tick"""
+    phase = rng.random()  # the radio's clock is unrelated in phase to TIM15
+    ts = (np.arange(int(len(levels) / tick_rate * rate)) + phase) / rate
+    s = levels[np.clip((ts * tick_rate).astype(int), 0, len(levels) - 1)] * 2.0 - 1.0
+    y = np.convolve(np.repeat(s, SI_OSR), SI_TX_FILTER / SI_TX_FILTER.sum(), mode="same")
+    return y[np.clip((t * rate * SI_OSR).astype(int), 0, len(y) - 1)]
+
+
+def render_firmware(bits, tick_period, sync, rng, rate=SI_TX_RATE):
     tick_rate, levels = firmware_pin_events(bits, tick_period)
     n = int(len(levels) / tick_rate * FINE_RATE)
     t = np.arange(n) / FINE_RATE
-    if si_sync:
-        # the radio latches GPIO3 on its own clock, unrelated in phase to TIM15
-        phase = rng.random()
-        t = (np.floor(t * SI_DATA_RATE + phase) - phase) / SI_DATA_RATE
+    if sync:
+        return si_sync(levels, tick_rate, t, rng, rate)
     idx = np.clip((t * tick_rate).astype(int), 0, len(levels) - 1)
     return levels[idx] * 2.0 - 1.0
 
@@ -193,6 +205,7 @@ def main():
         default=909,
         help="TIM15 counts per tick, (PSC+1)*(ARR+1); firmware uses 1*909=909",
     )
+    ap.add_argument("--si-rate", type=int, default=SI_TX_RATE, help="TX data clock for si-sync")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("-o", "--output", default="aprs.wav")
     args = ap.parse_args()
@@ -211,7 +224,11 @@ def main():
             f"baud {rate / APRS_BAUD_TICKS:.1f}"
         )
         x = render_firmware(
-            bits, args.tick_period, args.mode == "si-sync", np.random.default_rng(args.seed)
+            bits,
+            args.tick_period,
+            args.mode == "si-sync",
+            np.random.default_rng(args.seed),
+            args.si_rate,
         )
     write_wav(args.output, receiver_audio(x))
     print(f"wrote {args.output}")

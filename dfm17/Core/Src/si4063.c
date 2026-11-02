@@ -49,8 +49,8 @@ static uint8_t si4060_outdiv = 8;
 /*
  * si4060_config_dfm17
  *
- * sets up the DFM-17 transmitter: async direct 2FSK from GPIO3 (the MCU-timed
- * square wave), with the frequency, deviation and PA level from the settings
+ * sets up the DFM-17 transmitter: direct 2GFSK from GPIO3 (the MCU-timed
+ * square wave, SI_MOD_FSK), with the frequency, deviation and PA level from the settings
  * (cfg, settings.c; the frequency is limited to 420-450 MHz there).
  */
 void si4060_config_dfm17(void) {
@@ -67,12 +67,11 @@ void si4060_config_dfm17(void) {
  * si4060_set_cw
  *
  * on: unmodulated carrier exactly on the tuned frequency (MOD_TYPE_CW), for
- * measuring it. off: async direct 2FSK from GPIO3, the normal fox/APRS mode.
+ * measuring it. off: direct 2GFSK from GPIO3 (SI_MOD_FSK), the normal mode.
  */
 void si4060_set_cw(uint8_t on) {
-	si4060_set_property_8(PROP_MODEM,
-			MODEM_MOD_TYPE,
-			(on ? MOD_TYPE_CW : MOD_TYPE_2FSK) | MOD_SOURCE_DIRECT | MOD_GPIO_3 | MOD_DIRECT_MODE_ASYNC);
+	si4060_set_property_8(PROP_MODEM, MODEM_MOD_TYPE,
+			on ? MOD_TYPE_CW | MOD_SOURCE_DIRECT | MOD_GPIO_3 | MOD_DIRECT_MODE_ASYNC : SI_MOD_FSK);
 }
 
 /*
@@ -352,84 +351,6 @@ void si4060_stop_tx(void) {
 	si4060_change_state(STATE_READY);
 }
 
-#if APRS_AFSK_SINE
-/* the sine AFSK's radio side, only in the sine_test build (aprs.h) */
-
-/*
- * si4060_set_offset
- *
- * sets the FSK offset inside the Si4060 PLL. As PLL FRAC- and INTE-registers can't be modified while
- * transmitting, we must modify the MODEM_FREQ_DEV or MODEM_FREQ_OFFSET registers in transmission.
- * as we won't need more deviation than 25kHz, we can use the OFFSET register and save one byte.
- *
- * offset: frequency offset from carrier frequency (PLL tuning resolution)
- *
- */
-void si4060_set_offset(uint16_t offset) {
-	si4060_set_property_16_nocts(PROP_MODEM, MODEM_FREQ_OFFSET, offset);
-}
-
-/*
- * si4060_offset_units
- *
- * converts a frequency offset in Hz to MODEM_FREQ_OFFSET units at the current
- * output divider (same scaling as MODEM_FREQ_DEV)
- */
-int32_t si4060_offset_units(int32_t hz) {
-	return (int32_t)(((int64_t)hz * si4060_outdiv * (1 << 19)) / (2 * (int64_t)XO_FREQ));
-}
-
-/*
- * si4060_spi_fast
- *
- * on: SPI1 at PCLK2 / 4 (6 MHz, the Si4063 allows 10 MHz) so that
- * si4060_set_offset_fast() fits between AFSK samples. off: back to / 32.
- */
-void si4060_spi_fast(uint8_t on) {
-	CLEAR_BIT(SPI1->CR1, SPI_CR1_SPE);
-	MODIFY_REG(SPI1->CR1, SPI_CR1_BR, on ? SPI_BAUDRATEPRESCALER_4 : SPI_BAUDRATEPRESCALER_32);
-	SET_BIT(SPI1->CR1, SPI_CR1_SPE);
-}
-
-static inline uint8_t spi_xfer_fast(uint8_t b) {
-	while (!(SPI1->SR & SPI_SR_TXE))
-		;
-	SPI1->DR = b;
-	while (!(SPI1->SR & SPI_SR_RXNE))
-		;
-	return SPI1->DR;
-}
-
-/*
- * si4060_set_offset_fast
- *
- * writes MODEM_FREQ_OFFSET while transmitting, on the SPI registers, for AFSK
- * samples from the TIM15 ISR. nothing else may use the SPI meanwhile.
- *
- * returns: 0 if the radio wasn't ready (no CTS) and the sample was skipped
- */
-uint8_t si4060_set_offset_fast(int16_t offset) {
-	uint8_t cts;
-
-	(void)SPI1->DR;
-	spi_select();
-	spi_xfer_fast(CMD_READ_CMD_BUF);
-	cts = spi_xfer_fast(0xFF);
-	spi_deselect();
-	if (cts != 0xFF)
-		return 0; /* GCOVR_EXCL_LINE: the fake SPI data register echoes the byte written */
-
-	spi_select();
-	spi_xfer_fast(CMD_SET_PROPERTY);
-	spi_xfer_fast(PROP_MODEM);
-	spi_xfer_fast(2);
-	spi_xfer_fast(MODEM_FREQ_OFFSET);
-	spi_xfer_fast((uint16_t)offset >> 8);
-	spi_xfer_fast((uint16_t)offset & 0xFF);
-	spi_deselect();
-	return 1;
-}
-#endif /* APRS_AFSK_SINE */
 
 /*
  * si4060_set_property_8
@@ -611,17 +532,16 @@ void si4060_setup(uint8_t mod_type) {
 			PREAMBLE_TX_LENGTH,
 			0);
 
-	/* modulate directly from GPIO3. async: the radio follows the pin edges as they
-	 * happen instead of sampling it on its TX data clock, which would mangle the
-	 * MCU-timed AFSK square wave. async only supports 2FSK/OOK, not 2GFSK. */
-	si4060_set_property_8(PROP_MODEM,
-			MODEM_MOD_TYPE,
-			MOD_DIRECT_MODE_ASYNC | MOD_GPIO_3 | MOD_SOURCE_DIRECT | (mod_type & 0x07));
+	/* modulate directly from GPIO3, sampled on the TX data clock (SI_MOD_FSK
+	 * with mod_type MOD_TYPE_2GFSK). 2GFSK needs sync: async direct mode
+	 * follows the pin edges as they come but only does 2FSK, without the TX
+	 * filter. the data rate must be a multiple of the tone rates: at 4400 the
+	 * re-sampling mangled the 1200 Hz tone (#54) */
+	si4060_set_property_8(PROP_MODEM, MODEM_MOD_TYPE,
+			MOD_DIRECT_MODE_SYNC | MOD_GPIO_3 | MOD_SOURCE_DIRECT | (mod_type & 0x07));
 
-	/* setup the NCO data rate for APRS */
-	si4060_set_property_24(PROP_MODEM,
-			MODEM_DATA_RATE,
-			RF_MOD_APRS_SR);
+	/* the TX data clock */
+	si4060_set_property_24(PROP_MODEM, MODEM_DATA_RATE, SI_TX_RATE);
 
 	/* do not transmit sync word */
 	si4060_set_property_8(PROP_SYNC,
@@ -644,19 +564,17 @@ void si4060_setup(uint8_t mod_type) {
 /*
  * si4060_set_filter
  *
- * writes the bandpass filter coefficients into the Si4060. these realize a low pass filter for
- * harmonics of the square wave modulation waveform and a high pass filter for the
- * APRS preemphasis.
- *
+ * the TX filter that shapes the GPIO3 square wave: a 17-tap symmetric FIR at
+ * 10x SI_TX_RATE (132 kHz), COEFF_8 the centre tap. all taps equal is a
+ * 129 us moving average: the frequency steps become ramps and the response
+ * has its first null at 7.8 kHz, where the square wave's strongest sidebands
+ * were. on air (#54) the sidebands 8-10.5 kHz out dropped 12 dB and those
+ * 10.5-20 kHz out 6 dB, and packets decoded as before. the sum, 680, is that
+ * of the default BT 0.5 Gaussian, so the deviation stays the same. a sine
+ * isn't possible: the filter is too short at a rate the tones fit
  */
 void si4060_set_filter(void) {
-	//uint8_t coeff[9] = {0x1d, 0xe5, 0xb8, 0xaa, 0xc0, 0xf5, 0x36, 0x6b, 0x7f};	// 6dB@1200 Hz, 2400 Hz
-	//uint8_t coeff[9] = {0x07, 0xde, 0xbf, 0xb9, 0xd4, 0x05, 0x40, 0x6d, 0x7f};	// 3db@1200 Hz, 2400 Hz
-	//uint8_t coeff[9] = {0xfa, 0xe5, 0xd8, 0xde, 0xf8, 0x21, 0x4f, 0x71, 0x7f};	// LP only, 2400 Hz
-	//uint8_t coeff[9] = {0xd9, 0xf1, 0x0c, 0x29, 0x44, 0x5d, 0x70, 0x7c, 0x7f}; 	// LP only, 4800 Hz
-	//uint8_t coeff[9] = {0xd5, 0xe9, 0x03, 0x20, 0x3d, 0x58, 0x6d, 0x7a, 0x7f}; 	// LP only, 4400 Hz
-	// 6dB@1200Hz, 4400 Hz (bad stopband)
-	static const uint8_t coeff[9] = {0x81, 0x9f, 0xc4, 0xee, 0x18, 0x3e, 0x5c, 0x70, 0x76};
+	static const uint8_t coeff[9] = {0x28, 0x28, 0x28, 0x28, 0x28, 0x28, 0x28, 0x28, 0x28};
 
 	si4060_set_property_8(PROP_MODEM,
 			MODEM_TX_FILTER_COEFF_8,

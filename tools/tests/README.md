@@ -5,17 +5,13 @@ their logic can be tested without the board. `make` (here, or `make test` at
 the top level) builds and runs everything; each suite prints its failed checks
 and a summary, and the run fails if any check does.
 
-`test_aprs` and `test_si4063` are also built as `test_aprs_sine` and
-`test_si4063_sine` with `-DAPRS_AFSK_SINE=1`, the experimental sine AFSK of the
-`sine_test` firmware build; the sine checks below run only in those (#55).
-
 | Suite | Source under test | What it covers |
 |---|---|---|
-| `test_aprs` | aprs.c | position and status packets field by field (base91 position, altitude, telemetry), sequence numbers, fix validity, AX.25 header, FCS, the line bit stream decoded back to the frame (NRZI, flags, bit stuffing), and the transmit sequence for square-wave and sine AFSK (radio, timer and SPI calls in order, sine sample rate and amplitude, skipped samples) |
+| `test_aprs` | aprs.c | position and status packets field by field (base91 position, altitude, telemetry), sequence numbers, fix validity, AX.25 header, FCS, the line bit stream decoded back to the frame (NRZI, flags, bit stuffing), and the transmit sequence (radio and timer calls in order, a GPIO3 toggle per sample tick) |
 | `test_tracker` | tracker.c | the GPS duty cycle against a scripted GPS: quick fix, timeouts, 2D only, a fix that comes and goes (last 3D fix sent), no stale fix after a wake-up, a cold start longer than the timeout, reacquiring a lost fix that needs more than one wake window, the 5 min cadence |
 | `test_gps` | gps.c | the exact UBX-RXM-PMREQ sleep command, wake-up bytes, no polling while asleep or without PPS, configuration retries, UBX checksums of every canned message, the UBX-only CFG-PRT |
 | `test_gnss` | GNSS.c, gps.c | NAV-PVT replies through the UART callbacks (negative lat/lon/altitude), corrupt replies ignored, a silent GPS timing out, the buffer scan staying in bounds, the dynamic platform model per mode, the configuration messages, the chip ID |
-| `test_si4063` | si4063.c | PLL settings reproduce every frequency in 420-450 MHz to the synthesizer step, band selection, deviation and offset units, modulation modes, START_TX / READY, the CTS timeouts, the fast SPI mode for sine AFSK, the radio set-up (DIV_CLK for the STM32, async GPIO3 modulation, TX filter), reset and POWER_UP, PART_INFO, GET_PROPERTY |
+| `test_si4063` | si4063.c | PLL settings reproduce every frequency in 420-450 MHz to the synthesizer step, band selection, deviation units, modulation modes, START_TX / READY, the CTS timeouts, the radio set-up (DIV_CLK for the STM32, 2GFSK from GPIO3 on the TX data clock, the flat TX filter), reset and POWER_UP, PART_INFO, GET_PROPERTY |
 | `test_fox` | fox.c | the Morse ID decoded back from the tone timeline, element and gap timing, hunt tone length, APRS every 10th cycle, the button test transmissions |
 | `test_diag` | diag.c | button debounce, contact bounce, short/medium/long presses, a press held at power-on ignored, LED feedback while held, heartbeat, red blink codes, PPS flash, the PPS cycle count across the counter wrap |
 | `test_ppsdisc` | ppsdisc.c | the TCXO correction: estimate from a full window, slow and fast TCXOs, the corrected carrier, sub-cycle resolution, one-sided outliers trimmed, missed pulses / wake-up / HSI samples rejected, estimate kept without GPS, retune threshold, disable, queue overflow |

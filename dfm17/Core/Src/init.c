@@ -134,7 +134,7 @@ void initRadio() {
 	}
 
 	si4060_power_up(); 		//power up radio
-	si4060_setup(MOD_TYPE_2FSK);
+	si4060_setup(MOD_TYPE_2GFSK);
 	si4060_config_dfm17();
 	// idle with the crystal running: GPIO2 DIV_CLK clocks the STM32
 	si4060_stop_tx();

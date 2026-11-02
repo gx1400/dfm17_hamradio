@@ -2,8 +2,9 @@
 """
 afsk_sim.py - receiver audio from afsk_harness's per-tick carrier offset.
 
-Reads one offset in Hz per TIM15 tick (26402.6 Hz) on stdin, treats it as the
-output of an ideal FM discriminator, optionally applies land-mobile FM de-emphasis (6 dB/octave,
+Reads one offset in Hz per TIM15 tick (26402.6 Hz) on stdin, with --si-sync
+passes it through the Si4063's sync 2GFSK sampling and TX filter (aprs_sim.py's
+si-sync), treats it as the output of an ideal FM discriminator, optionally applies land-mobile FM de-emphasis (6 dB/octave,
 750 us, as a radio's speaker/TNC audio has), and writes a 48 kHz WAV for atest. Prints
 the level of the 1200 and 2200 Hz tones to show the twist.
 """
@@ -13,18 +14,23 @@ import sys
 import wave
 
 import numpy as np
+from aprs_sim import si_sync
 from scipy import signal
 
 TICK = 24e6 / 909
 p = argparse.ArgumentParser()
 p.add_argument("-o", required=True)
 p.add_argument("--deemph", action="store_true")
+p.add_argument("--si-sync", action="store_true")
 a = p.parse_args()
 
 f = np.array([float(x) for x in sys.stdin.read().split()])
 t_in = np.arange(len(f)) / TICK
 t_out = np.arange(0, t_in[-1], 1 / 48e3)
-audio = f[np.minimum((t_out * TICK).astype(int), len(f) - 1)]  # zero-order hold
+if a.si_sync:
+    audio = si_sync(f > 0, TICK, t_out, np.random.default_rng(1)) * np.max(np.abs(f))
+else:
+    audio = f[np.minimum((t_out * TICK).astype(int), len(f) - 1)]  # zero-order hold
 if a.deemph:
     # 6 dB/octave across the voice band (750 us, corner 212 Hz)
     b, aa = signal.bilinear([1], [750e-6, 1], fs=48e3)

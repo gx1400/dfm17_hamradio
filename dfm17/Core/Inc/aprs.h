@@ -46,22 +46,9 @@ extern volatile uint8_t aprs_send_now;
 extern volatile uint32_t aprs_packets_sent;
 uint8_t aprs_send_now_due(uint32_t now);
 
-/* AFSK modulation (see aprs.c): a square wave on GPIO3, the mode that decodes
- * on air. APRS_AFSK_SINE=1 (the sine_test build) adds the experimental sine
- * AFSK with pre-emphasis, which doesn't decode yet (#54), and starts in it;
- * aprs_afsk_sine switches between the two over SWD. Left out of the other
- * builds: about 0.8 KB of flash and 30 B of RAM (#55) */
-#ifndef APRS_AFSK_SINE
-#define APRS_AFSK_SINE			0
-#endif
-#if APRS_AFSK_SINE
-/* sine AFSK: peak deviation of each tone, space +3.1 dB over mark */
-#define APRS_MARK_DEV_HZ		2800
-#define APRS_SPACE_DEV_HZ		4000
-/* sine AFSK sample rate: TIM15 26402.6 Hz / 2 = 13201.3 Hz */
-#define APRS_AFSK_TICKS_PER_SAMPLE	2
-void aprs_afsk_tick(void);
-#endif
+/* AFSK modulation (see aprs.c): a square wave on GPIO3, smoothed by the
+ * radio's TX filter (si4060_set_filter). sine AFSK from MODEM_FREQ_OFFSET
+ * writes can't work: the Si4063 applies the offset only every 220 us (#54) */
 void tx_aprs(void);
 void aprs_tx_start(void);
 uint8_t aprs_tx_poll(void);
