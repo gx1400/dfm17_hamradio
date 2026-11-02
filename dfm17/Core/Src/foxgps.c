@@ -90,7 +90,7 @@ static void wake(uint32_t now) {
  *
  * the policy; call it from the main loop while the fox runs
  */
-void fox_gps_poll(GNSS_StateHandle *GNSS, uint32_t now) {
+void fox_gps_poll(const GNSS_StateHandle *GNSS, uint32_t now) {
 	switch (state) {
 	case FG_AWAKE:
 		if (ppsLockStatus && GNSS->fixType >= Fix3D) {

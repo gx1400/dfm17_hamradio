@@ -16,11 +16,21 @@ static uint8_t uart_log[256];
 static size_t uart_len;
 static int pvt_polls, config_calls, config_failures_left;
 static uint32_t config_wake_order;	/* bytes on the UART before each config */
+/* the UART is still busy (a poll's DMA): transmits fail until an abort */
+static int uart_busy, uart_aborts;
 
 HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *h, const uint8_t *d, uint16_t n, uint32_t t) {
 	(void)h; (void)t;
+	if (uart_busy)
+		return HAL_BUSY;
 	for (uint16_t i = 0; i < n && uart_len < sizeof(uart_log); i++)
 		uart_log[uart_len++] = d[i];
+	return HAL_OK;
+}
+HAL_StatusTypeDef HAL_UART_Abort(UART_HandleTypeDef *h) {
+	(void)h;
+	uart_aborts++;
+	uart_busy = 0;
 	return HAL_OK;
 }
 
@@ -57,6 +67,7 @@ static void reset(void) {
 	fake_tick = 1000;
 	uart_len = 0;
 	pvt_polls = config_calls = config_failures_left = 0;
+	uart_busy = uart_aborts = 0;
 	GNSS_timeouts = 0;
 	gpsWake();			/* leave gps.c awake */
 	uart_len = 0;
@@ -86,6 +97,18 @@ static void sleep_sends_pmreq_backup(void) {
 	CHECK_MEM(uart_log, want, sizeof(want));
 	ubx_ck(want, sizeof(want), &a, &b);
 	CHECK(a == 0x4D && b == 0x3B);
+	gpsWake();
+}
+
+/* a UART still busy with a poll: the transfer is aborted and the command
+ * sent anyway, or the GPS would stay on (#74) */
+static void sleep_aborts_a_busy_uart(void) {
+	reset();
+	uart_busy = 1;
+	gpsSleep();
+	CHECK_EQ(uart_aborts, 1);
+	CHECK_EQ(uart_len, 16);
+	CHECK(uart_log[2] == 0x02 && uart_log[3] == 0x41);
 	gpsWake();
 }
 
@@ -274,10 +297,11 @@ static void time_lock_cleared_by_sleep_and_wake(void) {
 	CHECK(gpsTimeLocked());
 }
 
-TEST_MAIN("gps", TEST(sleep_sends_pmreq_backup), TEST(no_polling_while_asleep),
-		TEST(no_polling_without_pps), TEST(wake_clears_stale_fix), TEST(poll_with_fix),
-		TEST(configure_first_try), TEST(configure_retries_until_answered), TEST(configure_gives_up),
-		TEST(ubx_crc_checks), TEST(ubx_build_packet), TEST(static_config_messages_valid),
-		TEST(config_is_ubx_only_9600), TEST(time_locked_from_pvt),
-		TEST(time_not_locked_without_fix), TEST(time_not_locked_invalid_or_inaccurate),
-		TEST(time_lock_goes_stale), TEST(time_lock_cleared_by_sleep_and_wake))
+TEST_MAIN("gps", TEST(sleep_sends_pmreq_backup), TEST(sleep_aborts_a_busy_uart),
+		TEST(no_polling_while_asleep), TEST(no_polling_without_pps), TEST(wake_clears_stale_fix),
+		TEST(poll_with_fix), TEST(configure_first_try), TEST(configure_retries_until_answered),
+		TEST(configure_gives_up), TEST(ubx_crc_checks), TEST(ubx_build_packet),
+		TEST(static_config_messages_valid), TEST(config_is_ubx_only_9600),
+		TEST(time_locked_from_pvt), TEST(time_not_locked_without_fix),
+		TEST(time_not_locked_invalid_or_inaccurate), TEST(time_lock_goes_stale),
+		TEST(time_lock_cleared_by_sleep_and_wake))

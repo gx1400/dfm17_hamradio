@@ -39,7 +39,7 @@
 #define FOX_GPS_SLEEP_TRIES	   3
 
 void fox_gps_start(void);
-void fox_gps_poll(GNSS_StateHandle *GNSS, uint32_t now);
+void fox_gps_poll(const GNSS_StateHandle *GNSS, uint32_t now);
 /* the last 3D fix, or NULL if there hasn't been one */
 GNSS_StateHandle *fox_gps_last_fix(void);
 uint8_t fox_gps_asleep(void);
