@@ -178,7 +178,12 @@ void gpsSleep(void) {
 	uint8_t packet[sizeof(payload) + 4];
 
 	buildUbxPacket(packet, payload, sizeof(payload));
-	HAL_UART_Transmit(GNSS_Handle.huart, packet, sizeof(packet), 100);
+	/* the UART can still be busy with a poll's DMA (e.g. one that timed
+	 * out): the command would be dropped and the GPS stay on (#74) */
+	if (HAL_UART_Transmit(GNSS_Handle.huart, packet, sizeof(packet), 100) != HAL_OK) {
+		HAL_UART_Abort(GNSS_Handle.huart);
+		HAL_UART_Transmit(GNSS_Handle.huart, packet, sizeof(packet), 100);
+	}
 	gpsAsleep = 1;
 	gpsTimeOk = 0;
 }

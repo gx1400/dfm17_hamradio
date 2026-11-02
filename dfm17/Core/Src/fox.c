@@ -34,7 +34,9 @@
 #include "aprs.h"
 #include "cw.h"
 #include "diag.h"
+#include "foxgps.h"
 #include "gpio.h"
+#include "gps.h"
 #include "si4063.h"
 #include "tim.h"
 #include "settings.h"
@@ -54,10 +56,15 @@ static void tx_stop(void) {
 	diag_set_tx(0);
 }
 
+/* the current fix while the GPS is locked, else the last one (it sleeps
+ * between resyncs, foxgps.c), else a status packet */
 static void send_aprs(GNSS_StateHandle *GNSS) {
+	GNSS_StateHandle *last = fox_gps_last_fix();
 	diag_set_tx(1);
-	aprs_prepare_buffer(GNSS, 0);
-	calculate_fcs();
+	if ((ppsLockStatus && GNSS->fixType >= Fix3D) || !last)
+		aprs_prepare_buffer(GNSS, 0);
+	else
+		aprs_prepare_fix(last, 1, 0);
 	tx_aprs();
 	diag_set_tx(0);
 }

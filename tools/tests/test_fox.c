@@ -21,7 +21,20 @@ void si4060_set_cw(uint8_t on) { cw_mode = on; }
 void startAprsTickTimer(void) {}
 void stopAprsTickTimer(void) {}
 void deassertSiGPIO3(void) {}
+volatile uint8_t ppsLockStatus;
+static GNSS_StateHandle *fake_last_fix; /* foxgps.c: the last fix, NULL = none */
+static int from_last_fix;
+GNSS_StateHandle *fox_gps_last_fix(void) {
+	return fake_last_fix;
+}
 uint8_t aprs_prepare_buffer(GNSS_StateHandle *g, uint8_t b) { (void)g; (void)b; return 1; }
+uint8_t aprs_prepare_fix(GNSS_StateHandle *g, uint8_t v, uint8_t b) {
+	(void)g;
+	(void)v;
+	(void)b;
+	from_last_fix++;
+	return 1;
+}
 void calculate_fcs(void) {}
 void tx_aprs(void) { aprs_sent++; }
 
@@ -172,6 +185,31 @@ static void send_now_no_tone(void) {
 	CHECK(!tx_on);
 }
 
+/* the GPS sleeps between resyncs (foxgps.c): APRS then uses the last fix,
+ * the live one while it's locked, and a status packet if there's never been
+ * a fix */
+static void aprs_uses_last_fix_while_gps_sleeps(void) {
+	GNSS_StateHandle g = {0}, last = {0};
+	last.fixType = Fix3D;
+	from_last_fix = 0;
+
+	fake_last_fix = &last;
+	ppsLockStatus = 0;
+	fox_send_now(&g);
+	CHECK_EQ(from_last_fix, 1);
+
+	g.fixType = Fix3D;
+	ppsLockStatus = 1;
+	fox_send_now(&g);
+	CHECK_EQ(from_last_fix, 1);
+
+	fake_last_fix = NULL;
+	ppsLockStatus = 0;
+	g.fixType = NoFix;
+	fox_send_now(&g);
+	CHECK_EQ(from_last_fix, 1);
+}
+
 /* every test runs on a board set up as NZ0P (fake_settings.h) */
 void test_setup(void) {
 	provision();
@@ -179,4 +217,5 @@ void test_setup(void) {
 
 TEST_MAIN("fox", TEST(aprs_every_nth_cycle), TEST(morse_id_decodes), TEST(morse_timing),
 		TEST(hunt_tone_length), TEST(cycle_fits_period), TEST(test_carrier),
-		TEST(test_tone_then_aprs), TEST(send_now_no_tone))
+		TEST(test_tone_then_aprs), TEST(send_now_no_tone),
+		TEST(aprs_uses_last_fix_while_gps_sleeps))

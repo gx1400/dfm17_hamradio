@@ -89,6 +89,7 @@
 #include "aprs.h"
 #include "si4063.h"
 #include "fox.h"
+#include "foxgps.h"
 #include "diag.h"
 #include "gps.h"
 #include "analog.h"
@@ -192,6 +193,7 @@ int main(void)
   uint8_t gpsFailures = 0;
   uint32_t lastAnalog = 0;
   tracker_start();
+  fox_gps_start();
   // first fox transmission right away
   uint32_t lastFox = HAL_GetTick() - cfg.fox_period_s * 1000UL;
   sleep_stats sleep_now = {0};
@@ -308,6 +310,8 @@ int main(void)
 	  if (diag_paused() || console_config_mode()) {
 		  // nothing to do: paused, or config mode on the serial console
 	  } else if (cfg.mode == MODE_FOX) {
+		  // GPS: a fix, then backup with an hourly resync (foxgps.c)
+		  fox_gps_poll(gnss, HAL_GetTick());
 		  if (HAL_GetTick() - lastFox >= cfg.fox_period_s * 1000UL) {
 			  lastFox = HAL_GetTick();
 			  fox_transmit(gnss);
@@ -316,12 +320,17 @@ int main(void)
 		  tracker_poll(gnss);
 	  }
 
-	  // test only (#12): sleep until the next interrupt, as a duty-cycled
-	  // low-power mode would. DWT stops counting while the core sleeps; the
-	  // debug clocks are switched off so an attached ST-Link can't hide that
+	  // on battery, nothing more to do until the next interrupt (SysTick at
+	  // the latest, 1 ms): sleep. The core is about 14 mA running, 7-8 mA
+	  // asleep (#74). Not on USB power, where it doesn't matter and the SWD
+	  // tools are used: STM32_Programmer_CLI in hot-plug mode resets a board
+	  // that sleeps, or switches its APB2 clocks off (#73; pyOCD is fine).
+	  // pps_sleep_test (#12) sleeps on USB too, for measuring, and switches
+	  // the debug clocks off in sleep so an attached ST-Link can't hide it
 	  sleep_now.loops++;
-	  if (pps_sleep_test) {
-		  CLEAR_BIT(DBGMCU->CR, DBGMCU_CR_DBG_SLEEP | DBGMCU_CR_DBG_STOP | DBGMCU_CR_DBG_STANDBY);
+	  if (pps_sleep_test || !analog_last.on_usb) {
+		  if (pps_sleep_test)
+			  CLEAR_BIT(DBGMCU->CR, DBGMCU_CR_DBG_SLEEP | DBGMCU_CR_DBG_STOP | DBGMCU_CR_DBG_STANDBY);
 		  uint16_t t0 = (uint16_t)TIM17->CNT;
 		  __WFI();
 		  // TIM17 free-runs at 1 MHz (delay_us); a wake-up comes well
