@@ -236,3 +236,53 @@ uint8_t posdither_apply(
 		*hmsl_mm += ((int32_t)rand_below(2 * a + 1) - (int32_t)a) * 1000;
 	return 1;
 }
+
+/*
+ * posdither_grid
+ *
+ * the Maidenhead locator of a position, len 2-10 characters (even): field
+ * (A-R), square (0-9), subsquare (a-x), extended square (0-9) and extended
+ * subsquare (a-x). For CW (#72): 8 characters are about 500 x 700 m cells,
+ * 10 about 20 x 30 m. Dither first, then convert, or the cell edges show
+ * where the true point is. Writes len characters and a NUL
+ */
+void posdither_grid(int32_t lat_e7, int32_t lon_e7, uint8_t len, char *out) {
+	/* from the south-west corner, in 1e-7 deg, inside the grid */
+	uint32_t lon = (uint32_t)((int64_t)lon_e7 + 180 * E7);
+	uint32_t lat = (uint32_t)((int64_t)lat_e7 + 90 * E7);
+	if (lon >= 360 * E7)
+		lon = 360 * E7 - 1;
+	if (lat >= 180 * E7)
+		lat = 180 * E7 - 1;
+	char g[10];
+	g[0] = (char)('A' + lon / (20 * E7));
+	g[1] = (char)('A' + lat / (10 * E7));
+	lon %= 20 * E7;
+	lat %= 10 * E7;
+	g[2] = (char)('0' + lon / (2 * E7));
+	g[3] = (char)('0' + lat / E7);
+	/* the rest of a square, scaled: the fraction of the square times 2e7 / 1e7 */
+	lon %= 2 * E7;
+	lat %= E7;
+	lon *= 24;
+	lat *= 24;
+	g[4] = (char)('a' + lon / (2 * E7));
+	g[5] = (char)('a' + lat / E7);
+	lon %= 2 * E7;
+	lat %= E7;
+	lon *= 10;
+	lat *= 10;
+	g[6] = (char)('0' + lon / (2 * E7));
+	g[7] = (char)('0' + lat / E7);
+	lon %= 2 * E7;
+	lat %= E7;
+	lon *= 24;
+	lat *= 24;
+	g[8] = (char)('a' + lon / (2 * E7));
+	g[9] = (char)('a' + lat / E7);
+	if (len > 10)
+		len = 10;
+	for (uint8_t i = 0; i < len; i++)
+		out[i] = g[i];
+	out[len] = 0;
+}

@@ -85,6 +85,9 @@ void settings_defaults(settings_t *s) {
 	s->pos_dither_min_m = 0;
 	s->pos_dither_minutes = 60;
 	s->pos_dither_alt_m = 0;
+	s->hunt_start_mode = HUNT_START_BOOT;
+	s->hunt_start_utc = 0;
+	s->cw_grid_len = 0;
 	for (unsigned i = 0; i < sizeof(s->reserved); i++)
 		s->reserved[i] = 0xFF;
 	s->crc = settings_crc(s);
@@ -202,9 +205,15 @@ enum settings_error settings_check(const settings_t *s) {
 			|| s->tracker_fix_timeout_s >= s->tracker_period_s
 			|| s->tracker_settle_s >= s->tracker_fix_timeout_s)
 		return SETTINGS_ERR_TRACKER_TIMING;
-	/* the tone plus a few seconds of ID and margin must fit in the period */
+	/* the locator after the CW ID: none (0 or erased), or 4-10 characters */
+	uint8_t grid = s->cw_grid_len == 0xFF ? 0 : s->cw_grid_len;
+	if (grid && (grid < 4 || grid > 10 || grid % 2))
+		return SETTINGS_ERR_CW_GRID;
+	/* the tone plus a few seconds of ID and margin, and the locator's Morse,
+	 * must fit in the period */
+	uint32_t grid_ms = (uint32_t)grid * CW_GRID_DITS_PER_CHAR * 1200 / s->cw_wpm;
 	if (s->fox_period_s < 10 || s->fox_tone_ms > 60000
-			|| s->fox_tone_ms + 8000UL > s->fox_period_s * 1000UL)
+			|| s->fox_tone_ms + 8000UL + grid_ms > s->fox_period_s * 1000UL)
 		return SETTINGS_ERR_FOX_TIMING;
 	if (s->gps_power != GPS_POWER_DUTY_CYCLE && s->gps_power != GPS_POWER_ALWAYS_ON
 			&& s->gps_power != GPS_POWER_DEFAULT)
@@ -217,6 +226,13 @@ enum settings_error settings_check(const settings_t *s) {
 			return SETTINGS_ERR_POS_DITHER;
 	} else if (s->pos_dither_mode != POS_DITHER_OFF && s->pos_dither_mode != POS_DITHER_DEFAULT) {
 		return SETTINGS_ERR_POS_DITHER;
+	}
+	if (s->hunt_start_mode == HUNT_START_TIME) {
+		if (s->hunt_start_utc == 0 || s->hunt_start_utc == 0xFFFFFFFFUL)
+			return SETTINGS_ERR_HUNT_START;
+	} else if (s->hunt_start_mode != HUNT_START_BOOT && s->hunt_start_mode != HUNT_START_BUTTON
+			&& s->hunt_start_mode != HUNT_START_DEFAULT) {
+		return SETTINGS_ERR_HUNT_START;
 	}
 	return SETTINGS_OK;
 }

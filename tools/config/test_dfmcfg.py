@@ -45,7 +45,10 @@ def defaults():
         pos_dither_min_m=0,
         pos_dither_minutes=60,
         pos_dither_alt_m=0,
-        reserved=b"\xff" * 8,
+        hunt_start_mode=0,
+        hunt_start_utc=0,
+        cw_grid_len=0,
+        reserved=b"\xff" * 2,
     )
     return d.seal(s)
 
@@ -160,7 +163,7 @@ class Checks(unittest.TestCase):
         ):
             d.apply_assignment(s, a)
         self.assertEqual(d.check(d.seal(s)), "OK")
-        self.assertIn("shrinking, 2000 m to 100 m over 90 min", d.describe(s))
+        self.assertIn("shrinking, 2000 m to 100 m over 90 min from the hunt start", d.describe(s))
         self.assertEqual(d.field_value(s, "pos_dither"), "shrinking")
         for bad in (
             "pos_dither=on",
@@ -187,6 +190,48 @@ class Checks(unittest.TestCase):
         d.apply_assignment(old, "pos_dither=fixed")
         self.assertEqual(d.check(d.seal(old)), "OK")
         self.assertEqual((old["pos_dither_m"], old["pos_dither_minutes"]), (500, 60))
+
+    def test_hunt_start_and_grid(self):
+        # #72: the hunt start (boot, time, button) and the locator after the CW ID
+        s = defaults()
+        self.assertIn("hunt_start    boot", d.describe(s))
+        d.apply_assignment(s, "hunt_start=time")
+        self.assertEqual(d.check(d.seal(dict(s))), "HUNT_START")  # no time yet
+        for when in (
+            "2026-11-04T14:00Z",
+            "2026-11-04T08:00-06:00",
+            "2026-11-04 14:00",
+            "1793800800",
+        ):
+            d.apply_assignment(s, f"hunt_start_utc={when}")
+            self.assertEqual(s["hunt_start_utc"], 1793800800, when)
+        self.assertEqual(d.check(d.seal(s)), "OK")
+        self.assertEqual(d.field_value(s, "hunt_start_utc"), "2026-11-04T14:00:00Z")
+        self.assertIn("hunt_start    time, 2026-11-04T14:00:00Z", d.describe(s))
+        d.apply_assignment(s, "hunt_start=button")
+        self.assertIn("button", d.describe(s))
+        d.apply_assignment(s, "cw_grid_len=8")
+        self.assertEqual(d.check(d.seal(s)), "OK")
+        self.assertEqual(d.field_value(s, "cw_grid_len"), "8")
+        for bad in (
+            "hunt_start=noon",
+            "hunt_start_utc=tomorrow",
+            "cw_grid_len=5",
+            "cw_grid_len=12",
+        ):
+            with self.assertRaises(d.SettingsError, msg=bad):
+                d.apply_assignment(defaults(), bad)
+        cases = [
+            ({"hunt_start_mode": 3}, "HUNT_START"),
+            ({"hunt_start_mode": 0xFF}, "OK"),  # erased: boot
+            ({"cw_grid_len": 2}, "CW_GRID"),
+            ({"cw_grid_len": 0xFF}, "OK"),
+            # 10 characters at 5 WPM (33.6 s) don't fit with a 10 s tone in 30 s
+            ({"cw_grid_len": 10, "cw_wpm": 5}, "FOX_TIMING"),
+            ({"cw_grid_len": 10, "cw_wpm": 5, "fox_period_s": 60}, "OK"),
+        ]
+        for change, want in cases:
+            self.assertEqual(d.check(d.seal(dict(defaults(), **change))), want, change)
 
     def test_lowercase_callsign_uppercased(self):
         s = defaults()

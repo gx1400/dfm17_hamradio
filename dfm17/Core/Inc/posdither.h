@@ -51,4 +51,7 @@ uint32_t posdither_cos_q16(int32_t lat_e7);
 uint8_t posdither_apply(
 		const settings_t *s, uint32_t ms, int32_t *lat_e7, int32_t *lon_e7, int32_t *hmsl_mm);
 
+/* the Maidenhead locator (2-10 characters, even) of a position, for the CW ID */
+void posdither_grid(int32_t lat_e7, int32_t lon_e7, uint8_t len, char *out);
+
 #endif /* INC_POSDITHER_H_ */

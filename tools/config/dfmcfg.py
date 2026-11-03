@@ -28,6 +28,7 @@ the script compares its version string with the board's flash first.
 
 import argparse
 import binascii
+import datetime
 import glob
 import os
 import re
@@ -76,7 +77,10 @@ LAYOUT = [
     ("pos_dither_min_m", 48, "<H"),
     ("pos_dither_minutes", 50, "<H"),
     ("pos_dither_alt_m", 52, "<H"),
-    ("reserved", 54, "8s"),
+    ("hunt_start_mode", 54, "B"),
+    ("hunt_start_utc", 55, "<I"),
+    ("cw_grid_len", 59, "B"),
+    ("reserved", 60, "2s"),
     ("crc", 62, "<H"),
 ]
 
@@ -100,6 +104,8 @@ ERRORS = [
     "EEPROM",
     "GPS_POWER",
     "POS_DITHER",
+    "HUNT_START",
+    "CW_GRID",
 ]
 SOURCES = ["built-in defaults", "EEPROM", "SWD (not saved)"]
 RESULTS = ["none", "OK", "INVALID", "EEPROM", "BAD_CMD"]
@@ -200,10 +206,13 @@ def check(s):
         or s["tracker_settle_s"] >= s["tracker_fix_timeout_s"]
     ):
         return "TRACKER_TIMING"
+    grid = 0 if s["cw_grid_len"] == 0xFF else s["cw_grid_len"]
+    if grid and grid not in CW_GRID_LENS:
+        return "CW_GRID"
     if (
         s["fox_period_s"] < 10
         or s["fox_tone_ms"] > 60000
-        or s["fox_tone_ms"] + 8000 > s["fox_period_s"] * 1000
+        or s["fox_tone_ms"] + 8000 + grid_ms(s) > s["fox_period_s"] * 1000
     ):
         return "FOX_TIMING"
     if s["gps_power"] not in GPS_POWER.values():
@@ -218,6 +227,11 @@ def check(s):
             return "POS_DITHER"
     elif mode not in (DITHER["off"], DITHER_ERASED):
         return "POS_DITHER"
+    if s["hunt_start_mode"] == HUNT["time"]:
+        if s["hunt_start_utc"] in (0, 0xFFFFFFFF):
+            return "HUNT_START"
+    elif s["hunt_start_mode"] not in (HUNT["boot"], HUNT["button"], HUNT_ERASED):
+        return "HUNT_START"
     return "OK"
 
 
@@ -233,10 +247,13 @@ WHY = {
     "DEVIATION": "deviation: 1000-5000 Hz",
     "TRACKER_TIMING": "tracker timing: period >= 30 s, 10 s <= fix timeout < period, "
     "settle < fix timeout",
-    "FOX_TIMING": "fox timing: period >= 10 s, tone <= 60 s, and tone + 8 s must fit in the period",
+    "FOX_TIMING": "fox timing: period >= 10 s, tone <= 60 s, and tone + 8 s (+ the locator's "
+    "Morse with cw_grid_len) must fit in the period",
     "GPS_POWER": "gps_power: default, duty_cycle or always_on",
     "POS_DITHER": "pos_dither: off, fixed or shrinking; radius <= 50000 m, altitude <= 1000 m; "
     "shrinking needs pos_dither_min_m <= pos_dither_m and pos_dither_minutes >= 1",
+    "HUNT_START": "hunt_start: boot, time or button; time needs hunt_start_utc",
+    "CW_GRID": "cw_grid_len: 0 (none), 4, 6, 8 or 10",
 }
 
 
@@ -281,6 +298,60 @@ DITHER_DEFAULTS = {
 }
 
 
+# the hunt start (#72, hunt.c): enum settings_hunt_start; 0xFF (erased) is boot
+HUNT = {"boot": 0, "time": 1, "button": 2}
+HUNT_ERASED = 0xFF
+# the Maidenhead locator after the fox's CW ID; its Morse counts in the fox
+# timing at CW_GRID_DITS_PER_CHAR dits a character (settings.h)
+CW_GRID_LENS = (4, 6, 8, 10)
+CW_GRID_DITS_PER_CHAR = 14
+
+
+def grid_ms(s):
+    grid = 0 if s["cw_grid_len"] == 0xFF else s["cw_grid_len"]
+    return grid * CW_GRID_DITS_PER_CHAR * 1200 // max(s["cw_wpm"], 1)
+
+
+def parse_utc(v):
+    """a hunt start: ISO 8601 (UTC unless it says otherwise, e.g.
+    2026-11-04T14:00Z or 2026-11-04T08:00-06:00), Unix seconds, or none"""
+    v = v.strip()
+    if v.lower() in ("none", "0"):
+        return 0
+    if v.isdigit():
+        t = int(v)
+    else:
+        try:
+            d = datetime.datetime.fromisoformat(v.replace("Z", "+00:00").replace(" ", "T"))
+        except ValueError:
+            raise SettingsError(
+                f"hunt_start_utc: '{v}' isn't a time, e.g. 2026-11-04T14:00Z or 2026-11-04T08:00-06:00"
+            ) from None
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=datetime.UTC)
+        t = int(d.timestamp())
+    if not 0 < t < 0xFFFFFFFF:
+        raise SettingsError(f"hunt_start_utc: {v} is out of range")
+    return t
+
+
+def utc_text(t):
+    if t in (0, 0xFFFFFFFF):
+        return "none"
+    return datetime.datetime.fromtimestamp(t, datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def hunt_text(s):
+    mode = s["hunt_start_mode"]
+    if mode == HUNT["time"]:
+        return f"time, {utc_text(s['hunt_start_utc'])}"
+    if mode == HUNT["button"]:
+        return "button (boots paused; a 3-10 s press starts it)"
+    if mode in (HUNT["boot"], HUNT_ERASED):
+        return "boot"
+    return f"{mode}?"
+
+
 def dither_text(s):
     mode = s["pos_dither_mode"]
     alt = f", altitude +-{s['pos_dither_alt_m']} m" if s["pos_dither_alt_m"] else ""
@@ -289,7 +360,7 @@ def dither_text(s):
     if mode == DITHER["shrinking"]:
         return (
             f"shrinking, {s['pos_dither_m']} m to {s['pos_dither_min_m']} m over "
-            f"{s['pos_dither_minutes']} min from boot{alt}"
+            f"{s['pos_dither_minutes']} min from the hunt start{alt}"
         )
     if mode in (DITHER["off"], DITHER_ERASED):
         return "off (the real position)"
@@ -394,6 +465,17 @@ def apply_assignment(s, item):
         s[name] = parse_int(name, v, 1, 65535)
     elif name == "pos_dither_alt_m":
         s[name] = parse_int(name, v, 0, DITHER_MAX_ALT_M)
+    elif name in ("hunt_start", "hunt_start_mode"):
+        if v.lower() not in HUNT:
+            raise SettingsError(f"hunt_start: '{v}' isn't {', '.join(HUNT)}")
+        s["hunt_start_mode"] = HUNT[v.lower()]
+    elif name == "hunt_start_utc":
+        s[name] = parse_utc(v)
+    elif name == "cw_grid_len":
+        n = parse_int(name, v, 0, 10)
+        if n and n not in CW_GRID_LENS:
+            raise SettingsError(f"cw_grid_len: {n} isn't 0, 4, 6, 8 or 10")
+        s[name] = n
     else:
         raise SettingsError(f"'{name}' isn't a setting (see 'dfmcfg.py fields')")
 
@@ -450,6 +532,8 @@ def describe(s):
             ),
             f"  gps_power     {gps}",
             f"  pos_dither    {dither_text(s)}",
+            f"  hunt_start    {hunt_text(s)}",
+            f"  cw_grid_len   {0 if s['cw_grid_len'] == 0xFF else s['cw_grid_len']}",
         ]
     )
 
@@ -484,10 +568,18 @@ FIELDS_HELP = """settings (name=value):
                          tracker fixes; always_on: never (1PPS kept, ~20-25 mA more)
   pos_dither=off         off, fixed or shrinking (#72): every APRS position is offset at
                          random within a radius, so hunters learn the area, not the spot
-  pos_dither_m=500       the radius, m (<= 50000); when shrinking, the radius at boot
+  pos_dither_m=500       the radius, m (<= 50000); when shrinking, the radius at the start
   pos_dither_min_m=0     shrinking: the radius at the end, m (0 = the real position)
-  pos_dither_minutes=60  shrinking: minutes from boot to the end, linear (>= 1)
-  pos_dither_alt_m=0     altitude offset up to +- this, m (<= 1000)"""
+  pos_dither_minutes=60  shrinking: minutes from the hunt start to the end, linear (>= 1)
+  pos_dither_alt_m=0     altitude offset up to +- this, m (<= 1000)
+  hunt_start=boot        when the hunt starts (#72); before it nothing goes out on the
+                         schedule. boot; time (at hunt_start_utc, from GPS time; with no
+                         GPS time an hour after boot, it starts anyway); button (boots
+                         paused, the first 3-10 s press or "fox start" starts it).
+                         The shrinking dither counts from the start
+  hunt_start_utc=none    time mode: e.g. 2026-11-04T14:00Z or 2026-11-04T08:00-06:00
+  cw_grid_len=0          the Maidenhead locator (of the dithered position) after the
+                         fox's CW ID: 0 none, 4, 6, 8 (~500 m cells) or 10 (~25 m)"""
 
 
 # ---- the analog calibration block (#43) ------------------------------------------
@@ -703,6 +795,9 @@ FIELDS = [
     ("pos_dither_min_m", "Fox", None),
     ("pos_dither_minutes", "Fox", None),
     ("pos_dither_alt_m", "Fox", None),
+    ("hunt_start", "Fox", list(HUNT)),
+    ("hunt_start_utc", "Fox", None),
+    ("cw_grid_len", "Fox", ["0", "4", "6", "8", "10"]),
 ]
 
 
@@ -747,6 +842,17 @@ def field_value(s, name):
         return str(s["dev_hz"])
     if name == "gps_power":
         return next((k for k, v in GPS_POWER.items() if v == s["gps_power"]), str(s["gps_power"]))
+    if name == "hunt_start":
+        mode = s["hunt_start_mode"]
+        return (
+            "boot"
+            if mode == HUNT_ERASED
+            else next((k for k, v in HUNT.items() if v == mode), str(mode))
+        )
+    if name == "hunt_start_utc":
+        return utc_text(s[name])
+    if name == "cw_grid_len":
+        return "0" if s[name] == 0xFF else str(s[name])
     if name == "pos_dither":
         mode = s["pos_dither_mode"]
         return (
@@ -1533,7 +1639,10 @@ def defaults():
         rtty_pa=PA_DEFAULT,
         pos_dither_mode=DITHER["off"],
         **DITHER_DEFAULTS,
-        reserved=b"\xff" * 8,
+        hunt_start_mode=HUNT["boot"],
+        hunt_start_utc=0,
+        cw_grid_len=0,
+        reserved=b"\xff" * 2,
     )
     return seal(s)
 

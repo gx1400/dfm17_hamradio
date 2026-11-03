@@ -39,6 +39,8 @@
 #include "gps.h"
 #include "ppscap.h"
 #include "ppsdisc.h"
+#include "hunt.h"
+#include "posdither.h"
 #include "settings.h"
 #include "si4063.h"
 #include "aprs.h"
@@ -123,6 +125,12 @@ void console_hw_status(void) {
 			(unsigned long)pps_disc_rejected);
 	console_printf("supply %u mV %u mA usb %u mV %d C cal %s\r\n", r->vin_mv, r->iin_ma, r->usb_mv,
 			r->temp_c, from[cal_source]);
+	/* the hunt start and the position dither (#72) */
+	static const char *const hunt_text[]
+			= {"started", "waiting for the time", "waiting for GPS time", "waiting for the button"};
+	uint32_t hunt_ms = hunt_elapsed_ms(HAL_GetTick());
+	console_printf("hunt %s %lu min dither %lu m\r\n", hunt_text[hunt_state_now()],
+			(unsigned long)(hunt_ms / 60000), (unsigned long)posdither_radius_m(&cfg, hunt_ms));
 	console_printf("loop %lu/s wfi %lu/s asleep %lu%%\r\n", (unsigned long)sleep_last.loops,
 			(unsigned long)sleep_last.wfi, (unsigned long)(sleep_last.asleep_us / 10000));
 	/* up: seconds since boot, as the uptime in the APRS packets (#81) */
