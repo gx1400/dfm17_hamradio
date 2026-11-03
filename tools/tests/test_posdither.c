@@ -4,6 +4,7 @@
  * radius, the altitude, and off meaning untouched
  */
 #include <math.h>
+#include <stdlib.h>
 #include "test.h"
 #include "posdither.h"
 #include "fake_settings.h"

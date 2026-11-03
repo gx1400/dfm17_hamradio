@@ -82,7 +82,7 @@ void tracker_start(void) {
 }
 
 /* returns 1 if the packet carried a position */
-static uint8_t send_aprs(GNSS_StateHandle *GNSS) {
+static uint8_t send_aprs(const GNSS_StateHandle *GNSS) {
 	uint8_t position;
 
 	diag_set_tx(1);
@@ -102,7 +102,7 @@ static uint8_t send_aprs(GNSS_StateHandle *GNSS) {
  * current fix if there is one, else this cycle's last fix (the GPS may be
  * asleep: no PPS, so send_aprs() would send a status), else a status
  */
-void tracker_send_now(GNSS_StateHandle *GNSS) {
+void tracker_send_now(const GNSS_StateHandle *GNSS) {
 	diag_set_tx(1);
 	if ((ppsLockStatus && GNSS->fixType >= Fix3D) || !have_last_fix)
 		aprs_prepare_buffer(GNSS, 0);
@@ -117,7 +117,7 @@ void tracker_send_now(GNSS_StateHandle *GNSS) {
  *
  * runs the tracker; call it from the main loop
  */
-void tracker_poll(GNSS_StateHandle *GNSS) {
+void tracker_poll(const GNSS_StateHandle *GNSS) {
 	uint32_t now = HAL_GetTick();
 
 	switch (state) {

@@ -60,8 +60,8 @@ static void tx_stop(void) {
 
 /* the current fix while the GPS is locked, else the last one (it sleeps
  * between resyncs, foxgps.c), else a status packet */
-static void send_aprs(GNSS_StateHandle *GNSS) {
-	GNSS_StateHandle *last = fox_gps_last_fix();
+static void send_aprs(const GNSS_StateHandle *GNSS) {
+	const GNSS_StateHandle *last = fox_gps_last_fix();
 	diag_set_tx(1);
 	if ((ppsLockStatus && GNSS->fixType >= Fix3D) || !last)
 		aprs_prepare_buffer(GNSS, 0);
@@ -78,7 +78,7 @@ static void send_aprs(GNSS_StateHandle *GNSS) {
  * fox_aprs_every-th time (0 = never) an APRS position packet. the caller
  * repeats it every fox_period_s.
  */
-void fox_transmit(GNSS_StateHandle *GNSS) {
+void fox_transmit(const GNSS_StateHandle *GNSS) {
 	tx_start();
 	/* let receiver squelch open before the ID */
 	HAL_Delay(500);
@@ -121,7 +121,7 @@ void fox_test_carrier(void) {
  * button medium press: FOX_TEST_MS of a steady 1200 Hz tone (the APRS mark
  * tone, for checking deviation and audio level), then one APRS packet
  */
-void fox_test_tone_aprs(GNSS_StateHandle *GNSS) {
+void fox_test_tone_aprs(const GNSS_StateHandle *GNSS) {
 	tx_start();
 	tone_half_ticks = FOX_TEST_TONE_HALF_TICKS;
 	HAL_Delay(FOX_TEST_MS);
@@ -137,6 +137,6 @@ void fox_test_tone_aprs(GNSS_StateHandle *GNSS) {
  *
  * send-now trigger (#51): one APRS packet, no test tone
  */
-void fox_send_now(GNSS_StateHandle *GNSS) {
+void fox_send_now(const GNSS_StateHandle *GNSS) {
 	send_aprs(GNSS);
 }

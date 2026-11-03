@@ -217,7 +217,7 @@ void base91_encode_latlon(char *buf, uint32_t value) {
  * checks for validity of the fix (GPS PPS and at least a 2D fix), then works as
  * aprs_prepare_fix().
  */
-uint8_t aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix) {
+uint8_t aprs_prepare_buffer(const GNSS_StateHandle *GNSS, uint8_t backlog_fix) {
 	return aprs_prepare_fix(GNSS, ppsLockStatus && GNSS->fixType >= Fix2D, backlog_fix);
 }
 
@@ -234,7 +234,7 @@ uint8_t aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix) {
  *
  * returns: 1 if the packet carries a position, 0 for a status packet
  */
-uint8_t aprs_prepare_fix(GNSS_StateHandle *GNSS, uint8_t fix_valid, uint8_t backlog_fix) {
+uint8_t aprs_prepare_fix(const GNSS_StateHandle *GNSS, uint8_t fix_valid, uint8_t backlog_fix) {
 	int16_t temp_aprs = 0;
 	uint16_t seq_tmp;
 	static uint16_t aprs_seqnum = 0;

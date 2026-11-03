@@ -50,12 +50,12 @@ void posdither_seed(uint32_t seed) {
 void posdither_stir(uint32_t x) {
 	state ^= x * 0x85EBCA6BUL;
 	state = (state << 13 | state >> 19) * 5 + 0xE6546B64UL;
-	if (!state)
-		state = 0x9E3779B9UL;
 }
 
 /* xorshift32 */
 uint32_t posdither_rand(void) {
+	if (!state) /* a stir can land on 0, where xorshift would stay */
+		state = 0x9E3779B9UL;
 	state ^= state << 13;
 	state ^= state >> 17;
 	state ^= state << 5;

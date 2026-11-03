@@ -35,8 +35,12 @@ static int from_last_fix;
 GNSS_StateHandle *fox_gps_last_fix(void) {
 	return fake_last_fix;
 }
-uint8_t aprs_prepare_buffer(GNSS_StateHandle *g, uint8_t b) { (void)g; (void)b; return 1; }
-uint8_t aprs_prepare_fix(GNSS_StateHandle *g, uint8_t v, uint8_t b) {
+uint8_t aprs_prepare_buffer(const GNSS_StateHandle *g, uint8_t b) {
+	(void)g;
+	(void)b;
+	return 1;
+}
+uint8_t aprs_prepare_fix(const GNSS_StateHandle *g, uint8_t v, uint8_t b) {
 	(void)g;
 	(void)v;
 	(void)b;
