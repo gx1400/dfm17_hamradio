@@ -57,7 +57,7 @@
  * the APRS data buffer
  * contains ASCII data
  */
-static const char aprs_pos_template[APRS_POS_LEN + 1] = "/ddhhmmz/xxxxyyyyOaa1|ss00112233|";
+static const char aprs_pos_template[APRS_POS_LEN + 1] = "/ddhhmmz/xxxxyyyyOaa1Uuuu|ss0011223344|";
 char aprs_buf[APRS_BUF_SIZE];
 /* number of bytes of aprs_buf that are sent */
 uint8_t aprs_len;
@@ -167,6 +167,39 @@ void base91_encode_tlm(char *buf, uint16_t value) {
     buf[1] = 33 + (value % 91);
 }
 
+/* the uptime comment field (#81): seconds since boot in 3 base91 digits */
+void base91_encode_uptime(char *buf, uint32_t value) {
+	value = value % APRS_UPTIME_MOD;
+	buf[0] = 33 + (value / (91 * 91));
+	value = value % (91 * 91);
+	buf[1] = 33 + (value / 91);
+	buf[2] = 33 + (value % 91);
+}
+
+/* seconds since boot, from the HAL tick (wraps after 49.7 days) */
+static uint32_t uptime_s(void) {
+	return HAL_GetTick() / 1000;
+}
+
+/* the number this packet gets among the ones keyed since boot (#79): it is
+ * counted in aprs_packets_sent once it has been sent */
+static uint32_t this_packet(void) {
+	return aprs_packets_sent + 1;
+}
+
+/* writes value in decimal, returns the number of characters */
+static uint8_t u32toav(uint32_t value, char *out) {
+	char tmp[10];
+	uint8_t n = 0, len = 0;
+	do {
+		tmp[n++] = '0' + value % 10;
+		value /= 10;
+	} while (value);
+	while (n)
+		out[len++] = tmp[--n];
+	return len;
+}
+
 void base91_encode_latlon(char *buf, uint32_t value) {
     buf[0] = 33 + (value / ((uint32_t)91*91*91));
     value = value % ((uint32_t)91*91*91);
@@ -254,17 +287,20 @@ uint8_t aprs_prepare_fix(GNSS_StateHandle *GNSS, uint8_t fix_valid, uint8_t back
 	}
 
 	/* telemetry channels: MCU temperature (C + APRS_TLM_TEMP_OFFSET), supply
-	 * voltage in mV, supply current in mA and USB voltage in mV (0 on
-	 * battery), each 0..8280 in base91 */
+	 * voltage in mV, supply current in mA, USB voltage in mV (0 on
+	 * battery) and this packet's number since boot (#79), each 0..8280 in
+	 * base91. the uptime goes in the comment ahead of them (#81) */
 	analog_reading analog;
 	analog_read(&analog);
 	temp_aprs = analog.temp_c + APRS_TLM_TEMP_OFFSET;
 
+	base91_encode_uptime(&aprs_buf[APRS_UPTIME_START], uptime_s());
 	base91_encode_tlm(&aprs_buf[APRS_SEQ_START], seq_tmp);
 	base91_encode_tlm(&aprs_buf[APRS_TEMP_START], (uint16_t)temp_aprs);
 	base91_encode_tlm(&aprs_buf[APRS_VOLT_START], analog.vin_mv);
 	base91_encode_tlm(&aprs_buf[APRS_VSOL_START], analog.iin_ma);
 	base91_encode_tlm(&aprs_buf[APRS_USB_START], analog.on_usb ? analog.usb_mv : 0);
+	base91_encode_tlm(&aprs_buf[APRS_SENT_START], this_packet() % 8281);
 
 	calculate_fcs();
 	return 1;
@@ -274,9 +310,11 @@ uint8_t aprs_prepare_fix(GNSS_StateHandle *GNSS, uint8_t fix_valid, uint8_t back
  * aprs_prepare_status
  *
  * prepares a status packet without a position, for when there is no GPS fix:
- * ">nofix 2D 4sv 4674mV 55mA 30C USB" (GPS fix type and satellites from the
- * last NAV-PVT, or "nopps" without GPS PPS; supply voltage, supply current, MCU
- * temperature, USB or BAT power). the GPS state comes first, a TH-D72 shows only 20 characters.
+ * ">nofix 2D 4sv 4674mV 55mA 30C USB s12 up3723" (GPS fix type and satellites
+ * from the last NAV-PVT, or "nopps" without GPS PPS; supply voltage, supply
+ * current, MCU temperature, USB or BAT power, this packet's number since boot
+ * (#79) and the uptime in s (#81)). the GPS state comes first, a TH-D72 shows
+ * only 20 characters.
  * the station is identified by the source callsign in the header.
  */
 void aprs_prepare_status(const GNSS_StateHandle *GNSS) {
@@ -315,6 +353,13 @@ void aprs_prepare_status(const GNSS_StateHandle *GNSS) {
 	aprs_buf[n++] = 'C';
 	__builtin_memcpy(&aprs_buf[n], analog.on_usb ? " USB" : " BAT", 4);
 	n += 4;
+	/* the packet number (as telemetry channel 5) and the uptime in s */
+	__builtin_memcpy(&aprs_buf[n], " s", 2);
+	n += 2;
+	n += u32toav(this_packet() % 8281, &aprs_buf[n]);
+	__builtin_memcpy(&aprs_buf[n], " up", 3);
+	n += 3;
+	n += u32toav(uptime_s(), &aprs_buf[n]);
 	aprs_len = n;
 
 	calculate_fcs();

@@ -7,8 +7,9 @@ This repo is a development implementation of code to run on a Graw DFM-17 radios
 Current firmware: an APRS tracker on 446.175 MHz by default. Every 5 min it
 wakes the GPS, waits for a 3D fix that has held for 10 s (up to 2 min), sends
 one packet and puts the GPS back into backup. The packet is a position with
-supply voltage, current and temperature telemetry, or a status packet
-(`>nofix 2D 4sv 4672mV 63mA 30C USB`) without a fix. The GPS stays on until it
+supply voltage, current, temperature, USB voltage, packet count and uptime
+telemetry, or a status packet (`>nofix 2D 4sv 4672mV 63mA 30C USB s12 up3723`)
+without a fix. The GPS stays on until it
 has a fix. In fox mode it is a 70 cm fox (Morse ID, hunt tone every 30 s, APRS
 every 5 min). Both have button and LED diagnostics. Tested on hardware with a
 HackRF and Dire Wolf.

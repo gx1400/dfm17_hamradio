@@ -33,7 +33,7 @@ The firmware's diagnostics (`GPS Update!`, …) go to the same port. `log off` s
 |---|---|
 | `help` | the command list |
 | `ver` | `ok DFMFW <version> <variant> proto 1 settings 1 64 cal 1 32 uid <MCU UID> flash <KB>` |
-| `status` | mode, settings, GPS, TCXO correction, supply, counters (a few lines, then `ok …`) |
+| `status` | mode, settings, GPS, TCXO correction, supply, counters (a few lines, then `ok sent <n> refused <n> repairs <n> up <s>`: packets keyed and refused, settings repairs, and the uptime in seconds, as in the APRS telemetry) |
 | `analog` | `ok` + the latest readings: `vin_raw iin_raw vref_raw vdda_mv vin_mv iin_ma temp_c usb_raw usb_mv on_usb` |
 | `log on` / `log off` | the `printf` diagnostics on the port |
 | `fox stop` / `fox start` | pause / resume the fox or tracker, like a long button press |

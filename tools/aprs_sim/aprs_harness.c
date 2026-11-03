@@ -25,6 +25,10 @@ volatile uint8_t ppsLockStatus = 1;
 void startAprsTickTimer(void) {}
 void stopAprsTickTimer(void) {}
 void HAL_Delay(unsigned int ms) { (void)ms; }
+/* 1 h 2 min 3 s after boot, for the uptime field */
+unsigned int HAL_GetTick(void) {
+	return 3723000;
+}
 void toggleSiGPIO3(void) {}
 void deassertSiGPIO3(void) {}
 void ledOnGreen(void) {}
