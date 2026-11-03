@@ -25,6 +25,11 @@ static void call(char c) {
 		calls[ncalls++] = c;
 }
 void si4060_setup(uint8_t mod_type) { (void)mod_type; }
+/* radio_use() (settings_store.c): the mode tuned before a key-up (#82) */
+static int tuned = -1;
+void radio_use(uint8_t tx) {
+	tuned = tx;
+}
 /* the transmit gate (si4063.c): refuse = 1 stands for a refused key-up */
 volatile uint32_t si4060_tx_refused;
 static int refuse;
@@ -463,6 +468,7 @@ static void tx_square_sequence(void) {
 	CHECK(ticks < 200000); /* finished */
 	CHECK_STR(calls, "GTSPtg");
 	CHECK_EQ(toggles, ticks);
+	CHECK_EQ(tuned, TX_APRS); /* on the APRS frequency and PA level (#82) */
 }
 
 /* aprs_packets_sent counts packets that were keyed, not ones the gate refused */

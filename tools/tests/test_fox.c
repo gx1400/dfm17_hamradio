@@ -15,7 +15,15 @@ volatile uint16_t tone_half_ticks;
 static int tx_on, aprs_sent, cw_mode, carrier_ms;
 
 void diag_set_tx(uint8_t on) { tx_on = on; }
-void si4060_start_tx(uint8_t channel) { (void)channel; }
+/* radio_use() (settings_store.c): the mode tuned, and the mode at each key-up */
+static int tuned = -1, keyed = -1;
+void radio_use(uint8_t tx) {
+	tuned = tx;
+}
+void si4060_start_tx(uint8_t channel) {
+	(void)channel;
+	keyed = tuned;
+}
 void si4060_stop_tx(void) {}
 void si4060_set_cw(uint8_t on) { cw_mode = on; }
 void startAprsTickTimer(void) {}
@@ -210,6 +218,17 @@ static void aprs_uses_last_fix_while_gps_sleeps(void) {
 	CHECK_EQ(from_last_fix, 1);
 }
 
+/* #82: the fox's ID and tone, and the button tests, key up on the fox profile */
+static void keys_on_fox_profile(void) {
+	GNSS_StateHandle g = {0};
+	tuned = keyed = -1;
+	fox_transmit(&g);
+	CHECK_EQ(keyed, TX_FOX);
+	keyed = -1;
+	fox_test_carrier();
+	CHECK_EQ(keyed, TX_FOX);
+}
+
 /* every test runs on a board set up as NZ0P (fake_settings.h) */
 void test_setup(void) {
 	provision();
@@ -218,4 +237,4 @@ void test_setup(void) {
 TEST_MAIN("fox", TEST(aprs_every_nth_cycle), TEST(morse_id_decodes), TEST(morse_timing),
 		TEST(hunt_tone_length), TEST(cycle_fits_period), TEST(test_carrier),
 		TEST(test_tone_then_aprs), TEST(send_now_no_tone),
-		TEST(aprs_uses_last_fix_while_gps_sleeps))
+		TEST(aprs_uses_last_fix_while_gps_sleeps), TEST(keys_on_fox_profile))

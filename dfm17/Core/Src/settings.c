@@ -76,6 +76,9 @@ void settings_defaults(settings_t *s) {
 	s->fox_tone_ms = 10000;
 	s->fox_aprs_every = 10;
 	s->gps_power = GPS_POWER_DEFAULT;
+	/* every mode on the main frequency and power (#82) */
+	s->aprs_freq = s->fox_freq = s->rtty_freq = SETTINGS_FREQ_DEFAULT;
+	s->aprs_pa = s->fox_pa = s->rtty_pa = SETTINGS_PA_DEFAULT;
 	for (unsigned i = 0; i < sizeof(s->reserved); i++)
 		s->reserved[i] = 0xFF;
 	s->crc = settings_crc(s);
@@ -175,6 +178,16 @@ enum settings_error settings_check(const settings_t *s) {
 		return SETTINGS_ERR_FREQ;
 	if (s->pa_level > 0x7F)
 		return SETTINGS_ERR_POWER;
+	/* the per-mode profiles (#82): in band and in range, or the main setting */
+	const uint16_t freqs[] = {s->aprs_freq, s->fox_freq, s->rtty_freq};
+	const uint8_t pas[] = {s->aprs_pa, s->fox_pa, s->rtty_pa};
+	for (unsigned i = 0; i < sizeof(freqs) / sizeof(freqs[0]); i++) {
+		if (freqs[i] != SETTINGS_FREQ_DEFAULT
+				&& freqs[i] > (450000000UL - SETTINGS_FREQ_BASE_HZ) / SETTINGS_FREQ_STEP_HZ)
+			return SETTINGS_ERR_FREQ;
+		if (pas[i] != SETTINGS_PA_DEFAULT && pas[i] > 0x7F)
+			return SETTINGS_ERR_POWER;
+	}
 	if (s->cw_wpm < 5 || s->cw_wpm > 40)
 		return SETTINGS_ERR_CW;
 	if (s->dev_hz < 1000 || s->dev_hz > 5000)
@@ -243,4 +256,40 @@ void settings_symbol(const settings_t *s, char *table, char *code) {
 		*table = SYMBOL_TRACKER_TABLE;
 		*code = SYMBOL_TRACKER_CODE;
 	}
+}
+
+/* the transmit mode whose profile the radio is tuned to (settings_radio): the
+ * 1PPS correction retunes to it between transmissions */
+uint8_t settings_tx_now = TX_APRS;
+
+/*
+ * settings_radio
+ *
+ * the frequency and PA level for a transmit mode (#82): the mode's own, or the
+ * main freq_hz / pa_level where the mode's are left at the default
+ */
+void settings_radio(const settings_t *s, uint8_t tx, uint32_t *freq_hz, uint8_t *pa_level) {
+	uint16_t f = SETTINGS_FREQ_DEFAULT;
+	uint8_t pa = SETTINGS_PA_DEFAULT;
+	if (tx == TX_APRS) {
+		f = s->aprs_freq;
+		pa = s->aprs_pa;
+	} else if (tx == TX_FOX) {
+		f = s->fox_freq;
+		pa = s->fox_pa;
+	} else if (tx == TX_RTTY) {
+		f = s->rtty_freq;
+		pa = s->rtty_pa;
+	}
+	*freq_hz = f == SETTINGS_FREQ_DEFAULT ? s->freq_hz
+										  : SETTINGS_FREQ_BASE_HZ + f * SETTINGS_FREQ_STEP_HZ;
+	*pa_level = pa == SETTINGS_PA_DEFAULT ? s->pa_level : pa;
+}
+
+/* the frequency of the profile the radio is tuned to now */
+uint32_t settings_freq_now(void) {
+	uint32_t f;
+	uint8_t pa;
+	settings_radio(&cfg, settings_tx_now, &f, &pa);
+	return f;
 }

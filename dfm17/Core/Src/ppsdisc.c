@@ -155,7 +155,7 @@ void pps_disc_update(void) {
 	if (moved >= PPS_DISC_RETUNE_PPB || moved <= -PPS_DISC_RETUNE_PPB
 			|| (want == 0 && pps_disc_applied_ppb != 0)) {
 		pps_disc_applied_ppb = want;
-		si4060_set_frequency(pps_disc_freq(cfg.freq_hz));
+		si4060_set_frequency(pps_disc_freq(settings_freq_now()));
 	}
 }
 

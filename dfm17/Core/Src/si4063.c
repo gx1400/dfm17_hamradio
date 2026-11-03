@@ -58,9 +58,13 @@ void si4060_config_dfm17(void) {
 	si4060_set_property_16(PROP_MODEM,
 			MODEM_FREQ_OFFSET,
 			0);
-	si4060_set_frequency(cfg.freq_hz);
+	/* the profile of the mode last used (#82); radio_use() retunes per mode */
+	uint32_t f;
+	uint8_t pa;
+	settings_radio(&cfg, settings_tx_now, &f, &pa);
+	si4060_set_frequency(f);
 	si4060_set_deviation(cfg.dev_hz);
-	si4060_set_tx_power(cfg.pa_level);
+	si4060_set_tx_power(pa);
 }
 
 /*

@@ -87,6 +87,24 @@ const swd_info_t swd_info = {
 /* the last settings that passed settings_check(), for the runtime check */
 static settings_t good;
 
+/*
+ * radio_use
+ *
+ * tunes the radio for a transmit mode (enum settings_tx, #82): its frequency,
+ * with the 1PPS correction, and its PA level from settings_radio(). every
+ * key-up path calls it first; between transmissions the 1PPS correction
+ * retunes to the same mode (settings_freq_now)
+ */
+void radio_use(uint8_t tx) {
+	uint32_t f;
+	uint8_t pa;
+	settings_tx_now = tx;
+	settings_radio(&cfg, tx, &f, &pa);
+	si4060_set_frequency(pps_disc_freq(f));
+	si4060_set_deviation(cfg.dev_hz);
+	si4060_set_tx_power(pa);
+}
+
 static uint8_t same_bytes(const void *a, const void *b, unsigned n) {
 	const uint8_t *p = a, *q = b;
 	for (unsigned i = 0; i < n; i++)
@@ -198,9 +216,7 @@ uint8_t settings_apply(const settings_t *s, enum settings_source source) {
 	if (settings_error != SETTINGS_OK)
 		return 0;
 	use(s, source);
-	si4060_set_frequency(pps_disc_freq(cfg.freq_hz));
-	si4060_set_deviation(cfg.dev_hz);
-	si4060_set_tx_power(cfg.pa_level);
+	radio_use(settings_tx_now);
 	print_settings();
 	return 1;
 }
@@ -300,9 +316,7 @@ void settings_poll(void) {
 		settings_repairs++;
 		cfg = good;
 		aprs_set_station();
-		si4060_set_frequency(pps_disc_freq(cfg.freq_hz));
-		si4060_set_deviation(cfg.dev_hz);
-		si4060_set_tx_power(cfg.pa_level);
+		radio_use(settings_tx_now);
 		printf("settings: live settings were changed outside settings_apply, restored\r\n");
 	}
 

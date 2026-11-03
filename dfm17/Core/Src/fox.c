@@ -41,8 +41,10 @@
 #include "tim.h"
 #include "settings.h"
 
-/* key up with the tone off; the carrier sits at one end of the deviation */
+/* key up with the tone off on the fox's frequency and PA level (#82); the
+ * carrier sits at one end of the deviation */
 static void tx_start(void) {
+	radio_use(TX_FOX);
 	diag_set_tx(1);
 	tone_half_ticks = 0;
 	deassertSiGPIO3();
@@ -102,7 +104,8 @@ void fox_transmit(GNSS_StateHandle *GNSS) {
  * fox_test_carrier
  *
  * button short press: FOX_TEST_MS of unmodulated carrier exactly on
- * the settings frequency, a single clean line on an SDR for reading it
+ * the fox's frequency (fox_freq, else freq_hz), a single clean line on an
+ * SDR for reading it
  */
 void fox_test_carrier(void) {
 	si4060_set_cw(1);

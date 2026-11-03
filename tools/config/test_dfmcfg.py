@@ -34,7 +34,13 @@ def defaults():
         fox_tone_ms=10000,
         fox_aprs_every=10,
         gps_power=0xFF,
-        reserved=b"\xff" * 26,
+        aprs_freq=0xFFFF,
+        aprs_pa=0xFF,
+        fox_freq=0xFFFF,
+        fox_pa=0xFF,
+        rtty_freq=0xFFFF,
+        rtty_pa=0xFF,
+        reserved=b"\xff" * 17,
     )
     return d.seal(s)
 
@@ -110,6 +116,31 @@ class Checks(unittest.TestCase):
         self.assertEqual(d.check(d.seal(dict(car))), "OK")
         for change in ({"symbol_table": b"\xff"}, {"symbol_code": b"\xff"}):
             self.assertEqual(d.check(d.seal(dict(car, **change))), "SYMBOL", change)
+
+    def test_mode_radio(self):
+        # #82: a frequency and PA level per transmit mode, default = the main ones
+        s = defaults()
+        for tx in d.TX_MODES:
+            self.assertEqual(d.mode_radio(s, tx), (446175000, 0x20))
+        for a in ("fox_freq=446.0MHz", "fox_power=0", "aprs_power=64", "rtty_freq=432100kHz"):
+            d.apply_assignment(s, a)
+        self.assertEqual(s["fox_freq"], (446_000_000 - 420_000_000) // 500)
+        self.assertEqual(d.mode_radio(s, "fox"), (446_000_000, 0))
+        self.assertEqual(d.mode_radio(s, "aprs"), (446175000, 64))
+        self.assertEqual(d.mode_radio(s, "rtty"), (432_100_000, 0x20))
+        self.assertEqual(d.check(d.seal(s)), "OK")
+        self.assertIn("fox radio     446.0000 MHz, power 0", d.describe(s))
+        self.assertIn("rtty radio    432.1000 MHz, power 32 (default)", d.describe(s))
+        d.apply_assignment(s, "fox_freq=default")
+        d.apply_assignment(s, "aprs_power=default")
+        self.assertEqual((s["fox_freq"], s["aprs_pa"]), (0xFFFF, 0xFF))
+        for bad in ("fox_freq=446.1751MHz", "fox_freq=451MHz", "aprs_power=128", "rtty_power=x"):
+            with self.assertRaises(d.SettingsError, msg=bad):
+                d.apply_assignment(defaults(), bad)
+        # the band edge, and out-of-range blocks, as settings_check() does
+        self.assertEqual(d.check(d.seal(dict(defaults(), aprs_freq=60000))), "OK")
+        self.assertEqual(d.check(d.seal(dict(defaults(), aprs_freq=60001))), "FREQ")
+        self.assertEqual(d.check(d.seal(dict(defaults(), rtty_pa=0x80))), "POWER")
 
     def test_lowercase_callsign_uppercased(self):
         s = defaults()
