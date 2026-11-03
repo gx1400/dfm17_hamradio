@@ -99,6 +99,25 @@ class Gui(unittest.TestCase):
         link = self.app.board.link
         self.assertEqual(d.unpack(link.eeprom)["freq_hz"], 432_100_000)
 
+    def test_serial_edit_apply_save(self):
+        # #50: the same edit, apply and save over the serial console instead of SWD
+        self.app.link.set("simulated serial")
+        self.app.refresh_probes()
+        self.connect()
+        self.assertIsInstance(self.app.board, d.SerialBoard)
+        self.assertIn("DFMFW", self.app.info["firmware"].cget("text"))
+        self.assertEqual(self.app.vars["callsign"].get(), "N0CALL")
+
+        self.app.vars["callsign"].set("nz0p")
+        self.app.vars["freq"].set("432.1MHz")
+        self.app.apply(save=True)
+        self.wait()
+        self.assertEqual(self.app.vars["callsign"].get(), "NZ0P")
+        self.assertFalse(self.app.unsaved())
+        board = self.app.board.link.ser.link  # FakeSerial on top of FakeLink
+        self.assertEqual(d.unpack(board.eeprom)["freq_hz"], 432_100_000)
+        self.assertEqual(d.callsign_str(d.unpack(board.eeprom)), "NZ0P")
+
     def test_bad_value_named(self):
         self.connect()
         self.app.vars["ssid"].set("16")
