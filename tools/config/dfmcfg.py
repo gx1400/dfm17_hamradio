@@ -158,7 +158,9 @@ def check(s):
     if s["ssid"] > 15:
         return "SSID"
     t, c = s["symbol_table"], s["symbol_code"]
-    if not (t in (b"/", b"\\") or b"A" <= t <= b"Z") or not (b"!" <= c <= b"~"):
+    if not symbol_auto(s) and (
+        not (t in (b"/", b"\\") or b"A" <= t <= b"Z") or not (b"!" <= c <= b"~")
+    ):
         return "SYMBOL"
     n, hops = s["path"] >> 4, s["path"] & 0x0F
     if not (1 <= n <= 2 and 1 <= hops <= n):
@@ -194,7 +196,7 @@ def check(s):
 WHY = {
     "CALLSIGN": "callsign: 3-6 of A-Z and 0-9, with at least one letter and one digit",
     "SSID": "ssid: 0-15",
-    "SYMBOL": "symbol: table '/', '\\' or an overlay A-Z, then a printable code, e.g. /O",
+    "SYMBOL": "symbol: auto, or table '/', '\\' or an overlay A-Z, then a printable code, e.g. />",
     "PATH": "path: WIDE1-1, WIDE2-1 or WIDE2-2",
     "MODE": "mode: tracker or fox",
     "FREQ": "freq: 420-450 MHz (the 70 cm band; the radio's output divider covers it)",
@@ -251,8 +253,13 @@ def apply_assignment(s, item):
     elif name == "ssid":
         s["ssid"] = parse_int(name, v, 0, 15)
     elif name == "symbol":
+        if v.lower() == "auto":
+            s["symbol_table"] = s["symbol_code"] = SYMBOL_AUTO
+            return
         if len(v) != 2:
-            raise SettingsError(f"symbol: '{v}' should be two characters, table then code, e.g. /O")
+            raise SettingsError(
+                f"symbol: '{v}' should be two characters, table then code, e.g. />, or auto"
+            )
         s["symbol_table"], s["symbol_code"] = v[0].encode(), v[1].encode()
     elif name == "path":
         if v.upper() not in PATHS:
@@ -289,10 +296,27 @@ def apply_assignment(s, item):
         raise SettingsError(f"'{name}' isn't a setting (see 'dfmcfg.py fields')")
 
 
+# symbol_table and symbol_code both 0xFF: the symbol follows the mode (#80),
+# as settings_symbol() in settings.c does
+SYMBOL_AUTO = b"\xff"
+SYMBOL_BY_MODE = {0: "/>", 1: "/\\"}  # MODES: tracker, fox
+
+
+def symbol_auto(s):
+    return s["symbol_table"] == SYMBOL_AUTO and s["symbol_code"] == SYMBOL_AUTO
+
+
+def symbol_text(s):
+    """the symbol as text; for auto, what the board sends in the current mode"""
+    if symbol_auto(s):
+        return f"auto ({SYMBOL_BY_MODE.get(s['mode'], '/>')} in this mode)"
+    return (s["symbol_table"] + s["symbol_code"]).decode("ascii", "replace")
+
+
 def describe(s):
     path = next((k for k, v in PATHS.items() if v == s["path"]), f"0x{s['path']:02x}?")
     mode = next((k for k, v in MODES.items() if v == s["mode"]), f"{s['mode']}?")
-    sym = (s["symbol_table"] + s["symbol_code"]).decode("ascii", "replace")
+    sym = symbol_text(s)
     gps = next((k for k, v in GPS_POWER.items() if v == s["gps_power"]), f"{s['gps_power']}?")
     if gps == "default":
         gps = "default (duty_cycle)"
@@ -323,7 +347,8 @@ def describe(s):
 FIELDS_HELP = """settings (name=value):
   callsign=NZ0P          3-6 of A-Z 0-9 (lowercase is uppercased), no SSID
   ssid=12                0-15
-  symbol=/O              table then code: /O balloon, /> car, /[ jogger
+  symbol=auto            auto (the default): /\\ DF station in fox mode, /> car in tracker
+                         mode; or a table then a code: /> car, /[ jogger, /O balloon
   path=WIDE1-1           WIDE1-1, WIDE2-1 or WIDE2-2
   mode=tracker           tracker or fox
   start_paused=no        yes: no transmissions until a long button press
@@ -564,7 +589,7 @@ def field_value(s, name):
     if name == "callsign":
         return callsign_str(s)
     if name == "symbol":
-        return (s["symbol_table"] + s["symbol_code"]).decode("ascii", "replace")
+        return "auto" if symbol_auto(s) else symbol_text(s)
     if name == "path":
         return next((k for k, v in PATHS.items() if v == s["path"]), f"0x{s['path']:02x}")
     if name == "mode":
@@ -1334,8 +1359,8 @@ def defaults():
         length=SIZE,
         callsign=b"N0CALL",
         ssid=12,
-        symbol_table=b"/",
-        symbol_code=b"O",
+        symbol_table=SYMBOL_AUTO,
+        symbol_code=SYMBOL_AUTO,
         path=0x11,
         mode=0,
         flags=0,

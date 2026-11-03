@@ -397,6 +397,22 @@ static void station_from_settings(void) {
 	CHECK_EQ(aprs_buf[APRS_SYMBOL_POS], '>');
 }
 
+/* #80: with the default (auto) symbol, the packet carries the mode's symbol */
+static void symbol_follows_mode(void) {
+	GNSS_StateHandle g = fix_3d();
+	ppsLockStatus = 1;
+	cfg.symbol_table = cfg.symbol_code = (char)SETTINGS_SYMBOL_AUTO;
+	cfg.mode = MODE_TRACKER;
+	aprs_prepare_buffer(&g, 0);
+	CHECK_EQ(aprs_buf[APRS_SYMTAB_POS], '/');
+	CHECK_EQ(aprs_buf[APRS_SYMBOL_POS], '>');
+	cfg.mode = MODE_FOX;
+	aprs_prepare_buffer(&g, 0);
+	CHECK_EQ(aprs_buf[APRS_SYMTAB_POS], '/');
+	CHECK_EQ(aprs_buf[APRS_SYMBOL_POS], '\\');
+	cfg.mode = MODE_TRACKER;
+}
+
 /* the full line coding: NRZI, flags, bit stuffing, FCS low byte first */
 static void line_bits_decode_to_frame(int position) {
 	GNSS_StateHandle g = fix_3d();
@@ -499,5 +515,6 @@ TEST_MAIN("aprs", TEST(crc_reference_vector), TEST(base91_telemetry_values),
 		TEST(no_pps_sends_status), TEST(no_fix_status_shows_gps_state),
 		TEST(status_negative_temperature), TEST(status_longest_fits), TEST(fix_2d_is_a_position),
 		TEST(prepare_fix_trusts_caller), TEST(fcs_matches_frame), TEST(header_addresses),
-		TEST(station_from_settings), TEST(line_bits_position), TEST(line_bits_status),
-		TEST(tx_square_sequence), TEST(packets_sent_counted), TEST(send_now_paced))
+		TEST(station_from_settings), TEST(symbol_follows_mode), TEST(line_bits_position),
+		TEST(line_bits_status), TEST(tx_square_sequence), TEST(packets_sent_counted),
+		TEST(send_now_paced))

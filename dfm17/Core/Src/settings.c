@@ -56,8 +56,8 @@ void settings_defaults(settings_t *s) {
 	for (int i = 0; i < 6; i++)
 		s->callsign[i] = call[i];
 	s->ssid = 12;
-	s->symbol_table = '/';
-	s->symbol_code = 'O';
+	s->symbol_table = (char)SETTINGS_SYMBOL_AUTO; /* follows the mode (#80) */
+	s->symbol_code = (char)SETTINGS_SYMBOL_AUTO;
 	s->path = 0x11;
 #ifdef FOX
 	s->mode = MODE_FOX;
@@ -120,6 +120,12 @@ static uint8_t is_digit(char c) {
 	return c >= '0' && c <= '9';
 }
 
+/* both symbol bytes SETTINGS_SYMBOL_AUTO: the symbol follows the mode */
+static uint8_t symbol_auto(const settings_t *s) {
+	return (uint8_t)s->symbol_table == SETTINGS_SYMBOL_AUTO
+			&& (uint8_t)s->symbol_code == SETTINGS_SYMBOL_AUTO;
+}
+
 /* 3-6 of A-Z 0-9 with at least one letter and one digit, then NUL padding */
 static uint8_t callsign_ok(const char *c) {
 	int n = 0, letters = 0, digits = 0;
@@ -156,8 +162,9 @@ enum settings_error settings_check(const settings_t *s) {
 		return SETTINGS_ERR_CALLSIGN;
 	if (s->ssid > 15)
 		return SETTINGS_ERR_SSID;
-	if (!(s->symbol_table == '/' || s->symbol_table == '\\' || is_upper(s->symbol_table))
-			|| s->symbol_code < '!' || s->symbol_code > '~')
+	if (!symbol_auto(s)
+			&& (!(s->symbol_table == '/' || s->symbol_table == '\\' || is_upper(s->symbol_table))
+					|| s->symbol_code < '!' || s->symbol_code > '~'))
 		return SETTINGS_ERR_SYMBOL;
 	uint8_t n = s->path >> 4, hops = s->path & 0x0F;
 	if (n < 1 || n > 2 || hops < 1 || hops > n)
@@ -217,4 +224,23 @@ uint8_t settings_tx_allowed(void) {
 /* keep the GPS on between tracker fixes */
 uint8_t settings_gps_always_on(void) {
 	return cfg.gps_power == GPS_POWER_ALWAYS_ON;
+}
+
+/*
+ * settings_symbol
+ *
+ * the APRS symbol to send: the one set, or with SETTINGS_SYMBOL_AUTO the
+ * mode's: "/\" (DF station) for the fox, "/>" (car) for the tracker (#80)
+ */
+void settings_symbol(const settings_t *s, char *table, char *code) {
+	if (!symbol_auto(s)) {
+		*table = s->symbol_table;
+		*code = s->symbol_code;
+	} else if (s->mode == MODE_FOX) {
+		*table = SYMBOL_FOX_TABLE;
+		*code = SYMBOL_FOX_CODE;
+	} else {
+		*table = SYMBOL_TRACKER_TABLE;
+		*code = SYMBOL_TRACKER_CODE;
+	}
 }
