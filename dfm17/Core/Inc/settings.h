@@ -54,14 +54,22 @@ enum settings_gps_power {
 /* flags */
 #define SETTINGS_FLAG_START_PAUSED 0x01 /* fox/tracker start paused */
 
+/* symbol_table and symbol_code both 0xFF (erased): the symbol follows the
+ * mode (settings_symbol), the default (#80) */
+#define SETTINGS_SYMBOL_AUTO 0xFF
+#define SYMBOL_FOX_TABLE	 '/'
+#define SYMBOL_FOX_CODE		 '\\' /* "/\" triangle, DF station: fox hunting */
+#define SYMBOL_TRACKER_TABLE '/'
+#define SYMBOL_TRACKER_CODE	 '>' /* /> car */
+
 typedef struct __attribute__((packed)) {
 	char magic[2];							  /* "DF" */
 	uint8_t version;						  /* SETTINGS_VERSION */
 	uint8_t length;							  /* SETTINGS_SIZE */
 	char callsign[6];						  /* A-Z 0-9, NUL-padded; "N0CALL" = not set up */
 	uint8_t ssid;							  /* 0-15 */
-	char symbol_table;						  /* '/', '\\' or an overlay A-Z */
-	char symbol_code;						  /* e.g. 'O' balloon, '>' car */
+	char symbol_table; /* '/', '\\', an overlay A-Z, or SETTINGS_SYMBOL_AUTO */
+	char symbol_code;  /* e.g. '>' car; SETTINGS_SYMBOL_AUTO with the table */
 	uint8_t path;							  /* WIDEn-N as 0xnN: 0x11 WIDE1-1, 0x21, 0x22 */
 	uint8_t mode;							  /* enum settings_mode */
 	uint8_t flags;							  /* SETTINGS_FLAG_* */
@@ -133,6 +141,7 @@ uint8_t settings_callsign_set(const settings_t *s);
 const char *settings_callsign(void);
 uint8_t settings_tx_allowed(void);
 uint8_t settings_gps_always_on(void);
+void settings_symbol(const settings_t *s, char *table, char *code);
 
 /* where tools/config (dfmcfg.py, dfmgui.py) finds the SWD mailbox without the
  * build's ELF: it scans flash for the magic (docs/config-gui.md). Append

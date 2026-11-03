@@ -57,7 +57,7 @@ refused. Other options:
 |---|---|---|
 | `callsign` | N0CALL | 3-6 of A-Z, 0-9, with at least one letter and one digit; no SSID. Lowercase is converted. N0CALL means "not set up" |
 | `ssid` | 12 | 0-15 |
-| `symbol` | `/O` (balloon) | table `/`, `\` or an overlay A-Z, then a printable code, e.g. `/>` car |
+| `symbol` | `auto` | `auto`: follows the mode, `/\` (triangle, DF station) for the fox and `/>` (car) for the tracker (#80). Or a fixed symbol: table `/`, `\` or an overlay A-Z, then a printable code, e.g. `/>` car, `/O` balloon |
 | `path` | WIDE1-1 | WIDE1-1, WIDE2-1, WIDE2-2 |
 | `mode` | tracker (fox with `-DFOX`) | tracker, fox |
 | `start_paused` | no | yes: nothing is sent until a long button press |
@@ -114,8 +114,8 @@ data is overwritten, and it's open for phone access since #8). Little-endian:
 | 3 | 1 | length (64) |
 | 4 | 6 | callsign, NUL-padded ASCII |
 | 10 | 1 | SSID |
-| 11 | 1 | symbol table |
-| 12 | 1 | symbol code |
+| 11 | 1 | symbol table (0xFF with the code: auto) |
+| 12 | 1 | symbol code (0xFF with the table: auto) |
 | 13 | 1 | path, `0xnN` for WIDEn-N |
 | 14 | 1 | mode (0 tracker, 1 fox) |
 | 15 | 1 | flags (bit 0: start paused) |

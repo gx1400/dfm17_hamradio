@@ -264,8 +264,7 @@ uint8_t aprs_prepare_fix(GNSS_StateHandle *GNSS, uint8_t fix_valid, uint8_t back
 
 	__builtin_memcpy(aprs_buf, aprs_pos_template, APRS_POS_LEN);
 	aprs_len = APRS_POS_LEN;
-	aprs_buf[APRS_SYMTAB_POS] = cfg.symbol_table;
-	aprs_buf[APRS_SYMBOL_POS] = cfg.symbol_code;
+	settings_symbol(&cfg, &aprs_buf[APRS_SYMTAB_POS], &aprs_buf[APRS_SYMBOL_POS]);
 
 	/* compressed altitude is log1.002(feet), which cannot go below 1 ft */
 	if (alt_ft < 1.0f)

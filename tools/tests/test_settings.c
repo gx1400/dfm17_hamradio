@@ -104,6 +104,41 @@ void test_setup(void) {
 
 /* ---- settings.c ------------------------------------------------------------ */
 
+/* #80: the default symbol is auto, which follows the mode; a symbol that's
+ * set wins; half auto is invalid */
+static void symbol_auto_follows_mode(void) {
+	settings_t s;
+	char t, c;
+	settings_defaults(&s);
+	CHECK_EQ((uint8_t)s.symbol_table, SETTINGS_SYMBOL_AUTO);
+	CHECK_EQ((uint8_t)s.symbol_code, SETTINGS_SYMBOL_AUTO);
+
+	provision_as(&s, "W1AW");
+	s.mode = MODE_TRACKER;
+	settings_symbol(&s, &t, &c);
+	CHECK(t == '/' && c == '>');
+	s.mode = MODE_FOX;
+	settings_symbol(&s, &t, &c);
+	CHECK(t == '/' && c == '\\');
+	settings_seal(&s);
+	CHECK_EQ(settings_check(&s), SETTINGS_OK);
+
+	s.symbol_table = '/';
+	s.symbol_code = 'O';
+	settings_symbol(&s, &t, &c);
+	CHECK(t == '/' && c == 'O');
+	settings_seal(&s);
+	CHECK_EQ(settings_check(&s), SETTINGS_OK);
+
+	s.symbol_table = (char)SETTINGS_SYMBOL_AUTO;
+	settings_seal(&s);
+	CHECK_EQ(settings_check(&s), SETTINGS_ERR_SYMBOL);
+	s.symbol_table = '/';
+	s.symbol_code = (char)SETTINGS_SYMBOL_AUTO;
+	settings_seal(&s);
+	CHECK_EQ(settings_check(&s), SETTINGS_ERR_SYMBOL);
+}
+
 static void defaults_are_valid_but_dont_transmit(void) {
 	settings_t s;
 	settings_defaults(&s);
@@ -290,7 +325,8 @@ static void check_rejects_bad_fields(void) {
 	s.freq_hz = 420000000UL;
 	s.ssid = 15;
 	s.path = 0x21;
-	s.symbol_table = 'A';
+	s.symbol_table = 'A'; /* an overlay */
+	s.symbol_code = '#';
 	s.fox_tone_ms = 22000;
 	settings_seal(&s);
 	CHECK_EQ(settings_check(&s), SETTINGS_OK);
@@ -673,8 +709,8 @@ static void swd_info_points_at_mailbox(void) {
 	CHECK(swd_info.analog_last == &analog_last);
 }
 
-TEST_MAIN("settings", TEST(defaults_are_valid_but_dont_transmit), TEST(crc_matches_python),
-		TEST(check_rejects_bad_fields), TEST(gps_always_on_follows_cfg),
+TEST_MAIN("settings", TEST(defaults_are_valid_but_dont_transmit), TEST(symbol_auto_follows_mode),
+		TEST(crc_matches_python), TEST(check_rejects_bad_fields), TEST(gps_always_on_follows_cfg),
 		TEST(boot_with_erased_eeprom_uses_defaults), TEST(boot_loads_valid_block),
 		TEST(boot_ignores_corrupt_block), TEST(swd_edit_apply_save_reload),
 		TEST(swd_apply_refuses_bad_values), TEST(save_failure_reported),

@@ -18,8 +18,8 @@ def defaults():
         length=64,
         callsign=b"NZ0P\0\0",
         ssid=12,
-        symbol_table=b"/",
-        symbol_code=b"O",
+        symbol_table=b"\xff",  # auto (#80)
+        symbol_code=b"\xff",
         path=0x11,
         mode=0,
         flags=0,
@@ -91,6 +91,25 @@ class Checks(unittest.TestCase):
             self.assertEqual(d.check(d.seal(s)), "OK")
         d.apply_assignment(s, "gps_power=always_on")
         self.assertIn("gps_power     always_on", d.describe(s))
+
+    def test_symbol_auto(self):
+        # #80: auto (both bytes 0xFF) is the default and follows the mode
+        self.assertTrue(d.symbol_auto(d.defaults()))
+        s = defaults()
+        d.apply_assignment(s, "symbol=auto")
+        self.assertEqual((s["symbol_table"], s["symbol_code"]), (b"\xff", b"\xff"))
+        self.assertEqual(d.check(d.seal(s)), "OK")
+        self.assertEqual(d.field_value(s, "symbol"), "auto")
+        self.assertIn("auto (/> in this mode)", d.describe(s))
+        d.apply_assignment(s, "mode=fox")
+        self.assertIn("auto (/\\ in this mode)", d.describe(s))
+        d.apply_assignment(s, "symbol=/>")
+        self.assertEqual(d.field_value(s, "symbol"), "/>")
+        # half auto is refused, as settings_check() does
+        car = dict(defaults(), symbol_table=b"/", symbol_code=b">")
+        self.assertEqual(d.check(d.seal(dict(car))), "OK")
+        for change in ({"symbol_table": b"\xff"}, {"symbol_code": b"\xff"}):
+            self.assertEqual(d.check(d.seal(dict(car, **change))), "SYMBOL", change)
 
     def test_lowercase_callsign_uppercased(self):
         s = defaults()
