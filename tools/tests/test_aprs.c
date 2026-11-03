@@ -80,6 +80,10 @@ static uint32_t base91_4(const char *p) {
 			+ (uint32_t)(p[2] - 33) * 91 + (uint32_t)(p[3] - 33);
 }
 
+static uint32_t base91_3(const char *p) {
+	return (uint32_t)(p[0] - 33) * 91 * 91 + (uint32_t)(p[1] - 33) * 91 + (uint32_t)(p[2] - 33);
+}
+
 static uint16_t base91_2(const char *p) {
 	return (uint16_t)((p[0] - 33) * 91 + (p[1] - 33));
 }
@@ -188,6 +192,52 @@ static void position_packet_fields(void) {
 	CHECK_EQ(base91_2(&aprs_buf[APRS_VOLT_START]), 4672);
 	CHECK_EQ(base91_2(&aprs_buf[APRS_VSOL_START]), 63);
 	CHECK_EQ(base91_2(&aprs_buf[APRS_USB_START]), 5020);
+	CHECK_EQ(base91_2(&aprs_buf[APRS_SENT_START]), 12);
+	/* the uptime comment sits between the position and the telemetry */
+	CHECK_EQ(aprs_buf[APRS_UPTIME_START - 1], 'U');
+	CHECK_EQ(base91_3(&aprs_buf[APRS_UPTIME_START]), 3723);
+}
+
+/* #81: the uptime field wraps after 91^3 s and uses only base91 digits */
+static void uptime_field(void) {
+	char b[3];
+	extern void base91_encode_uptime(char *buf, uint32_t value);
+	base91_encode_uptime(b, 0);
+	CHECK(b[0] == '!' && b[1] == '!' && b[2] == '!');
+	base91_encode_uptime(b, APRS_UPTIME_MOD - 1);
+	CHECK(b[0] == '{' && b[1] == '{' && b[2] == '{');
+	base91_encode_uptime(b, APRS_UPTIME_MOD + 5);
+	CHECK_EQ(base91_3(b), 5);
+
+	/* 9 days after boot: 777600 s, sent modulo 91^3 */
+	GNSS_StateHandle g = fix_3d();
+	ppsLockStatus = 1;
+	fake_tick = 777600000;
+	aprs_prepare_buffer(&g, 0);
+	CHECK_EQ(base91_3(&aprs_buf[APRS_UPTIME_START]), 777600 % APRS_UPTIME_MOD);
+}
+
+static int transmit(void);
+
+/* #79: channel 5 is this packet's number since boot, wrapping like the others */
+static void sent_count_channel(void) {
+	GNSS_StateHandle g = fix_3d();
+	ppsLockStatus = 1;
+	aprs_packets_sent = 41;
+	aprs_prepare_buffer(&g, 0);
+	CHECK_EQ(base91_2(&aprs_buf[APRS_SENT_START]), 42);
+	transmit();
+	aprs_prepare_buffer(&g, 0);
+	CHECK_EQ(base91_2(&aprs_buf[APRS_SENT_START]), 43);
+	/* a refused packet isn't counted, so the next one keeps its number */
+	refuse = 1;
+	transmit();
+	refuse = 0;
+	aprs_prepare_buffer(&g, 0);
+	CHECK_EQ(base91_2(&aprs_buf[APRS_SENT_START]), 43);
+	aprs_packets_sent = 8280;
+	aprs_prepare_buffer(&g, 0);
+	CHECK_EQ(base91_2(&aprs_buf[APRS_SENT_START]), 0);
 }
 
 static void usb_channel_zero_on_battery(void) {
@@ -231,7 +281,7 @@ static void no_pps_sends_status(void) {
 
 	CHECK_EQ(aprs_prepare_buffer(&g, 0), 0);
 	status_text(s);
-	CHECK_STR(s, ">nofix nopps 4672mV 63mA 30C USB");
+	CHECK_STR(s, ">nofix nopps 4672mV 63mA 30C USB s12 up3723");
 }
 
 static void no_fix_status_shows_gps_state(void) {
@@ -243,7 +293,7 @@ static void no_fix_status_shows_gps_state(void) {
 
 	CHECK_EQ(aprs_prepare_buffer(&g, 0), 0);
 	status_text(s);
-	CHECK_STR(s, ">nofix 1D 3sv 4672mV 63mA 30C USB");
+	CHECK_STR(s, ">nofix 1D 3sv 4672mV 63mA 30C USB s12 up3723");
 	/* a TH-D72 shows 20 characters: the GPS state must be among them */
 	CHECK(memcmp(s + 1, "nofix 1D 3sv", 12) == 0);
 }
@@ -259,7 +309,23 @@ static void status_negative_temperature(void) {
 
 	aprs_prepare_buffer(&g, 0);
 	status_text(s);
-	CHECK_STR(s, ">nofix nopps 4672mV 0mA -12C BAT");
+	CHECK_STR(s, ">nofix nopps 4672mV 0mA -12C BAT s12 up3723");
+	fake_analog = saved;
+}
+
+/* the longest status text still fits the buffer */
+static void status_longest_fits(void) {
+	GNSS_StateHandle g = {0};
+	analog_reading saved = fake_analog;
+	fake_analog.vin_mv = 65535;
+	fake_analog.iin_ma = 65535;
+	fake_analog.temp_c = -32767;
+	ppsLockStatus = 0;
+	aprs_packets_sent = 8279;
+	fake_tick = 0xFFFFFFFF; /* 4294967 s */
+	aprs_prepare_buffer(&g, 0);
+	CHECK(aprs_len <= APRS_BUF_SIZE);
+	CHECK(memcmp(&aprs_buf[aprs_len - 16], " s8280 up4294967", 16) == 0);
 	fake_analog = saved;
 }
 
@@ -422,12 +488,16 @@ static void send_now_paced(void) {
 void test_setup(void) {
 	provision();
 	aprs_set_station();
+	fake_tick = 3723000; /* 1 h 2 min 3 s: uptime 3723 */
+	fake_tick_step = 0;
+	aprs_packets_sent = 11; /* the next packet is number 12 */
 }
 
 TEST_MAIN("aprs", TEST(crc_reference_vector), TEST(base91_telemetry_values),
-		TEST(position_packet_fields), TEST(usb_channel_zero_on_battery), TEST(telemetry_sequence),
-		TEST(low_altitude_clamped), TEST(no_pps_sends_status), TEST(no_fix_status_shows_gps_state),
-		TEST(status_negative_temperature), TEST(fix_2d_is_a_position),
+		TEST(position_packet_fields), TEST(uptime_field), TEST(sent_count_channel),
+		TEST(usb_channel_zero_on_battery), TEST(telemetry_sequence), TEST(low_altitude_clamped),
+		TEST(no_pps_sends_status), TEST(no_fix_status_shows_gps_state),
+		TEST(status_negative_temperature), TEST(status_longest_fits), TEST(fix_2d_is_a_position),
 		TEST(prepare_fix_trusts_caller), TEST(fcs_matches_frame), TEST(header_addresses),
 		TEST(station_from_settings), TEST(line_bits_position), TEST(line_bits_status),
 		TEST(tx_square_sequence), TEST(packets_sent_counted), TEST(send_now_paced))

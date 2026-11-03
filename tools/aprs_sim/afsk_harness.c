@@ -27,6 +27,9 @@ static int gpio3;
 void startAprsTickTimer(void) {}
 void stopAprsTickTimer(void) {}
 void HAL_Delay(unsigned int ms) { (void)ms; }
+unsigned int HAL_GetTick(void) {
+	return 0;
+}
 void toggleSiGPIO3(void) { gpio3 ^= 1; }
 void deassertSiGPIO3(void) { gpio3 = 0; }
 void ledOnGreen(void) {}
