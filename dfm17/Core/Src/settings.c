@@ -79,6 +79,12 @@ void settings_defaults(settings_t *s) {
 	/* every mode on the main frequency and power (#82) */
 	s->aprs_freq = s->fox_freq = s->rtty_freq = SETTINGS_FREQ_DEFAULT;
 	s->aprs_pa = s->fox_pa = s->rtty_pa = SETTINGS_PA_DEFAULT;
+	/* the real position; when switched on: 500 m, shrinking to 0 over 1 h */
+	s->pos_dither_mode = POS_DITHER_OFF;
+	s->pos_dither_m = 500;
+	s->pos_dither_min_m = 0;
+	s->pos_dither_minutes = 60;
+	s->pos_dither_alt_m = 0;
 	for (unsigned i = 0; i < sizeof(s->reserved); i++)
 		s->reserved[i] = 0xFF;
 	s->crc = settings_crc(s);
@@ -203,6 +209,15 @@ enum settings_error settings_check(const settings_t *s) {
 	if (s->gps_power != GPS_POWER_DUTY_CYCLE && s->gps_power != GPS_POWER_ALWAYS_ON
 			&& s->gps_power != GPS_POWER_DEFAULT)
 		return SETTINGS_ERR_GPS_POWER;
+	if (s->pos_dither_mode == POS_DITHER_FIXED || s->pos_dither_mode == POS_DITHER_SHRINK) {
+		if (s->pos_dither_m > POS_DITHER_MAX_M || s->pos_dither_alt_m > POS_DITHER_MAX_ALT_M)
+			return SETTINGS_ERR_POS_DITHER;
+		if (s->pos_dither_mode == POS_DITHER_SHRINK
+				&& (s->pos_dither_min_m > s->pos_dither_m || s->pos_dither_minutes == 0))
+			return SETTINGS_ERR_POS_DITHER;
+	} else if (s->pos_dither_mode != POS_DITHER_OFF && s->pos_dither_mode != POS_DITHER_DEFAULT) {
+		return SETTINGS_ERR_POS_DITHER;
+	}
 	return SETTINGS_OK;
 }
 

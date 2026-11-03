@@ -93,9 +93,26 @@ typedef struct __attribute__((packed)) {
 	uint8_t fox_pa;
 	uint16_t rtty_freq; /* RTTY (#53) */
 	uint8_t rtty_pa;
-	uint8_t reserved[SETTINGS_SIZE - 45 - 2]; /* 0xFF */
+	/* position dithering (#72, posdither.c): report a random point within R
+	 * of the box. with the mode off (or 0xFF, erased) the rest is ignored */
+	uint8_t pos_dither_mode;	 /* enum settings_pos_dither */
+	uint16_t pos_dither_m;		 /* R, or R at the start when shrinking, <= 50000 */
+	uint16_t pos_dither_min_m;	 /* shrinking: R at the end, <= pos_dither_m */
+	uint16_t pos_dither_minutes; /* shrinking: from the start (boot) to the end, >= 1 */
+	uint16_t pos_dither_alt_m;	 /* altitude offset up to +-this, <= 1000 */
+	uint8_t reserved[SETTINGS_SIZE - 54 - 2]; /* 0xFF */
 	uint16_t crc;							  /* CRC-16/CCITT-FALSE of the bytes before it */
 } settings_t;
+
+/* pos_dither_mode */
+enum settings_pos_dither {
+	POS_DITHER_OFF = 0,
+	POS_DITHER_FIXED = 1,	   /* within pos_dither_m */
+	POS_DITHER_SHRINK = 2,	   /* pos_dither_m to pos_dither_min_m over pos_dither_minutes */
+	POS_DITHER_DEFAULT = 0xFF, /* erased: off */
+};
+#define POS_DITHER_MAX_M	 50000
+#define POS_DITHER_MAX_ALT_M 1000
 
 /* the transmit modes with a radio profile of their own (settings_radio) */
 enum settings_tx { TX_APRS = 0, TX_FOX = 1, TX_RTTY = 2 };
@@ -113,6 +130,8 @@ _Static_assert(offsetof(settings_t, fox_aprs_every) == 34, "settings_t layout");
 _Static_assert(offsetof(settings_t, gps_power) == 35, "settings_t layout");
 _Static_assert(offsetof(settings_t, aprs_freq) == 36, "settings_t layout");
 _Static_assert(offsetof(settings_t, rtty_pa) == 44, "settings_t layout");
+_Static_assert(offsetof(settings_t, pos_dither_mode) == 45, "settings_t layout");
+_Static_assert(offsetof(settings_t, pos_dither_alt_m) == 52, "settings_t layout");
 _Static_assert(offsetof(settings_t, crc) == SETTINGS_SIZE - 2, "settings_t layout");
 
 /* why a settings block was rejected (settings_check) */
@@ -134,6 +153,7 @@ enum settings_error {
 	SETTINGS_ERR_FOX_TIMING,
 	SETTINGS_ERR_EEPROM, /* the EEPROM didn't answer */
 	SETTINGS_ERR_GPS_POWER,
+	SETTINGS_ERR_POS_DITHER,
 };
 
 /* where the live settings came from */

@@ -52,6 +52,7 @@
 #include "gpio.h"
 #include "analog.h"
 #include "settings.h"
+#include "posdither.h"
 
 /*
  * the APRS data buffer
@@ -241,10 +242,13 @@ uint8_t aprs_prepare_fix(GNSS_StateHandle *GNSS, uint8_t fix_valid, uint8_t back
 	uint8_t day, hour, min;
 
 	if (fix_valid) {
-		/* u-blox PVT: lat/lon in 1e-7 degrees, height above MSL in mm */
-		lat = (float)GNSS->lat / 10000000.0f;
-		lon = (float)GNSS->lon / 10000000.0f;
-		alt_ft = (float)GNSS->hMSL / 1000.0f * 3.28084f;
+		/* u-blox PVT: lat/lon in 1e-7 degrees, height above MSL in mm; offset
+		 * at random when position dithering is on (#72) */
+		int32_t lat_e7 = GNSS->lat, lon_e7 = GNSS->lon, hmsl_mm = GNSS->hMSL;
+		posdither_apply(&cfg, HAL_GetTick(), &lat_e7, &lon_e7, &hmsl_mm);
+		lat = (float)lat_e7 / 10000000.0f;
+		lon = (float)lon_e7 / 10000000.0f;
+		alt_ft = (float)hmsl_mm / 1000.0f * 3.28084f;
 		day = GNSS->day;
 		hour = GNSS->hour;
 		min = GNSS->min;

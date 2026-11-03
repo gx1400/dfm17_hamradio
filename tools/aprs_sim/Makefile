@@ -7,7 +7,7 @@ CFLAGS  = -Wall -O1 -iquote stubs -iquote $(CORE)/Inc -include stubs/GNSS.h
 OUT     = out
 
 # settings.c: the callsign, SSID, path and symbol come from the settings
-FW_SRC  = $(CORE)/Src/aprs.c $(CORE)/Src/string.c $(CORE)/Src/settings.c
+FW_SRC  = $(CORE)/Src/aprs.c $(CORE)/Src/string.c $(CORE)/Src/settings.c $(CORE)/Src/posdither.c
 
 aprs_harness: aprs_harness.c $(FW_SRC) stubs/*.h
 	$(CC) $(CFLAGS) -o $@ aprs_harness.c $(FW_SRC) -lm

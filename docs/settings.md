@@ -75,6 +75,10 @@ refused. Other options:
 | `fox_tone_ms` | 10000 | <= 60000, and tone + 8 s must fit in the period |
 | `fox_aprs_every` | 10 | APRS after every Nth fox cycle; 0 = never (for an actual hunt: APRS gives the fox's position away) |
 | `gps_power` | default (duty_cycle) | `duty_cycle`: the GPS goes into backup mode between tracker fixes; in the fox mode, after the first settled fix, waking every hour to refresh the fix and the time (`foxgps.c`; APRS uses the last fix meanwhile). `always_on`: never; continuous 1PPS for the frequency correction and faster fixes, for about 20-25 mA more (on the stock CR123A cells that shortens the run time noticeably, #15). `default`: duty_cycle for now; #36 may make it switch on USB power |
+| `pos_dither` | off | position dithering for the fox (#72): `fixed` or `shrinking` offsets every APRS position at random, uniform over a disc around the box, a new draw for every packet, so hunters learn the area, not the spot. Averaging many reports still converges on the box (decided: no hidden centre). Applies in any mode |
+| `pos_dither_m` | 500 | the radius, m (up to 50000); when shrinking, the radius at boot. About 500 m suits a walking hunt, 2-5 km a driving one |
+| `pos_dither_min_m`, `pos_dither_minutes` | 0, 60 | shrinking: the radius goes linearly from `pos_dither_m` at boot to `pos_dither_min_m` (0 = the real position) after `pos_dither_minutes`, then stays there. A scheduled hunt start is still to come (#72) |
+| `pos_dither_alt_m` | 0 | the altitude moves by up to +- this many m (up to 1000) |
 
 ## Protection against bad values
 
@@ -139,7 +143,12 @@ data is overwritten, and it's open for phone access since #8). Little-endian:
 | 41 | 1 | fox PA level |
 | 42 | 2 | RTTY frequency |
 | 44 | 1 | RTTY PA level |
-| 45 | 17 | reserved (0xFF) |
+| 45 | 1 | position dither: 0 off, 1 fixed, 2 shrinking, 0xFF (erased) off |
+| 46 | 2 | dither radius, m |
+| 48 | 2 | shrinking: final radius, m |
+| 50 | 2 | shrinking: minutes from boot |
+| 52 | 2 | altitude dither, m |
+| 54 | 8 | reserved (0xFF) |
 | 62 | 2 | CRC-16/CCITT-FALSE of bytes 0-61 (Python: `binascii.crc_hqx(data, 0xFFFF)`) |
 
 `settings_t` in `dfm17/Core/Inc/settings.h` pins these offsets with static
