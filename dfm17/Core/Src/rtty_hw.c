@@ -22,8 +22,10 @@
   * along with this program.  If not, see <http://www.gnu.org/licenses/>.
   *
   ******************************************************************************
-  * The radio is in async direct 2FSK with GPIO3 as the data input (initRadio),
-  * so GPIO3 high and low are the carrier +/- the deviation. With the deviation
+  * The radio is in sync direct 2GFSK with GPIO3 as the data input (initRadio,
+  * si4060_setup): it samples GPIO3 at SI_TX_RATE (13201 Hz) and smooths the
+  * edges with its TX filter, which only rounds them at RTTY bit rates (#54).
+  * GPIO3 high and low are the carrier +/- the deviation. With the deviation
   * set to half the shift, holding GPIO3 for a bit time sends that bit: true
   * FSK, received on SSB (USB), not FM.
   *

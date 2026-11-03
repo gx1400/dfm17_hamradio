@@ -50,6 +50,13 @@ Reading this:
   u-blox MAX-M8C's ~20-25 mA tracking current and the transmitter's PA steps
   both show up at plausible sizes. The scale is the RECESSIM guess; a meter in
   series will confirm it and any offset.
+- **But PB1 doesn't measure the whole board** (DMM in series, 2026-11-01,
+  #74). With the MCU asleep or awake, the DMM moved 4.7 mA while PB1 stayed at
+  29 mA. It does follow the GPS (+22 mA) and the PA, so it presumably senses a
+  branch that feeds the GPS and the radio, not the MCU's 3.3 V. That may also
+  explain its +4 mA calibration offset (#43). **Use `iin_ma` for GPS and
+  transmit deltas only;** for battery-life figures, measure with a meter in the
+  supply line.
 - **PA0 is the supply after a divider**, and it drops 35 mV at full TX power,
   i.e. it sits behind some source resistance (diode, cable, USB charger). With
   USB 5 V in, 2 x 2.33 V = 4.67 V fits 5 V minus a Schottky drop, hence

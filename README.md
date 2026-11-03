@@ -146,7 +146,18 @@ To flash a release build:
    `STM32_Programmer_CLI -c port=SWD -d dfm17-<tag>-<variant>.hex -v -rst`.
    The `.hex` carries its address; a `.bin` needs `0x08000000` after the
    file name. A running board may need `mode=HOTPLUG` and a retry or two.
+   Flash on USB power: on battery, a reset releases the power latch and
+   switches the board off (#44).
 4. Confirm it: `tools/hw_survey/read_version.sh`.
+
+**Don't use STM32_Programmer_CLI on a sleeping board** (#73). The firmware
+sleeps (WFI) between interrupts on battery power, or whenever `pps_sleep_test`
+is set. A CubeProgrammer hot-plug access to a sleeping core has been seen to
+clear `RCC->APB2ENR`, which switches off the clocks to the ADC, USART1, SPI1
+(the radio), the timers and the GPIO ports, and hangs the board. That covers
+flashing, `dfmcfg --link cube`, `tx_test.py` and `read_version.sh`. Instead,
+put the board on USB power first (the firmware doesn't sleep on USB), or use
+pyOCD (`dfmcfg --link pyocd`), which was fine in the same tests.
 
 **Callsign:** release builds start with the callsign N0CALL and don't
 transmit until a board is set up: with the release's settings app, or
