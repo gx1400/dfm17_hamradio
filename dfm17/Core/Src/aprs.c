@@ -53,6 +53,7 @@
 #include "analog.h"
 #include "settings.h"
 #include "posdither.h"
+#include "hunt.h"
 
 /*
  * the APRS data buffer
@@ -243,9 +244,10 @@ uint8_t aprs_prepare_fix(const GNSS_StateHandle *GNSS, uint8_t fix_valid, uint8_
 
 	if (fix_valid) {
 		/* u-blox PVT: lat/lon in 1e-7 degrees, height above MSL in mm; offset
-		 * at random when position dithering is on (#72) */
+		 * at random when position dithering is on (#72), shrinking on the
+		 * hunt's clock (hunt.c) */
 		int32_t lat_e7 = GNSS->lat, lon_e7 = GNSS->lon, hmsl_mm = GNSS->hMSL;
-		posdither_apply(&cfg, HAL_GetTick(), &lat_e7, &lon_e7, &hmsl_mm);
+		posdither_apply(&cfg, hunt_elapsed_ms(HAL_GetTick()), &lat_e7, &lon_e7, &hmsl_mm);
 		lat = (float)lat_e7 / 10000000.0f;
 		lon = (float)lon_e7 / 10000000.0f;
 		alt_ft = (float)hmsl_mm / 1000.0f * 3.28084f;

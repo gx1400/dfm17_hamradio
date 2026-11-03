@@ -76,9 +76,12 @@ refused. Other options:
 | `fox_aprs_every` | 10 | APRS after every Nth fox cycle; 0 = never (for an actual hunt: APRS gives the fox's position away) |
 | `gps_power` | default (duty_cycle) | `duty_cycle`: the GPS goes into backup mode between tracker fixes; in the fox mode, after the first settled fix, waking every hour to refresh the fix and the time (`foxgps.c`; APRS uses the last fix meanwhile). `always_on`: never; continuous 1PPS for the frequency correction and faster fixes, for about 20-25 mA more (on the stock CR123A cells that shortens the run time noticeably, #15). `default`: duty_cycle for now; #36 may make it switch on USB power |
 | `pos_dither` | off | position dithering for the fox (#72): `fixed` or `shrinking` offsets every APRS position at random, uniform over a disc around the box, a new draw for every packet, so hunters learn the area, not the spot. Averaging many reports still converges on the box (decided: no hidden centre). Applies in any mode |
-| `pos_dither_m` | 500 | the radius, m (up to 50000); when shrinking, the radius at boot. About 500 m suits a walking hunt, 2-5 km a driving one |
-| `pos_dither_min_m`, `pos_dither_minutes` | 0, 60 | shrinking: the radius goes linearly from `pos_dither_m` at boot to `pos_dither_min_m` (0 = the real position) after `pos_dither_minutes`, then stays there. A scheduled hunt start is still to come (#72) |
+| `pos_dither_m` | 500 | the radius, m (up to 50000); when shrinking, the radius at the hunt start. About 500 m suits a walking hunt, 2-5 km a driving one |
+| `pos_dither_min_m`, `pos_dither_minutes` | 0, 60 | shrinking: the radius goes linearly from `pos_dither_m` at the hunt start to `pos_dither_min_m` (0 = the real position) after `pos_dither_minutes`, then stays there |
 | `pos_dither_alt_m` | 0 | the altitude moves by up to +- this many m (up to 1000) |
+| `hunt_start` | boot | when the hunt starts (#72, `hunt.c`). Before it nothing goes out on the schedule (the button tests and send-now still work), the GPS still gets its fix and time, and the shrinking dither counts from it. `boot`: at power-up. `time`: at `hunt_start_utc`, from GPS time; booted later, the hunt is already running and its clock counts from the set time; with no GPS time an hour after boot it starts anyway. `button`: the box boots paused and the first resume (a 3-10 s press, or `fox start` on the console) starts it. Once started it runs until the next boot. `status` on the console shows `hunt started 42 min dither 1825 m` or what it's waiting for |
+| `hunt_start_utc` | none | time mode: the start, given as ISO 8601 (`2026-11-04T14:00Z`, or with an offset, `2026-11-04T08:00-06:00`) or Unix seconds; stored as Unix seconds (UTC) |
+| `cw_grid_len` | 0 | the fox's CW ID adds the Maidenhead locator of the (dithered) position: 0 none, 4, 6, 8 (about 500 x 700 m cells) or 10 (about 20 x 30 m), e.g. `NZ0P EM28ou36`. Its Morse counts in the fox timing check |
 
 ## Protection against bad values
 
@@ -148,7 +151,10 @@ data is overwritten, and it's open for phone access since #8). Little-endian:
 | 48 | 2 | shrinking: final radius, m |
 | 50 | 2 | shrinking: minutes from boot |
 | 52 | 2 | altitude dither, m |
-| 54 | 8 | reserved (0xFF) |
+| 54 | 1 | hunt start: 0 boot, 1 time, 2 button, 0xFF (erased) boot |
+| 55 | 4 | hunt start time, Unix seconds (UTC); 0 none |
+| 59 | 1 | CW locator characters: 0, 4, 6, 8, 10; 0xFF (erased) none |
+| 60 | 2 | reserved (0xFF) |
 | 62 | 2 | CRC-16/CCITT-FALSE of bytes 0-61 (Python: `binascii.crc_hqx(data, 0xFFFF)`) |
 
 `settings_t` in `dfm17/Core/Inc/settings.h` pins these offsets with static

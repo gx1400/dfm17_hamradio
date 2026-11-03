@@ -733,6 +733,9 @@ static void write_layout(void) {
 	FIELD(pos_dither_min_m);
 	FIELD(pos_dither_minutes);
 	FIELD(pos_dither_alt_m);
+	FIELD(hunt_start_mode);
+	FIELD(hunt_start_utc);
+	FIELD(cw_grid_len);
 	FIELD(reserved);
 	FIELD(crc);
 #undef FIELD

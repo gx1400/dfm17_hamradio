@@ -99,6 +99,7 @@
 #include "ppscap.h"
 #include "nfc_tool.h"
 #include "console.h"
+#include "hunt.h"
 
 /* USER CODE END Includes */
 
@@ -210,6 +211,11 @@ int main(void)
 #endif
   if (cfg.flags & SETTINGS_FLAG_START_PAUSED)
 	  foxPaused = 1;
+  // the hunt start (#72): at boot, at a set UTC time, or on the button. In
+  // button mode the box boots paused and the first resume starts the hunt
+  hunt_init(HAL_GetTick());
+  if (hunt_starts_paused(&cfg))
+	  foxPaused = 1;
   // from here on diag_paused(): a long button press (or "fox start" on the
   // serial console) resumes the fox/tracker
   diag_set_paused(foxPaused);
@@ -307,16 +313,20 @@ int main(void)
 	  }
 #endif
 
+	  // before the hunt starts (#72) nothing goes out on the schedule; the
+	  // button tests and send-now above still work
+	  uint8_t hunting = hunt_poll(&cfg, gnss, HAL_GetTick(), diag_paused());
 	  if (diag_paused() || console_config_mode()) {
 		  // nothing to do: paused, or config mode on the serial console
 	  } else if (cfg.mode == MODE_FOX) {
-		  // GPS: a fix, then backup with an hourly resync (foxgps.c)
+		  // GPS: a fix, then backup with an hourly resync (foxgps.c); also
+		  // before the start, for the time and the position
 		  fox_gps_poll(gnss, HAL_GetTick());
-		  if (HAL_GetTick() - lastFox >= cfg.fox_period_s * 1000UL) {
+		  if (hunting && HAL_GetTick() - lastFox >= cfg.fox_period_s * 1000UL) {
 			  lastFox = HAL_GetTick();
 			  fox_transmit(gnss);
 		  }
-	  } else {
+	  } else if (hunting) {
 		  tracker_poll(gnss);
 	  }
 

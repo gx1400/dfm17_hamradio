@@ -116,6 +116,29 @@ static void morse_id_decodes(void) {
 	CHECK_STR(text, "NZ0P");
 }
 
+/* #72: with cw_grid_len the ID carries the Maidenhead locator of the
+ * position, the last fix while the GPS sleeps; no fix ever: the callsign */
+static void morse_id_with_grid(void) {
+	char text[24];
+	GNSS_StateHandle g = {0}, last = {0};
+	last.lat = 388613800; /* 38.86138 N, 94.80596 W: EM28ou36 */
+	last.lon = -948059600;
+	cfg.cw_grid_len = 8;
+	ppsLockStatus = 0;
+	fake_last_fix = &last;
+	reset();
+	fox_transmit(&g);
+	decode_morse(text, sizeof(text));
+	CHECK_STR(text, "NZ0PEM28OU36"); /* the decoder drops the word space */
+
+	fake_last_fix = NULL;
+	reset();
+	fox_transmit(&g);
+	decode_morse(text, sizeof(text));
+	CHECK_STR(text, "NZ0P");
+	cfg.cw_grid_len = 0;
+}
+
 static void morse_timing(void) {
 	GNSS_StateHandle g = {0};
 	const uint32_t dit = 1200 / cfg.cw_wpm; /* 80 ms at 15 WPM */
@@ -238,7 +261,7 @@ void test_setup(void) {
 	provision();
 }
 
-TEST_MAIN("fox", TEST(aprs_every_nth_cycle), TEST(morse_id_decodes), TEST(morse_timing),
-		TEST(hunt_tone_length), TEST(cycle_fits_period), TEST(test_carrier),
+TEST_MAIN("fox", TEST(aprs_every_nth_cycle), TEST(morse_id_decodes), TEST(morse_id_with_grid),
+		TEST(morse_timing), TEST(hunt_tone_length), TEST(cycle_fits_period), TEST(test_carrier),
 		TEST(test_tone_then_aprs), TEST(send_now_no_tone),
 		TEST(aprs_uses_last_fix_while_gps_sleeps), TEST(keys_on_fox_profile))

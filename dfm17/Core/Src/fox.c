@@ -40,6 +40,8 @@
 #include "si4063.h"
 #include "tim.h"
 #include "settings.h"
+#include "hunt.h"
+#include "posdither.h"
 
 /* key up with the tone off on the fox's frequency and PA level (#82); the
  * carrier sits at one end of the deviation */
@@ -72,6 +74,34 @@ static void send_aprs(const GNSS_StateHandle *GNSS) {
 }
 
 /*
+ * send_id
+ *
+ * the Morse ID: the callsign, then with cw_grid_len the Maidenhead locator of
+ * the (dithered) position, e.g. "NZ0P EM28ou36" (#72). The position is the
+ * current fix while the GPS is locked, else the last one; none: the callsign
+ */
+static void send_id(const GNSS_StateHandle *GNSS) {
+	char id[6 + 1 + 10 + 1];
+	const char *call = settings_callsign();
+	uint8_t n = 0;
+	while (n < 6 && call[n]) {
+		id[n] = call[n];
+		n++;
+	}
+	id[n] = 0;
+	uint8_t len = cfg.cw_grid_len == 0xFF ? 0 : cfg.cw_grid_len;
+	const GNSS_StateHandle *fix
+			= ppsLockStatus && GNSS->fixType >= Fix3D ? GNSS : fox_gps_last_fix();
+	if (len && fix) {
+		int32_t lat = fix->lat, lon = fix->lon, alt = fix->hMSL;
+		posdither_apply(&cfg, hunt_elapsed_ms(HAL_GetTick()), &lat, &lon, &alt);
+		id[n++] = ' ';
+		posdither_grid(lat, lon, len, &id[n]);
+	}
+	cw_send(id, cfg.cw_wpm);
+}
+
+/*
  * fox_transmit
  *
  * one fox transmission: Morse ID, the hunt tone (fox_tone_ms), then every
@@ -83,7 +113,7 @@ void fox_transmit(const GNSS_StateHandle *GNSS) {
 	/* let receiver squelch open before the ID */
 	HAL_Delay(500);
 
-	cw_send(settings_callsign(), cfg.cw_wpm);
+	send_id(GNSS);
 	HAL_Delay(500);
 
 	cw_tone(1);

@@ -100,7 +100,11 @@ typedef struct __attribute__((packed)) {
 	uint16_t pos_dither_min_m;	 /* shrinking: R at the end, <= pos_dither_m */
 	uint16_t pos_dither_minutes; /* shrinking: from the start (boot) to the end, >= 1 */
 	uint16_t pos_dither_alt_m;	 /* altitude offset up to +-this, <= 1000 */
-	uint8_t reserved[SETTINGS_SIZE - 54 - 2]; /* 0xFF */
+	/* the hunt start (#72, hunt.c) and the locator after the fox's CW ID */
+	uint8_t hunt_start_mode; /* enum settings_hunt_start */
+	uint32_t hunt_start_utc; /* time mode: the start, Unix seconds (UTC) */
+	uint8_t cw_grid_len;	 /* Maidenhead characters after the CW ID: 0, 4-10 even */
+	uint8_t reserved[SETTINGS_SIZE - 60 - 2]; /* 0xFF */
 	uint16_t crc;							  /* CRC-16/CCITT-FALSE of the bytes before it */
 } settings_t;
 
@@ -113,6 +117,17 @@ enum settings_pos_dither {
 };
 #define POS_DITHER_MAX_M	 50000
 #define POS_DITHER_MAX_ALT_M 1000
+
+/* hunt_start_mode */
+enum settings_hunt_start {
+	HUNT_START_BOOT = 0,	   /* at power-up */
+	HUNT_START_TIME = 1,	   /* at hunt_start_utc, from GPS time */
+	HUNT_START_BUTTON = 2,	   /* boots paused; the first resume starts it */
+	HUNT_START_DEFAULT = 0xFF, /* erased: at power-up */
+};
+/* Morse time allowed per locator character in the fox timing check: 14 dits
+ * covers the longest (a digit, 19 dits with the gap) averaged with letters */
+#define CW_GRID_DITS_PER_CHAR 14
 
 /* the transmit modes with a radio profile of their own (settings_radio) */
 enum settings_tx { TX_APRS = 0, TX_FOX = 1, TX_RTTY = 2 };
@@ -132,6 +147,8 @@ _Static_assert(offsetof(settings_t, aprs_freq) == 36, "settings_t layout");
 _Static_assert(offsetof(settings_t, rtty_pa) == 44, "settings_t layout");
 _Static_assert(offsetof(settings_t, pos_dither_mode) == 45, "settings_t layout");
 _Static_assert(offsetof(settings_t, pos_dither_alt_m) == 52, "settings_t layout");
+_Static_assert(offsetof(settings_t, hunt_start_mode) == 54, "settings_t layout");
+_Static_assert(offsetof(settings_t, cw_grid_len) == 59, "settings_t layout");
 _Static_assert(offsetof(settings_t, crc) == SETTINGS_SIZE - 2, "settings_t layout");
 
 /* why a settings block was rejected (settings_check) */
@@ -154,6 +171,8 @@ enum settings_error {
 	SETTINGS_ERR_EEPROM, /* the EEPROM didn't answer */
 	SETTINGS_ERR_GPS_POWER,
 	SETTINGS_ERR_POS_DITHER,
+	SETTINGS_ERR_HUNT_START,
+	SETTINGS_ERR_CW_GRID,
 };
 
 /* where the live settings came from */

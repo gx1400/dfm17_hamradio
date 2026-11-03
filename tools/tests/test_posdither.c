@@ -181,6 +181,36 @@ static void seeding(void) {
 	CHECK(posdither_rand() != 0);
 }
 
+/* Maidenhead locators, against an independent float implementation (Python) */
+static void grid_locators(void) {
+	char g[11];
+	const struct {
+		int32_t lat, lon;
+		const char *want;
+	} cases[] = {
+			{417147750, -727272600, "FN31pr21rn"},	/* W1AW, as on #72 */
+			{389987994, -946819494, "EM28px89dr"},	/* the bench */
+			{388613800, -948059600, "EM28ou36gr"},	/* work, 2026-11-02 */
+			{-338688000, 1512093000, "QF56od51cl"}, /* Sydney */
+			{0, 0, "JJ00aa00aa"},
+	};
+	for (unsigned i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+		posdither_grid(cases[i].lat, cases[i].lon, 10, g);
+		CHECK_STR(g, cases[i].want);
+	}
+	posdither_grid(417147750, -727272600, 4, g);
+	CHECK_STR(g, "FN31");
+	posdither_grid(417147750, -727272600, 6, g);
+	CHECK_STR(g, "FN31pr");
+	posdither_grid(417147750, -727272600, 8, g);
+	CHECK_STR(g, "FN31pr21");
+	/* the corners stay in the grid */
+	posdither_grid(900000000, 1800000000, 10, g);
+	CHECK_STR(g, "RR99xx99xx");
+	posdither_grid(-900000000, -1800000000, 10, g);
+	CHECK_STR(g, "AA00aa00aa");
+}
+
 /* settings_check: the limits, and the rest ignored while off */
 static void settings_limits(void) {
 	settings_t s;
@@ -215,4 +245,4 @@ static void settings_limits(void) {
 
 TEST_MAIN("posdither", TEST(off_leaves_position), TEST(within_radius_and_uniform),
 		TEST(longitude_scale), TEST(wraps_at_date_line), TEST(shrinking_radius), TEST(altitude),
-		TEST(seeding), TEST(settings_limits))
+		TEST(seeding), TEST(grid_locators), TEST(settings_limits))
