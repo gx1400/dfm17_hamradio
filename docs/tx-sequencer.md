@@ -88,22 +88,17 @@ now.
 
 ### EEPROM space
 
-The M24LR04E has 512 B. The free space is:
+The M24LR04E has 512 B; the full map is in
+[settings.md](settings.md#eeprom-map). Since the analog calibration (#43)
+took 0x160–0x17F, only **0x1C0–0x1FF (64 B)** is free. It's shared by the
+sequence, the RTTY fixed message (#53) and the stored 1PPS correction (#18).
+For example:
 
-| Range | Size | |
-|---|---|---|
-| 0x000–0x15F | 352 B | Graw factory data: don't touch |
-| 0x160–0x17F | 32 B | free; sector 2 is NFC-locked by Graw, which doesn't matter over I2C |
-| 0x180–0x1BF | 64 B | settings block |
-| 0x1C0–0x1FF | 64 B | free; sector 3 is open to NFC since #8 |
+- the sequence alone: up to 13 steps;
+- 8 steps and a ~16 B message, with 4 B left for the 1PPS correction.
 
-About 96 B is free, shared by the sequence, the RTTY fixed message (#53) and
-the calibration factors (#43). Two ways to split it:
-
-- **A:** the sequence at 0x1C0, up to 13 steps, or 8 steps and a ~20 B
-  message; calibration in 0x160.
-- **B:** the sequence at 0x160, up to 5 steps; the message and calibration
-  at 0x1C0.
+If that's too tight, the other option is Graw's backed-up area
+(0x000–0x15F), which means giving up the factory data on that board.
 
 ## To discuss when working the issues
 

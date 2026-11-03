@@ -222,10 +222,41 @@ open to a phone, unlike sector 3). Little-endian:
 sensor and VREFINT use the datasheet's typical values (the reserved bytes
 leave room for them).
 
-## Not yet (issue #18)
+## EEPROM map
 
-- The telemetry sequence counter and the learned 1PPS correction kept in the
-  EEPROM (board block).
-- The board serial (EEPROM 0x088) in the APRS comment.
-- Reloading after a phone writes the settings over NFC (PC13).
-- Programs: several fox/test recipes and a scheduler.
+The M24LR04E-R has 512 bytes of user memory in 4 sectors of 128 bytes,
+reached over I2C at 0x53 with 16-bit addresses. The MCU writes any sector
+over I2C without a password. Over NFC, Graw locked every sector, and sector 3
+can be opened (#8, [nfc-sector-lock.md](tests/nfc-sector-lock.md)). Board 1's
+contents are in `docs/data/`
+([hardware-investigation.md](hardware-investigation.md#eeprom-u12-st-m24lr04e-r)
+decodes them).
+
+| Range | Size | Sector | Contents |
+|---|---|---|---|
+| 0x000-0x0B7 | 184 B | 0, 1 | Graw configuration bytes, including the board serial at 0x088 (`20050128`, the PCB label). **Don't write** |
+| 0x0B8-0x157 | 160 B | 1, 2 | Graw's IEEE-754 doubles, probably the sensor boom's calibration. **Don't write** |
+| 0x158-0x15F | 8 B | 2 | erased on board 1, but kept with Graw's region, in case another board uses it |
+| 0x160-0x17F | 32 B | 2 | [analog calibration](#analog-calibration) (#43), magic `CA` |
+| 0x180-0x1BF | 64 B | 3 | [settings](#layout) (#18), magic `DF` |
+| 0x1C0-0x1FF | 64 B | 3 | **free.** Wanted by the sequencer (#56, [tx-sequencer.md](tx-sequencer.md)), the RTTY fixed message (#53) and the stored 1PPS correction (#18); to be shared out when #56 is designed |
+
+Each block of ours has its own magic, layout version, length and CRC, so an
+erased or foreign block is recognised and ignored. Inside the blocks, the
+spare bytes are the 2 reserved settings bytes (60-61) and 3 calibration bytes
+(23, 28-29).
+
+Back up a board before its first write: `tools/hw_survey/eeprom_backup.sh`,
+which reads the user memory and the system area. Board 1's backup is in
+`docs/data/`; board 2's isn't yet.
+
+## Not yet
+
+- The learned 1PPS correction kept in the EEPROM, so the box is on frequency
+  before the GPS has a fix (#18; where it goes waits for #56).
+- Reloading after a phone writes the settings over NFC (PC13): #8 and #64.
+- Programs: several fox/test recipes and a scheduler: #56.
+
+Decided against (#18): the board serial in the APRS comment, since the
+comment carries the uptime and telemetry; and keeping the packet number
+across resets, since the uptime (#81) already shows a reboot from APRS-IS.
