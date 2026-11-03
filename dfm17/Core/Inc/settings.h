@@ -84,9 +84,25 @@ typedef struct __attribute__((packed)) {
 	uint16_t fox_tone_ms;					  /* hunt tone length, <= 60000 */
 	uint8_t fox_aprs_every;					  /* APRS after every Nth fox cycle, 0 = never */
 	uint8_t gps_power;						  /* enum settings_gps_power */
-	uint8_t reserved[SETTINGS_SIZE - 36 - 2]; /* 0xFF */
+	/* a frequency and PA level per transmit mode (#82): frequencies in
+	 * SETTINGS_FREQ_STEP_HZ steps above SETTINGS_FREQ_BASE_HZ, 0xFFFF = freq_hz;
+	 * PA levels 0x00-0x7F, 0xFF = pa_level. erased (0xFF) blocks use the main ones */
+	uint16_t aprs_freq; /* APRS packets: tracker, fox APRS, send-now */
+	uint8_t aprs_pa;
+	uint16_t fox_freq; /* the fox's CW ID and hunt tone, the button tests */
+	uint8_t fox_pa;
+	uint16_t rtty_freq; /* RTTY (#53) */
+	uint8_t rtty_pa;
+	uint8_t reserved[SETTINGS_SIZE - 45 - 2]; /* 0xFF */
 	uint16_t crc;							  /* CRC-16/CCITT-FALSE of the bytes before it */
 } settings_t;
+
+/* the transmit modes with a radio profile of their own (settings_radio) */
+enum settings_tx { TX_APRS = 0, TX_FOX = 1, TX_RTTY = 2 };
+#define SETTINGS_FREQ_BASE_HZ 420000000UL
+#define SETTINGS_FREQ_STEP_HZ 500UL
+#define SETTINGS_FREQ_DEFAULT 0xFFFF /* use freq_hz */
+#define SETTINGS_PA_DEFAULT	  0xFF	 /* use pa_level */
 
 /* the layout is shared with tools/config/dfmcfg.py: pin it */
 _Static_assert(sizeof(settings_t) == SETTINGS_SIZE, "settings_t size");
@@ -95,6 +111,8 @@ _Static_assert(offsetof(settings_t, freq_hz) == 16, "settings_t layout");
 _Static_assert(offsetof(settings_t, dev_hz) == 22, "settings_t layout");
 _Static_assert(offsetof(settings_t, fox_aprs_every) == 34, "settings_t layout");
 _Static_assert(offsetof(settings_t, gps_power) == 35, "settings_t layout");
+_Static_assert(offsetof(settings_t, aprs_freq) == 36, "settings_t layout");
+_Static_assert(offsetof(settings_t, rtty_pa) == 44, "settings_t layout");
 _Static_assert(offsetof(settings_t, crc) == SETTINGS_SIZE - 2, "settings_t layout");
 
 /* why a settings block was rejected (settings_check) */
@@ -142,6 +160,9 @@ const char *settings_callsign(void);
 uint8_t settings_tx_allowed(void);
 uint8_t settings_gps_always_on(void);
 void settings_symbol(const settings_t *s, char *table, char *code);
+void settings_radio(const settings_t *s, uint8_t tx, uint32_t *freq_hz, uint8_t *pa_level);
+uint32_t settings_freq_now(void);
+extern uint8_t settings_tx_now; /* enum settings_tx the radio is tuned for */
 
 /* where tools/config (dfmcfg.py, dfmgui.py) finds the SWD mailbox without the
  * build's ELF: it scans flash for the magic (docs/config-gui.md). Append
@@ -209,6 +230,7 @@ void settings_init(void);
 uint8_t settings_apply(const settings_t *s, enum settings_source source);
 void settings_poll(void);
 uint8_t settings_command(uint8_t cmd);
+void radio_use(uint8_t tx);
 extern settings_t settings_edit;
 extern cal_t cal_edit;
 

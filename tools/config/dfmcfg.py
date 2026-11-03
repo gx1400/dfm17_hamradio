@@ -65,7 +65,13 @@ LAYOUT = [
     ("fox_tone_ms", 32, "<H"),
     ("fox_aprs_every", 34, "B"),
     ("gps_power", 35, "B"),
-    ("reserved", 36, "26s"),
+    ("aprs_freq", 36, "<H"),
+    ("aprs_pa", 38, "B"),
+    ("fox_freq", 39, "<H"),
+    ("fox_pa", 41, "B"),
+    ("rtty_freq", 42, "<H"),
+    ("rtty_pa", 44, "B"),
+    ("reserved", 45, "17s"),
     ("crc", 62, "<H"),
 ]
 
@@ -171,6 +177,12 @@ def check(s):
         return "FREQ"
     if s["pa_level"] > 0x7F:
         return "POWER"
+    for tx in TX_MODES:
+        f, pa = s[f"{tx}_freq"], s[f"{tx}_pa"]
+        if f != FREQ_DEFAULT and f > (450_000_000 - FREQ_BASE_HZ) // FREQ_STEP_HZ:
+            return "FREQ"
+        if pa != PA_DEFAULT and pa > 0x7F:
+            return "POWER"
     if not 5 <= s["cw_wpm"] <= 40:
         return "CW"
     if not 1000 <= s["dev_hz"] <= 5000:
@@ -218,6 +230,23 @@ def parse_int(name, v, lo, hi):
     if not lo <= n <= hi:
         raise SettingsError(f"{name}: {n} is outside {lo}-{hi}")
     return n
+
+
+# a frequency and PA level per transmit mode (#82), as settings_radio() in
+# settings.c: frequencies in 500 Hz steps above 420 MHz, 0xFFFF = freq; PA
+# levels 0-127, 0xFF = power
+TX_MODES = ("aprs", "fox", "rtty")
+FREQ_BASE_HZ = 420_000_000
+FREQ_STEP_HZ = 500
+FREQ_DEFAULT = 0xFFFF
+PA_DEFAULT = 0xFF
+
+
+def mode_radio(s, tx):
+    """(frequency in Hz, PA level) a transmit mode uses"""
+    f, pa = s[f"{tx}_freq"], s[f"{tx}_pa"]
+    hz = s["freq_hz"] if f == FREQ_DEFAULT else FREQ_BASE_HZ + f * FREQ_STEP_HZ
+    return hz, s["pa_level"] if pa == PA_DEFAULT else pa
 
 
 def parse_freq(v):
@@ -276,6 +305,17 @@ def apply_assignment(s, item):
         s["flags"] = (s["flags"] & ~FLAG_START_PAUSED) | (FLAG_START_PAUSED if on else 0)
     elif name in ("freq", "freq_hz"):
         s["freq_hz"] = parse_freq(v)
+    elif name in tuple(f"{tx}_freq" for tx in TX_MODES):
+        if v.lower() == "default":
+            s[name] = FREQ_DEFAULT
+        else:
+            hz = parse_freq(v)
+            if hz % FREQ_STEP_HZ:
+                raise SettingsError(f"{name}: {hz} Hz isn't a multiple of {FREQ_STEP_HZ} Hz")
+            s[name] = (hz - FREQ_BASE_HZ) // FREQ_STEP_HZ
+    elif name in tuple(f"{tx}_power" for tx in TX_MODES):
+        pa_name = name.replace("_power", "_pa")
+        s[pa_name] = PA_DEFAULT if v.lower() == "default" else parse_int(name, v, 0, 0x7F)
     elif name in ("power", "pa_level"):
         s["pa_level"] = parse_int(name, v, 0, 0x7F)
     elif name == "cw_wpm":
@@ -329,6 +369,13 @@ def describe(s):
             + ("  (starts paused)" if s["flags"] & FLAG_START_PAUSED else ""),
             f"  freq          {s['freq_hz']} Hz ({s['freq_hz'] / 1e6:.4f} MHz)",
             f"  power         {s['pa_level']} (0x{s['pa_level']:02X})",
+            *(
+                f"  {tx + ' radio':<13} {mode_radio(s, tx)[0] / 1e6:.4f} MHz"
+                + ("" if s[f"{tx}_freq"] != FREQ_DEFAULT else " (default)")
+                + f", power {mode_radio(s, tx)[1]}"
+                + ("" if s[f"{tx}_pa"] != PA_DEFAULT else " (default)")
+                for tx in TX_MODES
+            ),
             f"  deviation     {s['dev_hz']} Hz",
             f"  cw_wpm        {s['cw_wpm']}",
             (
@@ -354,6 +401,14 @@ FIELDS_HELP = """settings (name=value):
   start_paused=no        yes: no transmissions until a long button press
   freq=446.175MHz        420-450 MHz; whole Hz, or with a unit (kHz, MHz)
   power=32               PA level 0-127 (0x7F)
+  aprs_freq=default      a frequency per transmit mode (#82): APRS packets (aprs_),
+                         the fox's ID and tone and the button tests (fox_), RTTY
+                         (rtty_). default = freq; else 420-450 MHz in 500 Hz steps
+  aprs_power=default     a PA level per transmit mode: default = power, else 0-127
+  fox_freq=default       the fox's ID and hunt tone (and the button test carrier)
+  fox_power=default      PA level for the fox: default = power, else 0-127
+  rtty_freq=default      RTTY (#53): default = freq, else 420-450 MHz
+  rtty_power=default     PA level for RTTY: default = power, else 0-127
   deviation=2600         Hz, 1000-5000
   cw_wpm=15              5-40
   tracker_period_s=300   >= 30
@@ -559,6 +614,12 @@ FIELDS = [
     ("start_paused", "Station", ["no", "yes"]),
     ("freq", "Radio", None),
     ("power", "Radio", None),
+    ("aprs_freq", "Radio", None),
+    ("aprs_power", "Radio", None),
+    ("fox_freq", "Radio", None),
+    ("fox_power", "Radio", None),
+    ("rtty_freq", "Radio", None),
+    ("rtty_power", "Radio", None),
     ("deviation", "Radio", None),
     ("cw_wpm", "Radio", None),
     ("tracker_period_s", "Tracker", None),
@@ -600,6 +661,14 @@ def field_value(s, name):
         return f"{s['freq_hz'] / 1e6:.6f}".rstrip("0").rstrip(".") + "MHz"
     if name == "power":
         return str(s["pa_level"])
+    if name.endswith("_freq") and name[:-5] in TX_MODES:
+        if s[name] == FREQ_DEFAULT:
+            return "default"
+        hz = FREQ_BASE_HZ + s[name] * FREQ_STEP_HZ
+        return f"{hz / 1e6:.6f}".rstrip("0").rstrip(".") + "MHz"
+    if name.endswith("_power") and name[:-6] in TX_MODES:
+        pa = s[name[:-6] + "_pa"]
+        return "default" if pa == PA_DEFAULT else str(pa)
     if name == "deviation":
         return str(s["dev_hz"])
     if name == "gps_power":
@@ -1375,7 +1444,13 @@ def defaults():
         fox_tone_ms=10000,
         fox_aprs_every=10,
         gps_power=0xFF,
-        reserved=b"\xff" * 26,
+        aprs_freq=FREQ_DEFAULT,
+        aprs_pa=PA_DEFAULT,
+        fox_freq=FREQ_DEFAULT,
+        fox_pa=PA_DEFAULT,
+        rtty_freq=FREQ_DEFAULT,
+        rtty_pa=PA_DEFAULT,
+        reserved=b"\xff" * 17,
     )
     return seal(s)
 

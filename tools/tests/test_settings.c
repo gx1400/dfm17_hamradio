@@ -139,6 +139,69 @@ static void symbol_auto_follows_mode(void) {
 	CHECK_EQ(settings_check(&s), SETTINGS_ERR_SYMBOL);
 }
 
+/* #82: a frequency and PA level per transmit mode, defaulting to the main ones */
+static void radio_profiles(void) {
+	settings_t s;
+	uint32_t f;
+	uint8_t pa;
+	settings_defaults(&s);
+	CHECK_EQ(s.aprs_freq, SETTINGS_FREQ_DEFAULT);
+	CHECK_EQ(s.fox_pa, SETTINGS_PA_DEFAULT);
+	CHECK_EQ(s.rtty_freq, SETTINGS_FREQ_DEFAULT);
+
+	provision_as(&s, "W1AW");
+	for (uint8_t tx = TX_APRS; tx <= TX_RTTY; tx++) {
+		settings_radio(&s, tx, &f, &pa);
+		CHECK_EQ(f, s.freq_hz);
+		CHECK_EQ(pa, s.pa_level);
+	}
+	/* the fox low and on its own frequency, APRS higher, RTTY on 432.1 MHz */
+	s.fox_freq = (446000000UL - SETTINGS_FREQ_BASE_HZ) / SETTINGS_FREQ_STEP_HZ;
+	s.fox_pa = 0x00;
+	s.aprs_pa = 0x40;
+	s.rtty_freq = (432100000UL - SETTINGS_FREQ_BASE_HZ) / SETTINGS_FREQ_STEP_HZ;
+	settings_seal(&s);
+	CHECK_EQ(settings_check(&s), SETTINGS_OK);
+	settings_radio(&s, TX_FOX, &f, &pa);
+	CHECK_EQ(f, 446000000UL);
+	CHECK_EQ(pa, 0x00);
+	settings_radio(&s, TX_APRS, &f, &pa);
+	CHECK_EQ(f, s.freq_hz); /* frequency left at the default */
+	CHECK_EQ(pa, 0x40);
+	settings_radio(&s, TX_RTTY, &f, &pa);
+	CHECK_EQ(f, 432100000UL);
+	CHECK_EQ(pa, s.pa_level);
+
+	/* the band edges: 450.0 MHz is the last valid step */
+	s.aprs_freq = (450000000UL - SETTINGS_FREQ_BASE_HZ) / SETTINGS_FREQ_STEP_HZ;
+	settings_seal(&s);
+	CHECK_EQ(settings_check(&s), SETTINGS_OK);
+	s.aprs_freq++;
+	settings_seal(&s);
+	CHECK_EQ(settings_check(&s), SETTINGS_ERR_FREQ);
+	s.aprs_freq = 0; /* 420.0 MHz */
+	s.rtty_pa = 0x80;
+	settings_seal(&s);
+	CHECK_EQ(settings_check(&s), SETTINGS_ERR_POWER);
+	s.rtty_pa = 0x7F;
+	settings_seal(&s);
+	CHECK_EQ(settings_check(&s), SETTINGS_OK);
+
+	/* radio_use() tunes the radio to the mode's profile, and the 1PPS retune
+	 * between transmissions follows it */
+	s.rtty_pa = SETTINGS_PA_DEFAULT;
+	settings_seal(&s);
+	CHECK(settings_apply(&s, SETTINGS_FROM_SWD));
+	radio_use(TX_FOX);
+	CHECK_EQ(radio_freq, 446000000UL);
+	CHECK_EQ(radio_pa, 0x00);
+	CHECK_EQ(settings_freq_now(), 446000000UL);
+	radio_use(TX_APRS);
+	CHECK_EQ(radio_freq, 420000000UL);
+	CHECK_EQ(radio_pa, 0x40);
+	CHECK_EQ(settings_freq_now(), 420000000UL);
+}
+
 static void defaults_are_valid_but_dont_transmit(void) {
 	settings_t s;
 	settings_defaults(&s);
@@ -659,6 +722,12 @@ static void write_layout(void) {
 	FIELD(fox_tone_ms);
 	FIELD(fox_aprs_every);
 	FIELD(gps_power);
+	FIELD(aprs_freq);
+	FIELD(aprs_pa);
+	FIELD(fox_freq);
+	FIELD(fox_pa);
+	FIELD(rtty_freq);
+	FIELD(rtty_pa);
 	FIELD(reserved);
 	FIELD(crc);
 #undef FIELD
@@ -710,11 +779,11 @@ static void swd_info_points_at_mailbox(void) {
 }
 
 TEST_MAIN("settings", TEST(defaults_are_valid_but_dont_transmit), TEST(symbol_auto_follows_mode),
-		TEST(crc_matches_python), TEST(check_rejects_bad_fields), TEST(gps_always_on_follows_cfg),
-		TEST(boot_with_erased_eeprom_uses_defaults), TEST(boot_loads_valid_block),
-		TEST(boot_ignores_corrupt_block), TEST(swd_edit_apply_save_reload),
-		TEST(swd_apply_refuses_bad_values), TEST(save_failure_reported),
-		TEST(runtime_check_restores_settings), TEST(boot_loads_calibration),
-		TEST(swd_cal_edit_apply_save_reload), TEST(swd_cal_apply_refuses_out_of_range),
-		TEST(settings_commands_leave_calibration_alone), TEST(cal_eeprom_failures_reported),
-		TEST(swd_info_points_at_mailbox), TEST(write_layout), )
+		TEST(radio_profiles), TEST(crc_matches_python), TEST(check_rejects_bad_fields),
+		TEST(gps_always_on_follows_cfg), TEST(boot_with_erased_eeprom_uses_defaults),
+		TEST(boot_loads_valid_block), TEST(boot_ignores_corrupt_block),
+		TEST(swd_edit_apply_save_reload), TEST(swd_apply_refuses_bad_values),
+		TEST(save_failure_reported), TEST(runtime_check_restores_settings),
+		TEST(boot_loads_calibration), TEST(swd_cal_edit_apply_save_reload),
+		TEST(swd_cal_apply_refuses_out_of_range), TEST(settings_commands_leave_calibration_alone),
+		TEST(cal_eeprom_failures_reported), TEST(swd_info_points_at_mailbox), TEST(write_layout), )

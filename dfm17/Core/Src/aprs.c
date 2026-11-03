@@ -501,9 +501,11 @@ void aprs_tx_start(void) {
 	deassertSiGPIO3();
 	startAprsTickTimer();
 
-	/* radio was set up once in initRadio(): async direct 2FSK, GPIO3 drives the
+	/* radio was set up once in initRadio(): direct 2GFSK, GPIO3 drives the
 	 * deviation. not re-running si4060_setup() here avoids reconfiguring GPIO2,
-	 * whose DIV_CLK output clocks the STM32 */
+	 * whose DIV_CLK output clocks the STM32. only the APRS frequency and PA
+	 * level are set (#82) */
+	radio_use(TX_APRS);
 	si4060_start_tx(0);
 	/* add some TX delay */
 	HAL_Delay(250);

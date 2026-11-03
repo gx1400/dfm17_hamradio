@@ -63,6 +63,9 @@ refused. Other options:
 | `start_paused` | no | yes: nothing is sent until a long button press |
 | `freq` | 446.175 MHz | 420-450 MHz, given in whole Hz (`446175000`) or with a unit (`446.175MHz`, `432500kHz`); a bare `446.175` is refused |
 | `power` | 32 (0x20) | Si4063 PA level 0-127 |
+| `aprs_freq`, `aprs_power` | default | APRS packets (tracker, fox APRS, send-now): their own frequency and PA level (#82). `default` = `freq` / `power`; else 420-450 MHz in 500 Hz steps, PA 0-127 |
+| `fox_freq`, `fox_power` | default | the fox's CW ID and hunt tone, and the button test carrier and tone. The CW ID always goes out on the tone's frequency, so the hunt frequency is identified |
+| `rtty_freq`, `rtty_power` | default | RTTY, for the RTTY mode to come (#53); stored now, not used yet |
 | `deviation` | 2600 Hz | 1000-5000 Hz |
 | `cw_wpm` | 15 | 5-40 |
 | `tracker_period_s` | 300 | >= 30 |
@@ -130,7 +133,13 @@ data is overwritten, and it's open for phone access since #8). Little-endian:
 | 32 | 2 | fox tone, ms |
 | 34 | 1 | APRS every Nth fox cycle |
 | 35 | 1 | GPS power: 0 duty cycle, 1 always on, 0xFF default |
-| 36 | 26 | reserved (0xFF) |
+| 36 | 2 | APRS frequency: (Hz - 420 MHz) / 500, 0xFFFF = frequency |
+| 38 | 1 | APRS PA level, 0xFF = PA level |
+| 39 | 2 | fox frequency, as APRS |
+| 41 | 1 | fox PA level |
+| 42 | 2 | RTTY frequency |
+| 44 | 1 | RTTY PA level |
+| 45 | 17 | reserved (0xFF) |
 | 62 | 2 | CRC-16/CCITT-FALSE of bytes 0-61 (Python: `binascii.crc_hqx(data, 0xFFFF)`) |
 
 `settings_t` in `dfm17/Core/Inc/settings.h` pins these offsets with static
