@@ -66,17 +66,32 @@ Reading this:
 
 ### APRS telemetry (implemented)
 
-`aprs_prepare_buffer()` now fills the existing base91 telemetry extension
-`|ss tt vv ii|` with real values (each 0-8280):
+`aprs_prepare_buffer()` fills the base91 telemetry extension
+`|ss tt vv ii uu nn|` with real values (each 0-8280), after an uptime field
+in the comment:
 
 | Field | Value |
 |---|---|
-| ss | sequence number |
+| `U` + 3 chars | uptime in s since boot, base91 (wraps after 91³ s, about 8.7 days, #81) |
+| ss | sequence number (position packets since boot) |
 | tt | MCU temperature + 512 (C) |
 | vv | supply voltage, mV |
 | ii | supply current, mA |
+| uu | USB VBUS, mV (0 on battery) |
+| nn | this packet's number among all packets keyed since boot: positions, status, button and send-now (#79) |
 
-Over the air on 2026-10-29 (HackRF, Dire Wolf):
+- **A gap in `nn`** between two received packets means packets were sent and not heard.
+- **`nn` and the uptime dropping back to small values** mean the board restarted.
+- **Status packets** (no fix) carry both as text: `>nofix 2D 4sv 4672mV 63mA 30C USB s12 up3723`.
+
+Dire Wolf decodes both packets (`decode_aprs`):
+
+```
+NZ0P-12>APZDFM,WIDE1-1:/282145z/:cEF6V]&O_61U!It|!"&yT4!WX0!"|
+  Seq=1, A1=543, A2=4660, A3=54, A4=5020, A5=1   (comment "U!It": uptime 3723 s)
+```
+
+Over the air on 2026-10-29 (HackRF, Dire Wolf), before the uptime field and the 5th channel:
 
 ```
 NZ0P-12>APZDFM,WIDE1-1:/290433z/:h%M6T=WOFR1|!#&xTB!X|

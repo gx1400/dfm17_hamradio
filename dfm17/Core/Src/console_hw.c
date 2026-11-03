@@ -125,8 +125,10 @@ void console_hw_status(void) {
 			r->temp_c, from[cal_source]);
 	console_printf("loop %lu/s wfi %lu/s asleep %lu%%\r\n", (unsigned long)sleep_last.loops,
 			(unsigned long)sleep_last.wfi, (unsigned long)(sleep_last.asleep_us / 10000));
-	console_printf("ok sent %lu refused %lu repairs %lu\r\n", (unsigned long)aprs_packets_sent,
-			(unsigned long)si4060_tx_refused, (unsigned long)settings_repairs);
+	/* up: seconds since boot, as the uptime in the APRS packets (#81) */
+	console_printf("ok sent %lu refused %lu repairs %lu up %lu\r\n",
+			(unsigned long)aprs_packets_sent, (unsigned long)si4060_tx_refused,
+			(unsigned long)settings_repairs, (unsigned long)(HAL_GetTick() / 1000));
 }
 
 void console_hw_reset(void) {

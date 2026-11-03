@@ -98,7 +98,7 @@ void aprs_set_station(void);
 
 /*
  * position packet length
- * example: /ddhhmmz/xxxxyyyyOaa1|ss00112233|
+ * example: /ddhhmmz/xxxxyyyyOaa1Uuuu|ss0011223344|
  * 1 report indicator (real time, no APRS messaging)
  * 2 + 2 + 2 + 1: day / hour / minute / zulu time indicator
  * 1 symbol table
@@ -106,15 +106,19 @@ void aprs_set_station(void);
  * 4 lon
  * 1 symbol
  * 3 compressed alt + indicator
+ * 1 + 3 comment: 'U' and the uptime in s, base91 (wraps after 91^3 s, 8.7 days, #81)
  * 1 tlm delimiter
  * 2 tlm sequence id
  * 2 tlm temperature
  * 2 tlm supply voltage (mV)
  * 2 tlm supply current (mA)
  * 2 tlm USB voltage (mV, 0 on battery)
+ * 2 tlm packets sent since boot, this one included (#79)
  * 1 tlm delimiter
  */
-#define APRS_POS_LEN	(1 + 7 + 1 + 4 + 4 + 1 + 3 + 1 + 2 + 2 + 2 + 2 + 2 + 1)
+#define APRS_POS_LEN	(1 + 7 + 1 + 4 + 4 + 1 + 3 + 4 + 1 + 2 + 2 + 2 + 2 + 2 + 2 + 1)
+/* the uptime field wraps after 91^3 s */
+#define APRS_UPTIME_MOD (91UL * 91 * 91)
 /* room for the position packet or a status packet (">" and text) */
 #define APRS_BUF_SIZE	64
 
@@ -126,16 +130,18 @@ void aprs_set_station(void);
 #define APRS_LON_LEN	4
 #define APRS_ALT_START	18
 #define APRS_ALT_LEN	2
-#define APRS_SEQ_START	22
+#define APRS_UPTIME_START 22
+#define APRS_SEQ_START	  26
 #define APRS_SEQ_LEN	1
-#define APRS_TEMP_START	24
+#define APRS_TEMP_START	  28
 #define APRS_TEMP_LEN	1
-#define APRS_VOLT_START	26
+#define APRS_VOLT_START	  30
 #define APRS_VOLT_LEN	1
-#define APRS_VSOL_START	28
+#define APRS_VSOL_START	  32
 #define APRS_VSOL_LEN	1
-#define APRS_USB_START	30
+#define APRS_USB_START	  34
 #define APRS_USB_LEN	1
+#define APRS_SENT_START	  36
 
 #define AX25_SFLAGS	75
 #define AX25_EFLAGS	2

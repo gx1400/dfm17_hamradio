@@ -4,4 +4,5 @@
 void startAprsTickTimer(void);
 void stopAprsTickTimer(void);
 void HAL_Delay(unsigned int ms);
+unsigned int HAL_GetTick(void);
 #endif

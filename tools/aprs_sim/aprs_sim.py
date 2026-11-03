@@ -100,12 +100,15 @@ def decode_position(info):
         f"\n  time {info[1:3]}d {info[3:5]}:{info[5:7]}z  "
         f"lat {lat:.5f}  lon {lon:.5f}  alt {alt_ft * 0.3048:.0f} m"
     )
-    # base91 telemetry |ss tt vv ii uu|: sequence, temp + 512, supply mV,
-    # supply mA, USB mV (0 on battery)
-    if len(info) >= 33 and info[21] == "|" and info[32] == "|":
-        seq, temp, vin, iin, usb = (b91(info[i : i + 2]) for i in range(22, 32, 2))
+    # comment "U" + uptime in s, 3 base91 digits (#81), then the base91
+    # telemetry |ss tt vv ii uu nn|: sequence, temp + 512, supply mV, supply mA,
+    # USB mV (0 on battery), this packet's number since boot (#79)
+    if len(info) >= 39 and info[21] == "U" and info[25] == "|" and info[38] == "|":
+        seq, temp, vin, iin, usb, sent = (b91(info[i : i + 2]) for i in range(26, 38, 2))
         out += (
-            f"\n  telemetry seq {seq}  temp {temp - 512} C  supply {vin} mV  {iin} mA  USB {usb} mV"
+            f"\n  uptime {b91(info[22:25])} s"
+            f"\n  telemetry seq {seq}  temp {temp - 512} C  supply {vin} mV  {iin} mA"
+            f"  USB {usb} mV  packet {sent}"
         )
     return out
 
