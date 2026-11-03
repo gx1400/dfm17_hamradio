@@ -39,7 +39,7 @@
  *   better position after a hot start; NAV-PVT is polled every 5 s (10 s) */
 
 void tracker_start(void);
-void tracker_poll(GNSS_StateHandle *GNSS);
-void tracker_send_now(GNSS_StateHandle *GNSS);
+void tracker_poll(const GNSS_StateHandle *GNSS);
+void tracker_send_now(const GNSS_StateHandle *GNSS);
 
 #endif /* INC_TRACKER_H_ */

@@ -33,8 +33,8 @@
 #include <inttypes.h>
 #include "GNSS.h"
 
-uint8_t aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix);
-uint8_t aprs_prepare_fix(GNSS_StateHandle *GNSS, uint8_t fix_valid, uint8_t backlog_fix);
+uint8_t aprs_prepare_buffer(const GNSS_StateHandle *GNSS, uint8_t backlog_fix);
+uint8_t aprs_prepare_fix(const GNSS_StateHandle *GNSS, uint8_t fix_valid, uint8_t backlog_fix);
 void aprs_prepare_status(const GNSS_StateHandle *GNSS);
 
 /* send-now trigger (#51): write N over SWD to send N APRS packets right

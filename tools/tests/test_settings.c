@@ -728,6 +728,11 @@ static void write_layout(void) {
 	FIELD(fox_pa);
 	FIELD(rtty_freq);
 	FIELD(rtty_pa);
+	FIELD(pos_dither_mode);
+	FIELD(pos_dither_m);
+	FIELD(pos_dither_min_m);
+	FIELD(pos_dither_minutes);
+	FIELD(pos_dither_alt_m);
 	FIELD(reserved);
 	FIELD(crc);
 #undef FIELD

@@ -40,6 +40,7 @@
 #include "settings.h"
 #include "ppscap.h"
 #include "console.h"
+#include "posdither.h"
 
 
 extern UART_HandleTypeDef huart2;
@@ -52,6 +53,24 @@ extern uint8_t rxDone;
  * read back over SWD */
 //#define RADIO_CLOCK_PROBE
 void radio_clock_probe(void);
+
+/*
+ * seed_dither
+ *
+ * seeds the position-dithering PRNG (#72) so the offsets differ on every boot:
+ * the chip's unique ID, then the noisy low bits of the ADC readings mixed with
+ * the SysTick and cycle counters. 1PPS timing samples stir it later (ppsdisc.c)
+ */
+static void seed_dither(void) {
+	const uint32_t *uid = (const uint32_t *)UID_BASE;
+	posdither_seed(uid[0] ^ (uid[1] << 7) ^ (uid[2] << 13));
+	for (int i = 0; i < 8; i++) {
+		analog_reading r;
+		analog_read(&r);
+		posdither_stir(r.vin_raw ^ ((uint32_t)r.iin_raw << 12) ^ ((uint32_t)r.vref_raw << 20)
+				^ ((uint32_t)r.usb_raw << 6) ^ SysTick->VAL ^ DWT->CYCCNT);
+	}
+}
 
 /* set by the clock security system when the Si4063 clock on OSC_IN stops */
 static volatile uint8_t radioClockLost = 0;
@@ -97,6 +116,7 @@ void initHw(void) {
 
 	// timestamp the GPS PPS with TIM4 input capture (1PPS discipline, #12)
 	pps_capture_init();
+	seed_dither();
 
 	// initialize GPS chip
 	printf("Starting ublox...\r\n");

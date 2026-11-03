@@ -52,6 +52,7 @@
 #include "gpio.h"
 #include "analog.h"
 #include "settings.h"
+#include "posdither.h"
 
 /*
  * the APRS data buffer
@@ -216,7 +217,7 @@ void base91_encode_latlon(char *buf, uint32_t value) {
  * checks for validity of the fix (GPS PPS and at least a 2D fix), then works as
  * aprs_prepare_fix().
  */
-uint8_t aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix) {
+uint8_t aprs_prepare_buffer(const GNSS_StateHandle *GNSS, uint8_t backlog_fix) {
 	return aprs_prepare_fix(GNSS, ppsLockStatus && GNSS->fixType >= Fix2D, backlog_fix);
 }
 
@@ -233,7 +234,7 @@ uint8_t aprs_prepare_buffer(GNSS_StateHandle *GNSS, uint8_t backlog_fix) {
  *
  * returns: 1 if the packet carries a position, 0 for a status packet
  */
-uint8_t aprs_prepare_fix(GNSS_StateHandle *GNSS, uint8_t fix_valid, uint8_t backlog_fix) {
+uint8_t aprs_prepare_fix(const GNSS_StateHandle *GNSS, uint8_t fix_valid, uint8_t backlog_fix) {
 	int16_t temp_aprs = 0;
 	uint16_t seq_tmp;
 	static uint16_t aprs_seqnum = 0;
@@ -241,10 +242,13 @@ uint8_t aprs_prepare_fix(GNSS_StateHandle *GNSS, uint8_t fix_valid, uint8_t back
 	uint8_t day, hour, min;
 
 	if (fix_valid) {
-		/* u-blox PVT: lat/lon in 1e-7 degrees, height above MSL in mm */
-		lat = (float)GNSS->lat / 10000000.0f;
-		lon = (float)GNSS->lon / 10000000.0f;
-		alt_ft = (float)GNSS->hMSL / 1000.0f * 3.28084f;
+		/* u-blox PVT: lat/lon in 1e-7 degrees, height above MSL in mm; offset
+		 * at random when position dithering is on (#72) */
+		int32_t lat_e7 = GNSS->lat, lon_e7 = GNSS->lon, hmsl_mm = GNSS->hMSL;
+		posdither_apply(&cfg, HAL_GetTick(), &lat_e7, &lon_e7, &hmsl_mm);
+		lat = (float)lat_e7 / 10000000.0f;
+		lon = (float)lon_e7 / 10000000.0f;
+		alt_ft = (float)hmsl_mm / 1000.0f * 3.28084f;
 		day = GNSS->day;
 		hour = GNSS->hour;
 		min = GNSS->min;

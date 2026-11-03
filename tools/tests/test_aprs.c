@@ -418,6 +418,29 @@ static void symbol_follows_mode(void) {
 	cfg.mode = MODE_TRACKER;
 }
 
+/* #72: with position dithering on, the packet's position moves, within R */
+static void position_dithered(void) {
+	GNSS_StateHandle g = fix_3d();
+	ppsLockStatus = 1;
+	cfg.pos_dither_mode = POS_DITHER_FIXED;
+	cfg.pos_dither_m = 500;
+	int moved = 0;
+	for (int i = 0; i < 50; i++) {
+		aprs_prepare_buffer(&g, 0);
+		double lat = 90.0 - base91_4(&aprs_buf[APRS_LAT_START]) / 380926.0;
+		double lon = base91_4(&aprs_buf[APRS_LON_START]) / 190463.0 - 180.0;
+		double north = (lat - 38.9987994) * 111320.0;
+		double east = (lon + 94.6819494) * 111320.0 * cos(38.9987994 * M_PI / 180.0);
+		double d = sqrt(north * north + east * east);
+		CHECK(d < 500.0 + 1.0); /* plus the compressed format's ~0.3 m */
+		moved += d > 2.0;
+	}
+	CHECK(moved > 45);
+	cfg.pos_dither_mode = POS_DITHER_OFF;
+	aprs_prepare_buffer(&g, 0);
+	CHECK_NEAR(90.0 - base91_4(&aprs_buf[APRS_LAT_START]) / 380926.0, 38.9987994, 1e-5);
+}
+
 /* the full line coding: NRZI, flags, bit stuffing, FCS low byte first */
 static void line_bits_decode_to_frame(int position) {
 	GNSS_StateHandle g = fix_3d();
@@ -521,6 +544,6 @@ TEST_MAIN("aprs", TEST(crc_reference_vector), TEST(base91_telemetry_values),
 		TEST(no_pps_sends_status), TEST(no_fix_status_shows_gps_state),
 		TEST(status_negative_temperature), TEST(status_longest_fits), TEST(fix_2d_is_a_position),
 		TEST(prepare_fix_trusts_caller), TEST(fcs_matches_frame), TEST(header_addresses),
-		TEST(station_from_settings), TEST(symbol_follows_mode), TEST(line_bits_position),
-		TEST(line_bits_status), TEST(tx_square_sequence), TEST(packets_sent_counted),
-		TEST(send_now_paced))
+		TEST(station_from_settings), TEST(symbol_follows_mode), TEST(position_dithered),
+		TEST(line_bits_position), TEST(line_bits_status), TEST(tx_square_sequence),
+		TEST(packets_sent_counted), TEST(send_now_paced))

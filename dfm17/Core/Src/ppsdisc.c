@@ -47,6 +47,7 @@
 #include "main.h"
 #include "si4063.h"
 #include "settings.h"
+#include "posdither.h"
 
 #define QUEUE	32
 #define MAX_DEV_CYCLES	(PPS_DISC_NOMINAL / 1000000UL * PPS_DISC_MAX_PPM)
@@ -140,6 +141,7 @@ void pps_disc_update(void) {
 		queue_tail = head - QUEUE;
 	for (; queue_tail != head; queue_tail++) {
 		window[window_next] = queue[queue_tail % QUEUE];
+		posdither_stir((uint32_t)window[window_next]); /* PPS jitter: entropy (#72) */
 		window_next = (window_next + 1) % PPS_DISC_WINDOW;
 		if (window_n < PPS_DISC_WINDOW)
 			window_n++;

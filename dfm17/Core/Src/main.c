@@ -186,7 +186,7 @@ int main(void)
   initHw();
   si4060_stop_tx();
 
-  GNSS_StateHandle *gnss = (GNSS_StateHandle *)&GNSS_Handle;
+  const GNSS_StateHandle *gnss = (const GNSS_StateHandle *)&GNSS_Handle;
   uint8_t foxPaused = 0;
   // the GPS occasionally leaves a NAV-PVT poll unanswered; only a run of
   // failed updates counts as a GPS fault

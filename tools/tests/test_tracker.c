@@ -40,7 +40,7 @@ void gpsWake(void) {
 }
 void diag_set_tx(uint8_t on) { (void)on; }
 
-uint8_t aprs_prepare_buffer(GNSS_StateHandle *g, uint8_t backlog_fix) {
+uint8_t aprs_prepare_buffer(const GNSS_StateHandle *g, uint8_t backlog_fix) {
 	(void)backlog_fix;
 	prepared_from_last_fix = 0;
 	sent[nsent].lat = g->lat;
@@ -48,7 +48,7 @@ uint8_t aprs_prepare_buffer(GNSS_StateHandle *g, uint8_t backlog_fix) {
 	return sent[nsent].position;
 }
 
-uint8_t aprs_prepare_fix(GNSS_StateHandle *g, uint8_t fix_valid, uint8_t backlog_fix) {
+uint8_t aprs_prepare_fix(const GNSS_StateHandle *g, uint8_t fix_valid, uint8_t backlog_fix) {
 	(void)backlog_fix;
 	prepared_from_last_fix = 1;
 	sent[nsent].lat = g->lat;

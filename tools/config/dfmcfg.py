@@ -71,7 +71,12 @@ LAYOUT = [
     ("fox_pa", 41, "B"),
     ("rtty_freq", 42, "<H"),
     ("rtty_pa", 44, "B"),
-    ("reserved", 45, "17s"),
+    ("pos_dither_mode", 45, "B"),
+    ("pos_dither_m", 46, "<H"),
+    ("pos_dither_min_m", 48, "<H"),
+    ("pos_dither_minutes", 50, "<H"),
+    ("pos_dither_alt_m", 52, "<H"),
+    ("reserved", 54, "8s"),
     ("crc", 62, "<H"),
 ]
 
@@ -94,6 +99,7 @@ ERRORS = [
     "FOX_TIMING",
     "EEPROM",
     "GPS_POWER",
+    "POS_DITHER",
 ]
 SOURCES = ["built-in defaults", "EEPROM", "SWD (not saved)"]
 RESULTS = ["none", "OK", "INVALID", "EEPROM", "BAD_CMD"]
@@ -202,6 +208,16 @@ def check(s):
         return "FOX_TIMING"
     if s["gps_power"] not in GPS_POWER.values():
         return "GPS_POWER"
+    mode = s["pos_dither_mode"]
+    if mode in (DITHER["fixed"], DITHER["shrinking"]):
+        if s["pos_dither_m"] > DITHER_MAX_M or s["pos_dither_alt_m"] > DITHER_MAX_ALT_M:
+            return "POS_DITHER"
+        if mode == DITHER["shrinking"] and (
+            s["pos_dither_min_m"] > s["pos_dither_m"] or s["pos_dither_minutes"] == 0
+        ):
+            return "POS_DITHER"
+    elif mode not in (DITHER["off"], DITHER_ERASED):
+        return "POS_DITHER"
     return "OK"
 
 
@@ -219,6 +235,8 @@ WHY = {
     "settle < fix timeout",
     "FOX_TIMING": "fox timing: period >= 10 s, tone <= 60 s, and tone + 8 s must fit in the period",
     "GPS_POWER": "gps_power: default, duty_cycle or always_on",
+    "POS_DITHER": "pos_dither: off, fixed or shrinking; radius <= 50000 m, altitude <= 1000 m; "
+    "shrinking needs pos_dither_min_m <= pos_dither_m and pos_dither_minutes >= 1",
 }
 
 
@@ -247,6 +265,35 @@ def mode_radio(s, tx):
     f, pa = s[f"{tx}_freq"], s[f"{tx}_pa"]
     hz = s["freq_hz"] if f == FREQ_DEFAULT else FREQ_BASE_HZ + f * FREQ_STEP_HZ
     return hz, s["pa_level"] if pa == PA_DEFAULT else pa
+
+
+# position dithering (#72, posdither.c): enum settings_pos_dither; 0xFF
+# (erased) is off
+DITHER = {"off": 0, "fixed": 1, "shrinking": 2}
+DITHER_ERASED = 0xFF
+DITHER_MAX_M = 50000
+DITHER_MAX_ALT_M = 1000
+DITHER_DEFAULTS = {
+    "pos_dither_m": 500,
+    "pos_dither_min_m": 0,
+    "pos_dither_minutes": 60,
+    "pos_dither_alt_m": 0,
+}
+
+
+def dither_text(s):
+    mode = s["pos_dither_mode"]
+    alt = f", altitude +-{s['pos_dither_alt_m']} m" if s["pos_dither_alt_m"] else ""
+    if mode == DITHER["fixed"]:
+        return f"fixed, within {s['pos_dither_m']} m{alt}"
+    if mode == DITHER["shrinking"]:
+        return (
+            f"shrinking, {s['pos_dither_m']} m to {s['pos_dither_min_m']} m over "
+            f"{s['pos_dither_minutes']} min from boot{alt}"
+        )
+    if mode in (DITHER["off"], DITHER_ERASED):
+        return "off (the real position)"
+    return f"{mode}?"
 
 
 def parse_freq(v):
@@ -332,6 +379,21 @@ def apply_assignment(s, item):
         if v.lower() not in GPS_POWER:
             raise SettingsError(f"gps_power: '{v}' isn't {', '.join(GPS_POWER)}")
         s[name] = GPS_POWER[v.lower()]
+    elif name in ("pos_dither", "pos_dither_mode"):
+        if v.lower() not in DITHER:
+            raise SettingsError(f"pos_dither: '{v}' isn't {', '.join(DITHER)}")
+        s["pos_dither_mode"] = DITHER[v.lower()]
+        # a block saved before the fields existed has them erased: give them
+        # the firmware's defaults so switching on works on its own
+        for field, default in DITHER_DEFAULTS.items():
+            if s[field] == 0xFFFF:
+                s[field] = default
+    elif name == "pos_dither_m" or name == "pos_dither_min_m":
+        s[name] = parse_int(name, v, 0, DITHER_MAX_M)
+    elif name == "pos_dither_minutes":
+        s[name] = parse_int(name, v, 1, 65535)
+    elif name == "pos_dither_alt_m":
+        s[name] = parse_int(name, v, 0, DITHER_MAX_ALT_M)
     else:
         raise SettingsError(f"'{name}' isn't a setting (see 'dfmcfg.py fields')")
 
@@ -387,6 +449,7 @@ def describe(s):
                 f"APRS every {s['fox_aprs_every'] or 'never'}"
             ),
             f"  gps_power     {gps}",
+            f"  pos_dither    {dither_text(s)}",
         ]
     )
 
@@ -418,7 +481,13 @@ FIELDS_HELP = """settings (name=value):
   fox_tone_ms=10000      <= 60000, and tone + 8 s must fit in the period
   fox_aprs_every=10      APRS after every Nth fox cycle, 0 = never
   gps_power=default      default (duty_cycle), duty_cycle: GPS in backup between
-                         tracker fixes; always_on: never (1PPS kept, ~20-25 mA more)"""
+                         tracker fixes; always_on: never (1PPS kept, ~20-25 mA more)
+  pos_dither=off         off, fixed or shrinking (#72): every APRS position is offset at
+                         random within a radius, so hunters learn the area, not the spot
+  pos_dither_m=500       the radius, m (<= 50000); when shrinking, the radius at boot
+  pos_dither_min_m=0     shrinking: the radius at the end, m (0 = the real position)
+  pos_dither_minutes=60  shrinking: minutes from boot to the end, linear (>= 1)
+  pos_dither_alt_m=0     altitude offset up to +- this, m (<= 1000)"""
 
 
 # ---- the analog calibration block (#43) ------------------------------------------
@@ -629,6 +698,11 @@ FIELDS = [
     ("fox_period_s", "Fox", None),
     ("fox_tone_ms", "Fox", None),
     ("fox_aprs_every", "Fox", None),
+    ("pos_dither", "Fox", list(DITHER)),
+    ("pos_dither_m", "Fox", None),
+    ("pos_dither_min_m", "Fox", None),
+    ("pos_dither_minutes", "Fox", None),
+    ("pos_dither_alt_m", "Fox", None),
 ]
 
 
@@ -673,6 +747,13 @@ def field_value(s, name):
         return str(s["dev_hz"])
     if name == "gps_power":
         return next((k for k, v in GPS_POWER.items() if v == s["gps_power"]), str(s["gps_power"]))
+    if name == "pos_dither":
+        mode = s["pos_dither_mode"]
+        return (
+            "off"
+            if mode == DITHER_ERASED
+            else next((k for k, v in DITHER.items() if v == mode), str(mode))
+        )
     return str(s[name])
 
 
@@ -1450,7 +1531,9 @@ def defaults():
         fox_pa=PA_DEFAULT,
         rtty_freq=FREQ_DEFAULT,
         rtty_pa=PA_DEFAULT,
-        reserved=b"\xff" * 17,
+        pos_dither_mode=DITHER["off"],
+        **DITHER_DEFAULTS,
+        reserved=b"\xff" * 8,
     )
     return seal(s)
 

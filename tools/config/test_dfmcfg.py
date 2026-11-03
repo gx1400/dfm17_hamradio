@@ -40,7 +40,12 @@ def defaults():
         fox_pa=0xFF,
         rtty_freq=0xFFFF,
         rtty_pa=0xFF,
-        reserved=b"\xff" * 17,
+        pos_dither_mode=0,
+        pos_dither_m=500,
+        pos_dither_min_m=0,
+        pos_dither_minutes=60,
+        pos_dither_alt_m=0,
+        reserved=b"\xff" * 8,
     )
     return d.seal(s)
 
@@ -141,6 +146,47 @@ class Checks(unittest.TestCase):
         self.assertEqual(d.check(d.seal(dict(defaults(), aprs_freq=60000))), "OK")
         self.assertEqual(d.check(d.seal(dict(defaults(), aprs_freq=60001))), "FREQ")
         self.assertEqual(d.check(d.seal(dict(defaults(), rtty_pa=0x80))), "POWER")
+
+    def test_pos_dither(self):
+        # #72: off by default; fixed or shrinking, with the firmware's limits
+        s = defaults()
+        self.assertIn("pos_dither    off (the real position)", d.describe(s))
+        for a in (
+            "pos_dither=shrinking",
+            "pos_dither_m=2000",
+            "pos_dither_min_m=100",
+            "pos_dither_minutes=90",
+            "pos_dither_alt_m=10",
+        ):
+            d.apply_assignment(s, a)
+        self.assertEqual(d.check(d.seal(s)), "OK")
+        self.assertIn("shrinking, 2000 m to 100 m over 90 min", d.describe(s))
+        self.assertEqual(d.field_value(s, "pos_dither"), "shrinking")
+        for bad in (
+            "pos_dither=on",
+            "pos_dither_m=50001",
+            "pos_dither_minutes=0",
+            "pos_dither_alt_m=1001",
+        ):
+            with self.assertRaises(d.SettingsError, msg=bad):
+                d.apply_assignment(defaults(), bad)
+        cases = [
+            ({"pos_dither_mode": 2, "pos_dither_min_m": 600}, "POS_DITHER"),
+            ({"pos_dither_mode": 2, "pos_dither_minutes": 0}, "POS_DITHER"),
+            ({"pos_dither_mode": 1, "pos_dither_m": 50001}, "POS_DITHER"),
+            ({"pos_dither_mode": 3}, "POS_DITHER"),
+            ({"pos_dither_mode": 0, "pos_dither_m": 0xFFFF}, "OK"),  # ignored while off
+        ]
+        for change, want in cases:
+            self.assertEqual(d.check(d.seal(dict(defaults(), **change))), want, change)
+        # a block saved before the fields: erased, off; switching on fills defaults
+        old = dict(defaults(), pos_dither_mode=0xFF, pos_dither_m=0xFFFF, pos_dither_min_m=0xFFFF)
+        old.update(pos_dither_minutes=0xFFFF, pos_dither_alt_m=0xFFFF)
+        self.assertEqual(d.check(d.seal(dict(old))), "OK")
+        self.assertEqual(d.field_value(old, "pos_dither"), "off")
+        d.apply_assignment(old, "pos_dither=fixed")
+        self.assertEqual(d.check(d.seal(old)), "OK")
+        self.assertEqual((old["pos_dither_m"], old["pos_dither_minutes"]), (500, 60))
 
     def test_lowercase_callsign_uppercased(self):
         s = defaults()
