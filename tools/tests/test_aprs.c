@@ -110,6 +110,11 @@ static void status_text(char *out) {
  * decodes the line bits from get_next_bit() like a receiver: NRZI, then the
  * first frame between flags, bit-unstuffed, LSB first. returns the length.
  */
+/* an AX.25 flag, 0x7E, in NRZI-decoded bits */
+static int is_flag(const uint8_t *b) {
+	return !b[0] && b[1] && b[2] && b[3] && b[4] && b[5] && b[6] && !b[7];
+}
+
 static size_t decode_frame(uint8_t *out, size_t max) {
 	static uint8_t bits[8192];
 	size_t n = 0;
@@ -124,18 +129,13 @@ static size_t decode_frame(uint8_t *out, size_t max) {
 
 	size_t i = 0, ones = 0, len = 0, nb = 0;
 	uint8_t byte = 0;
-	/* skip to the end of the opening flags */
-	while (i + 8 <= n) {
-		int flag = !bits[i] && bits[i + 1] && bits[i + 2] && bits[i + 3] && bits[i + 4]
-				&& bits[i + 5] && bits[i + 6] && !bits[i + 7];
-		if (!flag) {
-			if (len == 0 && nb == 0 && i > 0)
-				break;
-			i++;
-			continue;
-		}
+	/* find the first flag, then skip to the end of the opening flags. the
+	 * line's level before this frame depends on the transmission before it,
+	 * so the very first decoded bit may be wrong: don't expect a flag at 0 */
+	while (i + 8 <= n && !is_flag(&bits[i]))
+		i++;
+	while (i + 8 <= n && is_flag(&bits[i]))
 		i += 8;
-	}
 	for (; i < n; i++) {
 		if (ones == 5) {			/* stuffed zero, or a flag */
 			if (bits[i])
