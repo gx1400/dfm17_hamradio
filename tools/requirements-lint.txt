@@ -2,7 +2,7 @@
 # running the checks locally. Pinned so results don't change under us;
 # Dependabot (.github/dependabot.yml) proposes updates. cppcheck comes from the
 # Ubuntu 24.04 packages instead (2.13).
-ruff==0.17.3
+ruff==0.17.4
 clang-format==23.1.5
 shellcheck-py==0.11.0.1
 actionlint-py==1.7.12.25
