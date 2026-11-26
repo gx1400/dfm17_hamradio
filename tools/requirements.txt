@@ -1,7 +1,7 @@
 # Python packages for tools/aprs_sim (and the other analysis scripts in tools/).
 # Pinned so CI is reproducible; Dependabot (.github/dependabot.yml) proposes
 # updates.
-numpy==2.5.4
+numpy==2.5.5
 scipy==1.18.1
 # host-test coverage report (make -C tools/tests coverage)
 gcovr==8.8
